@@ -21,7 +21,7 @@ El plugin aspira a publicarse en la tienda de Obsidian. La arquitectura inicial 
 
 ### Excluye
 
-Calendario, manejo de archivos, contraseñas cifradas, funciones de IA o skills para modelos, plantillas de vault y borrado de proyectos/tareas. Estas funciones podrán evaluarse en versiones posteriores.
+Calendario, manejo de archivos, contraseñas cifradas, integración con IA, skills para modelos, plantillas de vault y borrado de proyectos/tareas. Estas funciones no forman parte de la V1; las capacidades de IA y las skills propias del sistema quedan en el roadmap para versiones posteriores.
 
 ## Datos y formato Markdown
 
@@ -68,3 +68,9 @@ La validación detectará, como mínimo, YAML/frontmatter inválido, Properties 
 ## Verificación
 
 Probar el flujo en un vault vacío; creación y enlace de notas; edición y cambio de estado; cambios manuales desde Markdown; conservación del contenido y Properties personalizadas; propiedades ausentes o inválidas; relaciones rotas; y vista en anchos estrechos y amplios. Añadir pruebas automatizadas para la validación y las operaciones de lectura/escritura cuando la estructura del plugin lo permita.
+
+## Roadmap: IA y skills propias del sistema
+
+Una versión futura incluirá skills de primera parte, creadas específicamente para guiar a modelos de IA en el manejo de este sistema. No serán skills genéricas de Obsidian ni una copia de las skills del entorno de desarrollo. Deben enseñar a los modelos las convenciones del vault, el esquema Markdown de proyectos y tareas y los flujos de trabajo propios del plugin.
+
+Estas skills formarán parte del producto y deberán respetar Markdown como fuente de verdad. La integración con modelos, el mecanismo para descubrir o proporcionarles las skills, sus permisos y la lista de skills concretas se diseñarán antes de implementar esa versión. La V1 no requiere proveedor de IA ni incluye estas skills.
