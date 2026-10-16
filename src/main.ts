@@ -1,21 +1,47 @@
 import { Plugin } from "obsidian";
+import { DEFAULT_SETTINGS, type PluginSettings } from "./settings";
+import { SettingsTab } from "./ui/SettingsTab";
 
 /**
  * DevHelper Dashboard - Obsidian plugin entry point.
  *
- * The full plugin lifecycle (settings, view, ribbon, commands) is wired
- * in later tasks. This scaffold only exercises the Plugin base class and
- * the data-loading API so the build and typecheck succeed.
+ * The settings tab exposes the two folder paths the dashboard reads
+ * Markdown from. Views, commands, ribbon buttons, and the vault event
+ * wiring are added in later tasks.
  */
 export default class DevHelperDashboardPlugin extends Plugin {
+  settings: PluginSettings = { ...DEFAULT_SETTINGS };
+
   async onload(): Promise<void> {
-    // Exercise data loading so the data.json plumbing is validated
-    // by the bundle, even though settings are not yet implemented.
-    await Promise.resolve(this.loadData());
+    this.settings = mergeSettings(DEFAULT_SETTINGS, await this.loadData());
+    this.addSettingTab(new SettingsTab(this, DEFAULT_SETTINGS));
     console.log(`${this.manifest.name} v${this.manifest.version} loaded`);
   }
 
   onunload(): void {
     // Nothing to clean up yet.
   }
+}
+
+/**
+ * Merge persisted plugin data over the defaults. Unknown keys in the
+ * persisted blob are ignored so a future schema can extend defaults
+ * without losing the user's existing values.
+ */
+function mergeSettings(
+  defaults: PluginSettings,
+  persisted: unknown,
+): PluginSettings {
+  if (!persisted || typeof persisted !== "object") return { ...defaults };
+  const candidate = persisted as Partial<PluginSettings>;
+  return {
+    projectsFolder:
+      typeof candidate.projectsFolder === "string"
+        ? candidate.projectsFolder
+        : defaults.projectsFolder,
+    tasksFolder:
+      typeof candidate.tasksFolder === "string"
+        ? candidate.tasksFolder
+        : defaults.tasksFolder,
+  };
 }
