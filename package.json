@@ -21,6 +21,11 @@
   ],
   "author": "DevHelper",
   "license": "MIT",
+  "files": [
+    "main.js",
+    "manifest.json",
+    "styles.css"
+  ],
   "devDependencies": {
     "@types/js-yaml": "4.0.9",
     "@types/node": "22.10.2",
