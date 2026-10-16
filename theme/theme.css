@@ -11,6 +11,11 @@
   --background-modifier-border: #363633;
   --interactive-accent: #e8e8e8;
   --text-on-accent: #171717;
+  --text-accent: var(--text-normal);
+  --link-color: var(--text-normal);
+  --link-color-hover: var(--text-normal);
+  --link-external-color: var(--text-normal);
+  --link-unresolved-color: var(--text-muted);
   --color-green: oklch(55% 0.22 145);
   --color-blue: oklch(70% 0.2 265);
   --color-orange: oklch(88% 0.18 85);
@@ -20,12 +25,19 @@
   --radius-xl: 1rem;
 }
 
-.theme-dark a {
+.theme-dark a,
+.theme-dark .internal-link,
+.theme-dark .external-link,
+.theme-dark .markdown-rendered a {
   color: var(--text-normal);
   font-weight: 500;
   text-decoration: underline;
   text-decoration-color: var(--text-muted);
   text-underline-offset: 2px;
+}
+
+.theme-dark .internal-link.is-unresolved {
+  color: var(--text-muted);
 }
 
 .theme-dark ::selection {
@@ -358,7 +370,7 @@ body.theme-dark.is-mobile .mobile-toolbar {
   min-height: 48px;
 }
 
-body.is-phone .workspace-leaf-content {
+body.theme-dark.is-phone .workspace-leaf-content {
   padding-bottom: env(safe-area-inset-bottom);
 }
 

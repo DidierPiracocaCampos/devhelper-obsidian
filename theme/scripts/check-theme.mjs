@@ -54,12 +54,11 @@ function checkThemeCss() {
   const css = readFileSync(path, "utf8");
   const forbidden = [
     { token: "!important", label: "!important" },
-    { token: "url(http://", label: "url(http://" },
-    { token: "url(https://", label: "url(https://" },
+    { token: /url\(\s*["']?\s*(?:https?:)?\/\//i, label: "remote url()" },
     { token: "@import", label: "@import" },
   ];
   for (const { token, label } of forbidden) {
-    if (css.includes(token)) {
+    if (typeof token === "string" ? css.includes(token) : token.test(css)) {
       fail(`theme.css contiene prohibido: ${label}`);
     }
   }
