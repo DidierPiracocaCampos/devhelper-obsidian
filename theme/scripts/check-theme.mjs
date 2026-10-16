@@ -11,6 +11,13 @@ const requiredVariables = [
   /\-\-text-normal\s*:\s*#e8e8e8/,
   /\-\-text-muted\b/,
   /\-\-text-faint\b/,
+  /\-\-background-modifier-border\s*:\s*#363633/,
+  /\-\-interactive-accent\s*:\s*#e8e8e8/,
+  /\-\-text-on-accent\s*:\s*#171717/,
+  /\-\-color-green\s*:\s*oklch\(55%\s+0\.22\s+145\)/,
+  /\-\-color-blue\s*:\s*oklch\(70%\s+0\.2\s+265\)/,
+  /\-\-color-orange\s*:\s*oklch\(88%\s+0\.18\s+85\)/,
+  /\-\-color-red\s*:\s*oklch\(70%\s+0\.25\s+25\)/,
 ];
 
 function fail(message) {

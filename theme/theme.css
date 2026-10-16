@@ -8,4 +8,24 @@
   --text-normal: #e8e8e8;
   --text-muted: color-mix(in oklab, #e8e8e8 70%, transparent);
   --text-faint: color-mix(in oklab, #e8e8e8 50%, transparent);
+  --background-modifier-border: #363633;
+  --interactive-accent: #e8e8e8;
+  --text-on-accent: #171717;
+  --color-green: oklch(55% 0.22 145);
+  --color-blue: oklch(70% 0.2 265);
+  --color-orange: oklch(88% 0.18 85);
+  --color-red: oklch(70% 0.25 25);
+}
+
+.theme-dark a {
+  color: var(--text-normal);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--background-modifier-border);
+  text-underline-offset: 2px;
+}
+
+.theme-dark ::selection {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
 }
