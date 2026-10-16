@@ -29,7 +29,10 @@ la comunidad** e instálalo desde ahí.
 
 - `screenshots/screenshot.png` — miniatura 16:9 (512×288).
 - `screenshots/screenshot-editor.png` — editor con sidebar en escritorio.
-- `screenshots/screenshot-mobile.png` — vista con emulación móvil.
+- `screenshots/screenshot-mobile.png` — vista con emulación móvil a ancho de
+  escritorio (1920×1080); la barra inferior móvil es visible y usa los estilos
+  del theme. Verificada también a ancho estrecho real (414 px): la toolbar se
+  muestra con fondo `--background-secondary` y objetivos de 44 px.
 
 ## Compatibilidad
 
