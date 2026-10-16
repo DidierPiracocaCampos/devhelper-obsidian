@@ -1,5 +1,4 @@
 import { ItemView, Setting, WorkspaceLeaf } from "obsidian";
-import type { App as ObsidianApp } from "obsidian";
 import type { PluginSettings } from "../settings";
 import type {
   DashboardData,
@@ -25,20 +24,22 @@ export const VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard";
  * operations are routed through `ProjectTaskRepository` so the same
  * logic is exercised by the fake adapter tests in Task 4 and by the
  * Obsidian adapter at runtime.
+ *
+ * The view never keeps a private copy of the data either: every
+ * render pulls a fresh `repository.load()`. This is what makes
+ * external Markdown edits (Task 6 vault listeners) show up in the UI
+ * without invalidating a cache.
  */
 export class DashboardView extends ItemView {
   private readonly repository: ProjectTaskRepository;
-  // `settings` is kept around for future task wiring (Task 6 will use
-  // it to refresh on metadata-cache changes). We do not read folder
-  // names here because the repository already owns that mapping.
+  // `settings` is kept around so the view can re-read folder names if
+  // it ever needs to; today the repository owns that mapping.
   private readonly settings: PluginSettings;
 
   private selectedProjectPath: string | null = null;
-  private latestData: DashboardData = { projects: [], tasks: [], issues: [] };
 
   constructor(
     leaf: WorkspaceLeaf,
-    _app: ObsidianApp,
     repository: ProjectTaskRepository,
     settings: PluginSettings,
   ) {
@@ -74,13 +75,13 @@ export class DashboardView extends ItemView {
 
   /**
    * Reload data from the repository and rebuild the DOM. Safe to call
-   * from anywhere (command palette, ribbon, vault event handler...).
-   * Skips the rebuild when the leaf isn't visible so a background
-   * refresh doesn't allocate DOM nodes that nobody will look at.
+   * from anywhere (command palette, ribbon, vault event handler,
+   * in-view modal callbacks). Skips the rebuild when the leaf isn't
+   * visible so a background refresh doesn't allocate DOM nodes that
+   * nobody will look at.
    */
   async refresh(): Promise<void> {
     const data = await this.repository.load();
-    this.latestData = data;
     if (!this.isVisibleLeaf()) return;
     this.render(data);
   }
@@ -88,12 +89,13 @@ export class DashboardView extends ItemView {
   /**
    * Update the selected project. Called from the project dropdown.
    * The selection lives on the view instance so it survives every
-   * refresh but does NOT leak into plugin storage.
+   * refresh but does NOT leak into plugin storage. We trigger a full
+   * `refresh()` so the re-render uses live vault data instead of a
+   * cached snapshot.
    */
   setSelectedProjectPath(path: string | null): void {
     this.selectedProjectPath = path;
-    if (!this.isVisibleLeaf()) return;
-    this.render(this.latestData);
+    void this.refresh();
   }
 
   private isVisibleLeaf(): boolean {
@@ -347,8 +349,11 @@ export class DashboardView extends ItemView {
     modal.open();
   }
 
-  private openCreateTask(): void {
-    const projects = this.latestData.projects;
+  private async openCreateTask(): Promise<void> {
+    // Pull the project list from the live vault so we never show a
+    // stale list (the user might have renamed a project in another
+    // pane while this view was hidden).
+    const projects = (await this.repository.load()).projects;
     if (projects.length === 0) {
       // Repository would refuse anyway; we make the failure obvious.
       console.warn(
@@ -372,8 +377,10 @@ export class DashboardView extends ItemView {
     modal.open();
   }
 
-  private openEditTask(task: TaskRecord): void {
-    const projects = this.latestData.projects;
+  private async openEditTask(task: TaskRecord): Promise<void> {
+    // Pull the project list from the live vault so the dropdown
+    // matches what the repository would actually accept.
+    const projects = (await this.repository.load()).projects;
     const modal = new TaskFormModal(this.app, {
       mode: "edit",
       initial: {

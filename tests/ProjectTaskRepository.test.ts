@@ -365,6 +365,67 @@ describe("ProjectTaskRepository", () => {
         expect(data.issues).toHaveLength(0);
       });
     });
+
+    describe("reloadReadsManualMarkdownChanges", () => {
+      it("picks up status and project-link edits made directly on the file", async () => {
+        const fake = createFakeVault();
+        seedFile(fake, "Projects/Alpha.md", projectNote());
+        seedFile(fake, "Projects/Beta.md", projectNote());
+        // Task starts as open + linked to Alpha; carries a custom
+        // `priority` frontmatter key and a body line the test will
+        // later assert is preserved untouched.
+        const taskPath = "Tasks/Write copy.md";
+        const initial = [
+          "---",
+          "type: task",
+          'project: "[[Projects/Alpha]]"',
+          "status: open",
+          "priority: high",
+          "---",
+          "# Write copy",
+          "",
+          "Custom body content stays here.",
+        ].join("\n");
+        seedFile(fake, taskPath, initial);
+
+        const repo = makeRepo(fake);
+
+        // Sanity check: the first load reflects the seeded values.
+        const first = await repo.load();
+        const firstTask = first.tasks.find((t) => t.path === taskPath)!;
+        expect(firstTask).toBeDefined();
+        expect(firstTask.status).toBe("open");
+        expect(firstTask.projectPath).toBe("Projects/Alpha.md");
+        expect(firstTask.properties.priority).toBe("high");
+
+        // Simulate an external Markdown edit (the user opening the
+        // note in the editor and toggling status + reassigning the
+        // project link). We rewrite the stored bytes directly so the
+        // repository's next `load()` has to re-read from scratch.
+        const manuallyEdited = [
+          "---",
+          "type: task",
+          'project: "[[Projects/Beta]]"',
+          "status: done",
+          "priority: high",
+          "---",
+          "# Write copy",
+          "",
+          "Custom body content stays here.",
+        ].join("\n");
+        fake.files.set(taskPath, manuallyEdited);
+
+        const second = await repo.load();
+        const secondTask = second.tasks.find((t) => t.path === taskPath)!;
+        expect(secondTask).toBeDefined();
+        expect(secondTask.status).toBe("done");
+        expect(secondTask.projectPath).toBe("Projects/Beta.md");
+        // The custom `priority` key survives the second load because
+        // `load()` parses the file as it sits on disk and keeps every
+        // unknown frontmatter entry in `properties`.
+        expect(secondTask.properties.priority).toBe("high");
+      });
+    });
   });
 
   // -------------------------------------------------------------------------

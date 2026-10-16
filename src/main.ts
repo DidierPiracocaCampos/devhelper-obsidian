@@ -17,12 +17,21 @@ import {
  *     available.
  *  3. Register the settings tab, the dashboard view, the command and
  *     the ribbon button.
- *  4. On unload, let Obsidian dispose of registered views/commands
- *     automatically.
+ *  4. Subscribe to vault and metadata-cache events so external edits
+ *     refresh the dashboard view automatically (debounced).
+ *  5. On unload, Obsidian tears down every `registerEvent`/`registerView`
+ *     subscription we own.
  */
 export default class DevHelperDashboardPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS };
   repository!: ProjectTaskRepository;
+
+  /**
+   * Handle for the pending debounced refresh. We use a `number` because
+   * `setTimeout` returns an integer in the browser/Electron runtime;
+   * storing `null` means "no refresh scheduled".
+   */
+  private refreshTimer: number | null = null;
 
   async onload(): Promise<void> {
     this.settings = mergeSettings(DEFAULT_SETTINGS, await this.loadData());
@@ -34,8 +43,7 @@ export default class DevHelperDashboardPlugin extends Plugin {
 
     this.registerView(
       VIEW_TYPE_DEVHELPER_DASHBOARD,
-      (leaf) =>
-        new DashboardView(leaf, this.app, this.repository, this.settings!),
+      (leaf) => new DashboardView(leaf, this.repository, this.settings!),
     );
 
     this.addCommand({
@@ -50,12 +58,31 @@ export default class DevHelperDashboardPlugin extends Plugin {
       () => this.activateDashboardView(),
     );
 
+    // Wire vault + metadata-cache events so external Markdown edits
+    // refresh the dashboard without restarting Obsidian. `registerEvent`
+    // detaches the listener automatically on `onunload`; we must NOT
+    // rely on a manual cleanup.
+    const schedule = () => this.scheduleDashboardRefresh();
+    this.registerEvent(this.app.vault.on("create", schedule));
+    this.registerEvent(this.app.vault.on("modify", schedule));
+    this.registerEvent(this.app.vault.on("delete", schedule));
+    this.registerEvent(this.app.vault.on("rename", schedule));
+    // Metadata-cache changes do NOT fire on rename (see Obsidian docs);
+    // the vault 'rename' subscription above covers that case.
+    this.registerEvent(this.app.metadataCache.on("changed", schedule));
+
     console.log(`${this.manifest.name} v${this.manifest.version} loaded`);
   }
 
   onunload(): void {
-    // Nothing to clean up explicitly: Obsidian tears down registered
-    // views, commands and ribbon icons when the plugin unloads.
+    // Nothing to clean up explicitly: Obsidian tears down every
+    // `registerEvent`/`registerView` subscription when the plugin
+    // unloads. Cancel any pending debounced refresh so it cannot fire
+    // against a half-torn-down vault.
+    if (this.refreshTimer !== null) {
+      window.clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   }
 
   /**
@@ -70,8 +97,52 @@ export default class DevHelperDashboardPlugin extends Plugin {
       type: VIEW_TYPE_DEVHELPER_DASHBOARD,
       active: true,
     });
+    // Ask the freshly-mounted view to pull data immediately so the
+    // user does not see a loading placeholder on activation.
+    const view = leaf.view;
+    if (
+      view &&
+      typeof (view as DashboardView).refresh === "function"
+    ) {
+      await (view as DashboardView).refresh();
+    }
+  }
+
+  /**
+   * Schedule a dashboard refresh. Repeated calls within `DEBOUNCE_MS`
+   * collapse into a single refresh so a flurry of vault writes
+   * produces one re-render rather than one per event.
+   */
+  private scheduleDashboardRefresh(): void {
+    if (this.refreshTimer !== null) {
+      window.clearTimeout(this.refreshTimer);
+    }
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = null;
+      void this.refreshDashboard();
+    }, DEBOUNCE_MS);
+  }
+
+  /**
+   * Iterate every open dashboard leaf and call `refresh()` on it. Each
+   * view loads its own copy of the data so two leaves can show
+   * different projects without coordinating state.
+   */
+  private async refreshDashboard(): Promise<void> {
+    const leaves = this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_DEVHELPER_DASHBOARD,
+    );
+    for (const leaf of leaves) {
+      const view = leaf.view;
+      if (view && typeof (view as DashboardView).refresh === "function") {
+        await (view as DashboardView).refresh();
+      }
+    }
   }
 }
+
+/** Time window (in ms) used to coalesce bursty vault events. */
+const DEBOUNCE_MS = 250;
 
 /**
  * Merge persisted plugin data over the defaults. Unknown keys in the
