@@ -279,3 +279,71 @@ body.theme-dark::after {
   border-color: var(--interactive-accent);
   color: var(--text-on-accent);
 }
+
+/* Resaltado de sintaxis: monocromo; sólo strings/números usan acentos semánticos */
+.theme-dark .cm-comment,
+.theme-dark .cm-punctuation,
+.theme-dark .cm-meta,
+.theme-dark .cm-formatting,
+.theme-dark .cm-formatting-link {
+  color: var(--text-faint);
+}
+
+.theme-dark .cm-keyword,
+.theme-dark .cm-builtin,
+.theme-dark .cm-tag,
+.theme-dark .cm-attribute {
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+.theme-dark .cm-string {
+  color: var(--color-blue);
+}
+
+.theme-dark .cm-number {
+  color: var(--color-green);
+}
+
+.theme-dark .cm-variable,
+.theme-dark .cm-variable-2,
+.theme-dark .cm-variable-3,
+.theme-dark .cm-property,
+.theme-dark .cm-def,
+.theme-dark .cm-type,
+.theme-dark .cm-atom {
+  color: var(--text-normal);
+}
+
+.theme-dark .cm-operator {
+  color: var(--text-muted);
+}
+
+.theme-dark .cm-quote {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.theme-dark .cm-header,
+.theme-dark .cm-heading {
+  color: var(--text-normal);
+  font-weight: 700;
+}
+
+.theme-dark .cm-link,
+.theme-dark .cm-url {
+  color: var(--color-blue);
+  text-decoration: underline;
+}
+
+.theme-dark .cm-emphasis {
+  font-style: italic;
+}
+
+.theme-dark .cm-strong {
+  font-weight: 700;
+}
+
+.theme-dark .cm-hr {
+  color: var(--text-faint);
+}
