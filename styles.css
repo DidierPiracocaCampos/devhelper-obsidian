@@ -1,0 +1,6 @@
+/* DevHelper Dashboard - theme-aware styles.
+   Real layout rules arrive with the dashboard view in a later task. */
+
+.devhelper-dashboard-root {
+  color: var(--text-normal);
+}
