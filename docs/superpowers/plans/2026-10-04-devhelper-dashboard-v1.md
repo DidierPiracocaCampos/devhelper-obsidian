@@ -1,160 +1,169 @@
-# DevHelper Obsidian Dashboard V1 Implementation Plan
+# Plan de implementación: Dashboard DevHelper para Obsidian V1
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Para trabajadores agénticos:** SUB-SKILL OBLIGATORIO: Usa superpowers:subagent-driven-development (recomendado) o superpowers:executing-plans para implementar este plan tarea por tarea. Los pasos usan sintaxis de casilla (`- [ ]`) para el seguimiento.
 
-**Goal:** Build an Obsidian plugin that provides a responsive dashboard for Markdown-backed projects and linked tasks.
+**Objetivo:** Construir un plugin de Obsidian que ofrezca un dashboard adaptable para proyectos respaldados por Markdown y tareas enlazadas.
 
-**Architecture:** A custom Obsidian `ItemView` renders project selection, task cards, and note validation issues. A repository layer reads and writes Markdown through a narrow vault adapter; plugin storage contains only settings. A small settings tab configures project and task folders.
+**Arquitectura:** Un `ItemView` propio de Obsidian renderiza la selección de proyectos, las tarjetas de tareas y los problemas de validación de notas. Una capa de repositorio lee y escribe Markdown a través de un adaptador de vault estrecho; el almacenamiento del plugin contiene solo los ajustes. Una pestaña de ajustes pequeña configura las carpetas de proyectos y tareas.
 
-**Tech Stack:** TypeScript, Obsidian Plugin API, esbuild, Vitest, YAML parser; native DOM and Obsidian theme variables, no UI framework.
+**Stack tecnológico:** TypeScript, Obsidian Plugin API, esbuild, Vitest, parser YAML (`js-yaml`); DOM nativo y variables de tema de Obsidian, sin framework de UI.
 
 **Spec:** `docs/superpowers/specs/2026-10-04-obsidian-project-dashboard-design.md`
 
-## Global Constraints
+## Restricciones globales
 
-- Markdown notes are the only source of truth; project and task data must not be duplicated in plugin storage.
-- Default folders are `Projects/` and `Tasks/`, configurable from plugin settings.
-- Required Properties are project `type: project`; task `type: task`, `project` as a wikilink, and `status: open|done`.
-- Preserve user-defined Properties and the Markdown body when editing.
-- The V1 supports create, edit, and task completion; it does not support deletion.
-- AI integration, first-party skills, calendar, file management, encrypted passwords, and vault templates are outside V1.
-- The dashboard follows the agreed dark-background/light-panel/dark-card aesthetic and adapts to Obsidian themes and pane widths.
+- Las notas Markdown son la única fuente de verdad; los datos de proyectos y tareas no deben duplicarse en el almacenamiento del plugin.
+- Las carpetas por defecto son `Projects/` y `Tasks/`, configurables desde los ajustes.
+- Properties requeridas: proyecto `type: project`; tarea `type: task`, `project` como wikilink y `status: open|done`.
+- Preservar las Properties definidas por el usuario y el cuerpo Markdown al editar.
+- La V1 admite crear, editar y completar tareas; no admite borrado.
+- La integración con IA, las skills propias, el calendario, el manejo de archivos, las contraseñas cifradas y las plantillas de vault quedan fuera de la V1.
+- El dashboard sigue la estética acordada (fondo oscuro / panel claro / tarjeta oscura) y se adapta a los temas de Obsidian y al ancho del panel.
+- Orden determinista: proyectos por `title` ascendente (sin distinguir mayúsculas; desempate por `path`); tareas por `status` (`open` antes que `done`) y luego `title` ascendente (sin distinguir mayúsculas; desempate por `path`).
+- Nombres de archivo seguros y únicos: al crear o renombrar, sustituir `\ / : * ? " < > |` y `#` por `-`, recortar `.` y espacios finales, usar `Untitled` si el resultado queda vacío, y si la ruta ya existe añadir ` 2`, ` 3`, … antes de `.md`.
+- `selectedProjectPath` es estado en memoria de la vista (no se persiste); si el proyecto desaparece tras un refresco, se selecciona el primer proyecto ordenado (o `null` si no hay ninguno).
 
-## Review Focus
+## Foco de revisión
 
-- Malformed or unterminated YAML frontmatter: parser tests must return a note-specific issue without aborting the vault scan.
-- Missing `type`, task `project`/`status`, or an unsupported status value: validation tests must return a precise issue and leave the note unchanged.
-- Unresolved task project links or links to a non-project note: repository tests must report the affected task and keep other records available.
-- Duplicate or unsafe titles and missing nested folders: repository tests must create a unique safe path, create missing folders, and never overwrite another note.
-- Markdown edits or renames while the dashboard is open: integration/manual verification must refresh the view and demonstrate that custom Properties and body text survive dashboard writes.
+- YAML/frontmatter malformado o sin terminar: el parser debe devolver un problema específico de la nota sin abortar el escaneo del vault.
+- Falta `type`, falta `project`/`status` en tareas, o un valor de estado no admitido: la validación debe devolver un problema preciso y dejar la nota sin cambios.
+- Enlaces de proyecto de tarea sin resolver o que apuntan a una nota que no es proyecto: el repositorio debe reportar la tarea afectada y mantener disponibles los demás registros.
+- Títulos duplicados o no seguros y carpetas anidadas ausentes: el repositorio debe generar una ruta segura y única (también al renombrar), crear las carpetas que falten y no sobrescribir nunca otra nota.
+- Rutas de carpeta inseguras (absolutas, `..`, barras invertidas): `normalizeVaultFolderPath` debe rechazarlas o normalizarlas sin salir del vault.
+- Orden de presentación no determinista: los tests de `presentDashboard` deben fijar el orden secundario (título) para evitar pruebas frágiles.
+- El proyecto seleccionado desaparece (renombrado/borrado externamente): `refresh()` debe caer al primer proyecto sin romper la vista.
+- Ediciones o renombrados de Markdown con el dashboard abierto: la verificación de integración/manual debe refrescar la vista y demostrar que las Properties personalizadas y el cuerpo sobreviven a las escrituras del dashboard.
 
 ---
 
-## File Map
+## Mapa de archivos
 
-- `manifest.json`, `package.json`, `package-lock.json`, `tsconfig.json`, `esbuild.config.mjs`: plugin identity, dependencies, type checking, and production/development bundles.
-- `src/main.ts`: plugin lifecycle, command, ribbon button, view registration, settings loading, and vault event wiring.
-- `src/settings.ts`, `src/ui/SettingsTab.ts`: default and persisted folder settings plus their Obsidian settings UI.
-- `src/domain/types.ts`, `src/domain/parseNote.ts`, `src/domain/presentDashboard.ts`: validated domain records, Markdown frontmatter parsing, and deterministic dashboard ordering.
-- `src/data/VaultAdapter.ts`, `src/data/ObsidianVaultAdapter.ts`, `src/data/ProjectTaskRepository.ts`: testable vault boundary and project/task reads and writes.
-- `src/ui/DashboardView.ts`, `src/ui/ProjectFormModal.ts`, `src/ui/TaskFormModal.ts`: dashboard, project/task creation and editing, status actions, and validation issue actions.
-- `styles.css`: responsive dashboard styling using Obsidian theme variables.
-- `tests/settings.test.ts`, `tests/parseNote.test.ts`, `tests/presentDashboard.test.ts`, `tests/ProjectTaskRepository.test.ts`: focused unit tests.
-- `README.md`: development, installation, Markdown schema, and V1 behavior.
-- `.gitignore`: generated dependencies and build outputs only; do not ignore or alter the existing `.agents/` skills or `skills-lock.json`.
+- `manifest.json`, `package.json`, `package-lock.json`, `tsconfig.json`, `esbuild.config.mjs`: identidad del plugin, dependencias, comprobación de tipos y bundles de producción/desarrollo.
+- `src/main.ts`: ciclo de vida del plugin, comando, botón de ribbon, registro de la vista, carga de ajustes y cableado de eventos del vault.
+- `src/settings.ts`, `src/ui/SettingsTab.ts`: ajustes por defecto y persistidos de carpetas, más su UI de ajustes de Obsidian.
+- `src/domain/types.ts`, `src/domain/parseNote.ts`, `src/domain/presentDashboard.ts`: registros de dominio validados, parseo del frontmatter Markdown y orden determinista del dashboard.
+- `src/data/VaultAdapter.ts`, `src/data/ObsidianVaultAdapter.ts`, `src/data/ProjectTaskRepository.ts`: frontera de vault testeable y lecturas/escrituras de proyectos y tareas.
+- `src/ui/DashboardView.ts`, `src/ui/ProjectFormModal.ts`, `src/ui/TaskFormModal.ts`: dashboard, creación y edición de proyectos/tareas, acciones de estado y acciones sobre problemas de validación.
+- `styles.css`: estilos adaptables del dashboard usando variables de tema de Obsidian.
+- `tests/settings.test.ts`, `tests/parseNote.test.ts`, `tests/presentDashboard.test.ts`, `tests/ProjectTaskRepository.test.ts`: tests unitarios enfocados.
+- `README.md`: desarrollo, instalación, esquema Markdown y comportamiento de la V1.
+- `.gitignore`: solo dependencias generadas y salidas de build; no ignorar ni alterar `.agents/` ni `skills-lock.json` existentes.
 
-## Task 1: Create a buildable Obsidian plugin skeleton
+## Tarea 1: Crear el esqueleto de un plugin de Obsidian compilable
 
-**Files:** Create `manifest.json`, `package.json`, `package-lock.json` (generated by npm), `tsconfig.json`, `esbuild.config.mjs`, `.gitignore`, `src/main.ts`, `styles.css`, and `README.md`.
+**Archivos:** Crear `manifest.json`, `package.json`, `package-lock.json` (generado por npm), `tsconfig.json`, `esbuild.config.mjs`, `.gitignore`, `src/main.ts`, `styles.css` y `README.md`.
 
-**Interfaces:** `src/main.ts` exports the default `Plugin` subclass. The initial manifest uses plugin ID `devhelper-dashboard`, display name `DevHelper Dashboard`, version `0.1.0`, minimum Obsidian version `1.4.0`, author `DevHelper`, and `isDesktopOnly: false`; verify ID availability before any marketplace submission.
+**Interfaces:** `src/main.ts` exporta la subclase `Plugin` por defecto. El manifest inicial usa ID de plugin `devhelper-dashboard`, nombre visible `DevHelper Dashboard`, versión `0.1.0`, versión mínima de Obsidian `1.4.0`, autor `DevHelper` e `isDesktopOnly: false`; verifica la disponibilidad del ID antes de cualquier envío al marketplace.
 
-- [ ] Create the manifest and TypeScript/esbuild configuration; mark `obsidian` as an external bundle dependency.
-- [ ] Add npm scripts `dev`, `build`, `typecheck`, and `test`; use `obsidian` for API typings, Vitest for tests, and `yaml` for frontmatter parsing; generate the lockfile with `npm install`.
-- [ ] Add the minimal plugin entry point and theme-aware empty stylesheet; restrict `.gitignore` to generated files such as `node_modules/`, `main.js`, and source maps.
-- [ ] Run `npm run typecheck` and `npm run build`.
+- [ ] Crear el manifest y la configuración de TypeScript/esbuild; marcar `obsidian` como dependencia externa del bundle.
+- [ ] Añadir los scripts npm `dev`, `build`, `typecheck` y `test`; usar `obsidian` para los tipados de API, Vitest para los tests y `js-yaml` (más `@types/js-yaml`) para el parseo del frontmatter; fijar versiones en `devDependencies` y añadir `"engines": { "node": ">=18" }`; generar el lockfile con `npm install`.
+- [ ] Añadir el punto de entrada mínimo del plugin y una hoja de estilos vacía consciente del tema; limitar `.gitignore` a archivos generados como `node_modules/`, `main.js` y source maps.
+- [ ] Ejecutar `npm run typecheck` y `npm run build`.
 
-Run: `npm run typecheck; npm run build`
-Expected: both commands exit successfully and the build emits `main.js` without bundling Obsidian itself.
+Ejecutar: `npm run typecheck; npm run build`
+Esperado: ambos comandos salen con éxito y el build emite `main.js` sin empaquetar Obsidian.
 
-- [ ] Commit as `build: scaffold DevHelper Obsidian plugin`.
+- [ ] Commit como `build: crear esqueleto del plugin DevHelper para Obsidian`.
 
-## Task 2: Add settings and folder path normalization
+## Tarea 2: Añadir ajustes y normalización de rutas de carpetas
 
-**Files:** Create `src/settings.ts`, `src/ui/SettingsTab.ts`, and `tests/settings.test.ts`; modify `src/main.ts` and `package.json` only if needed for test execution.
+**Archivos:** Crear `src/settings.ts`, `src/ui/SettingsTab.ts` y `tests/settings.test.ts`; modificar `src/main.ts` y `package.json` solo si es necesario para ejecutar tests.
 
-**Interfaces:** `PluginSettings` has `projectsFolder: string` and `tasksFolder: string`. `DEFAULT_SETTINGS` is `{ projectsFolder: "Projects", tasksFolder: "Tasks" }`. `normalizeVaultFolderPath(path: string, fallback: string): string` trims whitespace and leading/trailing `/` characters and returns a vault-relative path; empty input returns `fallback`.
+**Interfaces:** `PluginSettings` tiene `projectsFolder: string` y `tasksFolder: string`. `DEFAULT_SETTINGS` es `{ projectsFolder: "Projects", tasksFolder: "Tasks" }`. `normalizeVaultFolderPath(path: string, fallback: string): string` recorta espacios y barras `/` iniciales/finales y devuelve una ruta relativa al vault; una entrada vacía devuelve `fallback`. Reemplaza `\` por `/`, colapsa `/` repetidas y rechaza (devolviendo `fallback`) las rutas absolutas (que empiezan por `/` o por letra de unidad como `C:`) y cualquier ruta con un segmento `..`.
 
-- [ ] Write `usesDefaultFolders()` and `normalizesFolderPath()` tests asserting defaults `Projects`/`Tasks`, trimming of whitespace and surrounding `/`, and fallback for empty input.
-- [ ] Run `npm test -- tests/settings.test.ts` and verify the new tests fail because the settings module is not implemented.
-- [ ] Implement settings defaults and normalization in `src/settings.ts`.
-- [ ] Implement a `PluginSettingTab` with text inputs for both folders; persist only settings with the plugin's `loadData()`/`saveData()` methods.
-- [ ] Run `npm test -- tests/settings.test.ts` and `npm run typecheck`.
+- [ ] Escribir los tests `usesDefaultFolders()` y `normalizesFolderPath()` que verifican los valores por defecto `Projects`/`Tasks`, el recorte de espacios y `/` circundantes, y el fallback para entrada vacía.
+- [ ] Añadir los tests `rejectsAbsolutePath()`, `rejectsParentTraversal()` y `collapsesSlashes()` que verifican que una ruta absoluta, una con `..` y una con `//` o `\` se normalizan a una ruta relativa segura o devuelven `fallback`.
+- [ ] Ejecutar `npm test -- tests/settings.test.ts` y verificar que los nuevos tests fallan porque el módulo de ajustes no está implementado.
+- [ ] Implementar los valores por defecto y la normalización en `src/settings.ts`.
+- [ ] Implementar un `PluginSettingTab` con entradas de texto para ambas carpetas; persistir solo los ajustes con `loadData()`/`saveData()` del plugin.
+- [ ] Ejecutar `npm test -- tests/settings.test.ts` y `npm run typecheck`.
 
-Expected: settings tests pass; settings never include project/task records.
+Esperado: los tests de ajustes pasan; los ajustes nunca incluyen registros de proyectos/tareas.
 
-- [ ] Commit as `feat: configure project and task folders`.
+- [ ] Commit como `feat: configurar carpetas de proyectos y tareas`.
 
-## Task 3: Parse and validate project/task Markdown
+## Tarea 3: Parsear y validar el Markdown de proyectos y tareas
 
-**Files:** Create `src/domain/types.ts`, `src/domain/parseNote.ts`, and `tests/parseNote.test.ts`.
+**Archivos:** Crear `src/domain/types.ts`, `src/domain/parseNote.ts` y `tests/parseNote.test.ts`.
 
-**Interfaces:** `ProjectRecord` is `{ path: string; title: string; properties: Record<string, unknown> }`. `TaskRecord` is `{ path: string; title: string; projectPath: string; status: "open" | "done"; properties: Record<string, unknown> }`. `DashboardIssue` is `{ path: string; message: string }`. `DashboardData` is `{ projects: ProjectRecord[]; tasks: TaskRecord[]; issues: DashboardIssue[] }`. `NoteSnapshot` is `{ path: string; basename: string; content: string }`. `ParsedNote` is `{ kind: "project"; project: ProjectRecord } | { kind: "task"; task: TaskRecord } | { kind: "issue"; issue: DashboardIssue }`. `parseProjectTaskNote(note: NoteSnapshot, resolveProject: (link: string, sourcePath: string) => string | null): ParsedNote` returns one of those variants.
+**Interfaces:** `ProjectRecord` es `{ path: string; title: string; properties: Record<string, unknown> }`. `TaskRecord` es `{ path: string; title: string; projectPath: string; status: "open" | "done"; properties: Record<string, unknown> }`. `DashboardIssue` es `{ path: string; message: string }`. `DashboardData` es `{ projects: ProjectRecord[]; tasks: TaskRecord[]; issues: DashboardIssue[] }`. `NoteSnapshot` es `{ path: string; basename: string; content: string }`. `ParsedNote` es `{ kind: "project"; project: ProjectRecord } | { kind: "task"; task: TaskRecord } | { kind: "issue"; issue: DashboardIssue }`. `parseProjectTaskNote(note: NoteSnapshot, resolveProject: (link: string, sourcePath: string) => string | null): ParsedNote` devuelve una de esas variantes.
 
-- [ ] Write `parsesValidProject()`, `parsesValidTask()`, `reportsMalformedFrontmatter()`, `reportsMissingOrWrongType()`, `reportsMissingTaskProject()`, `reportsMissingOrInvalidTaskStatus()`, and `reportsUnresolvedTaskProject()` tests; assert valid records retain custom Properties and each invalid note yields its own path-specific issue.
-- [ ] Run `npm test -- tests/parseNote.test.ts` and verify the behavior tests fail before implementation.
-- [ ] Implement frontmatter extraction and YAML parsing with the `yaml` package; use the note basename as the display title and preserve parsed custom Properties on each valid record.
-- [ ] Return one issue for an invalid note rather than throwing and interrupting a complete folder scan.
-- [ ] Run `npm test -- tests/parseNote.test.ts` and `npm run typecheck`.
+- [ ] Escribir los tests `parsesValidProject()`, `parsesValidTask()`, `reportsMalformedFrontmatter()`, `reportsMissingOrWrongType()`, `reportsMissingTaskProject()`, `reportsMissingOrInvalidTaskStatus()` y `reportsUnresolvedTaskProject()`; verificar que los registros válidos conservan las Properties personalizadas y que cada nota inválida produce su propio problema específico de ruta.
+- [ ] Ejecutar `npm test -- tests/parseNote.test.ts` y verificar que los tests de comportamiento fallan antes de la implementación.
+- [ ] Implementar la extracción del frontmatter y el parseo YAML con el paquete `js-yaml`; usar el nombre base de la nota como título mostrado y conservar las Properties personalizadas parseadas en cada registro válido.
+- [ ] Devolver un único problema para una nota inválida en lugar de lanzar e interrumpir el escaneo completo de la carpeta.
+- [ ] Ejecutar `npm test -- tests/parseNote.test.ts` y `npm run typecheck`.
 
-Expected: each invalid input yields a path-specific issue; valid files parse without losing custom Properties.
+Esperado: cada entrada inválida produce un problema específico de ruta; los archivos válidos se parsean sin perder Properties personalizadas.
 
-- [ ] Commit as `feat: parse and validate project task notes`.
+- [ ] Commit como `feat: parsear y validar notas de proyectos y tareas`.
 
-## Task 4: Implement the vault adapter and repository
+## Tarea 4: Implementar el adaptador de vault y el repositorio
 
-**Files:** Create `src/data/VaultAdapter.ts`, `src/data/ObsidianVaultAdapter.ts`, `src/data/ProjectTaskRepository.ts`, and `tests/ProjectTaskRepository.test.ts`; use the types and parser from Task 3.
+**Archivos:** Crear `src/data/VaultAdapter.ts`, `src/data/ObsidianVaultAdapter.ts`, `src/data/ProjectTaskRepository.ts` y `tests/ProjectTaskRepository.test.ts`; usar los tipos y el parser de la Tarea 3.
 
-**Interfaces:** `VaultNoteRef` is `{ path: string; basename: string }`. `VaultAdapter` exposes `listMarkdownFiles(folderPath: string): VaultNoteRef[]`, `read(note: VaultNoteRef): Promise<string>`, `createFolder(path: string): Promise<void>`, `createMarkdown(path: string, content: string): Promise<VaultNoteRef>`, `rename(note: VaultNoteRef, newPath: string): Promise<VaultNoteRef>`, `processFrontMatter(note: VaultNoteRef, update: (frontmatter: Record<string, unknown>) => void): Promise<void>`, and `resolveLink(linkPath: string, sourcePath: string): VaultNoteRef | null`. `ProjectTaskRepository.load(): Promise<DashboardData>` returns `{ projects: ProjectRecord[]; tasks: TaskRecord[]; issues: DashboardIssue[] }`. It also exposes `createProject(title: string): Promise<void>`, `createTask(title: string, projectPath: string): Promise<void>`, `renameProject(path: string, title: string): Promise<void>`, `renameTask(path: string, title: string): Promise<void>`, `reassignTask(path: string, projectPath: string): Promise<void>`, and `setTaskStatus(path: string, status: "open" | "done"): Promise<void>`.
+**Interfaces:** `VaultNoteRef` es `{ path: string; basename: string }`. `VaultAdapter` expone `listMarkdownFiles(folderPath: string): VaultNoteRef[]`, `read(note: VaultNoteRef): Promise<string>`, `createFolder(path: string): Promise<void>` (crea la carpeta y todos sus ancestros ausentes, ya que el `createFolder` de Obsidian solo crea un nivel), `createMarkdown(path: string, content: string): Promise<VaultNoteRef>`, `rename(note: VaultNoteRef, newPath: string): Promise<VaultNoteRef>`, `processFrontMatter(note: VaultNoteRef, update: (frontmatter: Record<string, unknown>) => void): Promise<void>` y `resolveLink(linkPath: string, sourcePath: string): VaultNoteRef | null`. `ProjectTaskRepository.load(): Promise<DashboardData>` devuelve `{ projects: ProjectRecord[]; tasks: TaskRecord[]; issues: DashboardIssue[] }`. También expone `createProject(title: string): Promise<void>`, `createTask(title: string, projectPath: string): Promise<void>`, `renameProject(path: string, title: string): Promise<void>`, `renameTask(path: string, title: string): Promise<void>`, `reassignTask(path: string, projectPath: string): Promise<void>` y `setTaskStatus(path: string, status: "open" | "done"): Promise<void>`.
 
-- [ ] Write repository tests using a fake `VaultAdapter` for folder scans, valid/invalid note isolation, unresolved task links, creating notes, editing/renaming, project rename link updates, task reassignment, task status changes, duplicate titles, and preservation of custom Properties and body text.
-- [ ] Run `npm test -- tests/ProjectTaskRepository.test.ts` and verify the tests fail before implementation.
-- [ ] Implement `ObsidianVaultAdapter` with Obsidian vault/file-manager APIs, including `processFrontMatter` for property edits and Obsidian's safe file rename operation for title edits.
-- [ ] Implement `ProjectTaskRepository` to scan only configured folders, create missing folders, generate unique safe Markdown paths, write the agreed frontmatter, resolve task project wikilinks, and return per-note issues.
-- [ ] Write project notes with `---\ntype: project\n---\n`; write task notes with `---\ntype: task\nproject: "[[<project vault path without .md>]]"\nstatus: open\n---\n`. Use configured folder paths when constructing project links.
-- [ ] In `renameProject`, update `project` Properties on tasks that pointed to the old project path, including when Obsidian's automatic link-update preference is disabled; test `renamingProjectUpdatesLinkedTasks()`.
-- [ ] Ensure each operation mutates only its named controlled Property (`type` on creation, `project` on task creation/reassignment, `status` on status change); do not rewrite note bodies or remove other Properties.
-- [ ] Run `npm test -- tests/ProjectTaskRepository.test.ts`, `npm test`, and `npm run typecheck`.
+- [ ] Escribir tests de repositorio usando un `VaultAdapter` falso para: escaneo de carpetas, aislamiento de notas válidas/inválidas, enlaces de tarea sin resolver, creación de notas, edición/renombrado, actualización de enlaces al renombrar proyecto, reasignación de tarea, cambios de estado, títulos duplicados y conservación de Properties personalizadas y cuerpo.
+- [ ] Añadir los tests `sanitizesUnsafeCharacters()` y `renamingToExistingTitleDisambiguates()` que verifican que un título con caracteres ilegales se sanitiza y que renombrar a un título ya existente genera una ruta nueva con sufijo sin sobrescribir la nota original.
+- [ ] Ejecutar `npm test -- tests/ProjectTaskRepository.test.ts` y verificar que los tests fallan antes de la implementación.
+- [ ] Implementar `ObsidianVaultAdapter` con las APIs de vault/file-manager de Obsidian, incluido `processFrontMatter` para editar Properties y la operación segura de renombrado de archivos para editar títulos; `createFolder` debe crear cada nivel de la ruta por separado.
+- [ ] Implementar `ProjectTaskRepository` para escanear solo las carpetas configuradas, crear las carpetas ausentes, generar rutas Markdown seguras y únicas (sanitizando y sufijando según las restricciones globales, también al renombrar), escribir el frontmatter acordado, resolver los wikilinks de proyecto de las tareas y devolver problemas por nota.
+- [ ] Escribir notas de proyecto con `---\ntype: project\n---\n`; escribir notas de tarea con `---\ntype: task\nproject: "[[<ruta de vault del proyecto sin .md>]]"\nstatus: open\n---\n`. Usar las rutas de carpetas configuradas al construir los enlaces de proyecto.
+- [ ] En `renameProject`, actualizar las Properties `project` de las tareas que apuntaban a la ruta antigua del proyecto, incluso cuando la preferencia de actualización automática de enlaces de Obsidian esté desactivada; testear `renamingProjectUpdatesLinkedTasks()`.
+- [ ] Garantizar que cada operación muta solo su Property controlada nombrada (`type` en la creación, `project` en creación/reasignación de tarea, `status` en el cambio de estado); no reescribir cuerpos de nota ni eliminar otras Properties.
+- [ ] Ejecutar `npm test -- tests/ProjectTaskRepository.test.ts`, `npm test` y `npm run typecheck`.
 
-Expected: all repository tests pass; duplicate titles never overwrite existing notes.
+Esperado: todos los tests del repositorio pasan; los títulos duplicados nunca sobrescriben notas existentes.
 
-- [ ] Commit as `feat: manage project and task markdown notes`.
+- [ ] Commit como `feat: gestionar notas Markdown de proyectos y tareas`.
 
-## Task 5: Implement dashboard presentation and forms
+## Tarea 5: Implementar la presentación del dashboard y los formularios
 
-**Files:** Create `src/domain/presentDashboard.ts`, `tests/presentDashboard.test.ts`, `src/ui/DashboardView.ts`, `src/ui/ProjectFormModal.ts`, and `src/ui/TaskFormModal.ts`; modify `src/main.ts` and `styles.css`.
+**Archivos:** Crear `src/domain/presentDashboard.ts`, `tests/presentDashboard.test.ts`, `src/ui/DashboardView.ts`, `src/ui/ProjectFormModal.ts` y `src/ui/TaskFormModal.ts`; modificar `src/main.ts` y `styles.css`.
 
-**Interfaces:** `DashboardPresentation` is `{ selectedProject: ProjectRecord | null; tasks: TaskRecord[]; issues: DashboardIssue[] }`. `presentDashboard(data: DashboardData, selectedProjectPath: string | null): DashboardPresentation` returns the selected project, its tasks ordered with `open` before `done`, and visible issues. `DashboardView` receives the repository and exposes `refresh(): Promise<void>`. Project forms create or rename a project; task forms create or edit a task title and project link.
+**Interfaces:** `DashboardPresentation` es `{ selectedProject: ProjectRecord | null; tasks: TaskRecord[]; issues: DashboardIssue[] }`. `presentDashboard(data: DashboardData, selectedProjectPath: string | null): DashboardPresentation` devuelve el proyecto seleccionado, sus tareas ordenadas con `open` antes que `done` (y luego por `title` ascendente, sin distinguir mayúsculas, con desempate por `path`), y los problemas visibles; los proyectos se ordenan por `title` ascendente (sin distinguir mayúsculas, desempate por `path`). `DashboardView` recibe el repositorio, expone `refresh(): Promise<void>` y mantiene `selectedProjectPath` en memoria (si el proyecto desaparece, cae al primer proyecto ordenado, o `null` si no hay ninguno). Los formularios de proyecto crean o renombran un proyecto; los de tarea crean o editan el título y el enlace de proyecto de una tarea.
 
-- [ ] Write `showsEmptyDashboard()`, `selectsFirstProjectByDefault()`, `filtersTasksToSelectedProject()`, `ordersOpenTasksBeforeDone()`, and `showsValidationIssues()` tests with explicit expected records and ordering.
-- [ ] Run `npm test -- tests/presentDashboard.test.ts` and verify those tests fail.
-- [ ] Implement `presentDashboard` and make its tests pass.
-- [ ] Implement project and task modals with required-field validation; default a new task to the currently selected project.
-- [ ] Implement a custom `ItemView` with Spanish labels, project selection, create controls, task cards, status toggle/reopen, edit actions, and per-note issue messages with an action to open the source note.
-- [ ] Add responsive styling based on Obsidian theme variables: dark canvas, light rounded panels, dark task cards; include narrow-pane and wide-pane layouts. Do not add delete controls.
-- [ ] Run `npm test`, `npm run typecheck`, and `npm run build`.
+- [ ] Escribir los tests `showsEmptyDashboard()`, `selectsFirstProjectByDefault()`, `filtersTasksToSelectedProject()`, `ordersOpenTasksBeforeDone()` y `showsValidationIssues()` con registros y orden esperados explícitos.
+- [ ] Añadir los tests `ordersProjectsByTitle()` y `ordersTasksByTitleWithinStatus()` que fijan el orden secundario determinista, y `fallsBackWhenSelectedProjectMissing()` que verifica que un `selectedProjectPath` inexistente cae al primer proyecto.
+- [ ] Ejecutar `npm test -- tests/presentDashboard.test.ts` y verificar que esos tests fallan.
+- [ ] Implementar `presentDashboard` y hacer pasar sus tests.
+- [ ] Implementar los modales de proyecto y tarea con validación de campos requeridos; por defecto una tarea nueva se asigna al proyecto seleccionado.
+- [ ] Implementar un `ItemView` propio con etiquetas en español, selección de proyecto, controles de creación, tarjetas de tarea, cambio/reabrir de estado, acciones de edición y mensajes de problema por nota con una acción para abrir la nota de origen.
+- [ ] Añadir estilos adaptables basados en variables de tema de Obsidian: lienzo oscuro, paneles claros redondeados, tarjetas de tarea oscuras; incluir layouts de panel estrecho y ancho. No añadir controles de borrado.
+- [ ] Ejecutar `npm test`, `npm run typecheck` y `npm run build`.
 
-Expected: presentation tests pass and the plugin bundle contains the complete view and forms.
+Esperado: los tests de presentación pasan y el bundle del plugin contiene la vista y los formularios completos.
 
-- [ ] Commit as `feat: add project task dashboard view`.
+- [ ] Commit como `feat: añadir vista de dashboard de proyectos y tareas`.
 
-## Task 6: Wire lifecycle, refresh, and settings into the plugin
+## Tarea 6: Cablear el ciclo de vida, el refresco y los ajustes en el plugin
 
-**Files:** Modify `src/main.ts` and `src/ui/DashboardView.ts`; update `tests/ProjectTaskRepository.test.ts`.
+**Archivos:** Modificar `src/main.ts` y `src/ui/DashboardView.ts`; actualizar `tests/ProjectTaskRepository.test.ts`.
 
-- [ ] Register the custom view, an `open-dashboard` command, a ribbon button, and the settings tab in the plugin lifecycle.
-- [ ] Add refresh handling for vault create/modify/delete/rename and metadata-cache changes; debounce refreshes and use the vault rename event because metadata-cache changes are not emitted for renames.
-- [ ] Ensure editing in the dashboard refreshes from the saved Markdown rather than relying on a separate in-memory copy.
-- [ ] Add `reloadReadsManualMarkdownChanges()`: modify a task status/link in the fake vault, reload repository data, and assert the returned task reflects the edited Markdown; body and custom-property preservation is asserted by the repository write tests in Task 4.
-- [ ] Run `npm test`, `npm run typecheck`, and `npm run build`.
+- [ ] Registrar la vista propia, un comando `open-dashboard`, un botón de ribbon y la pestaña de ajustes en el ciclo de vida del plugin.
+- [ ] Añadir manejo de refresco para eventos de crear/modificar/borrar/renombrar del vault y cambios de metadata-cache; debounce de los refrescos y usar el evento de renombrado del vault porque los cambios de metadata-cache no se emiten para renombrados.
+- [ ] Garantizar que editar desde el dashboard refresca desde el Markdown guardado en lugar de depender de una copia en memoria separada.
+- [ ] Añadir `reloadReadsManualMarkdownChanges()`: modificar el estado/enlace de una tarea en el vault falso, recargar los datos del repositorio y verificar que la tarea devuelta refleja el Markdown editado; la conservación de cuerpo y Properties personalizadas la verifican los tests de escritura del repositorio en la Tarea 4.
+- [ ] Ejecutar `npm test`, `npm run typecheck` y `npm run build`.
 
-Expected: the command and ribbon button reveal one dashboard view; external Markdown changes update it without restarting Obsidian.
+Esperado: el comando y el botón de ribbon muestran una única vista de dashboard; los cambios externos de Markdown la actualizan sin reiniciar Obsidian.
 
-- [ ] Commit as `feat: sync dashboard with vault changes`.
+- [ ] Commit como `feat: sincronizar el dashboard con los cambios del vault`.
 
-## Task 7: Document and verify the V1
+## Tarea 7: Documentar y verificar la V1
 
-**Files:** Update `README.md` and, if required by the final build setup, `manifest.json` or the build configuration.
+**Archivos:** Actualizar `README.md` y, si el build final lo requiere, `manifest.json` o la configuración de build.
 
-- [ ] Document installation/development commands, configurable folders, required Properties, task statuses, edit behavior, validation errors, and the no-delete V1 limit.
-- [ ] Run `npm test`, `npm run typecheck`, and `npm run build`; inspect that release outputs include `main.js`, `manifest.json`, and `styles.css`.
-- [ ] In a clean test vault, verify project/task creation and linking, title editing/rename, task reassignment, completion/reopening, direct Markdown edits, malformed notes, missing folders, duplicate titles, and custom-property/body preservation.
-- [ ] Verify the view in a narrow pane and a wide pane with both Obsidian light and dark themes; confirm an issue action opens the affected note.
-- [ ] Commit as `docs: document dashboard v1 and verification`.
+- [ ] Documentar los comandos de instalación/desarrollo, las carpetas configurables, las Properties requeridas, los estados de tarea, el comportamiento de edición, los errores de validación y el límite de no-borrado de la V1.
+- [ ] Ejecutar `npm test`, `npm run typecheck` y `npm run build`; inspeccionar que las salidas de release incluyan `main.js`, `manifest.json` y `styles.css`.
+- [ ] En un vault de prueba limpio, verificar creación y enlace de proyectos/tareas, edición/renombrado de títulos, reasignación de tarea, completado/reabrir, ediciones directas de Markdown, notas malformadas, carpetas ausentes, títulos duplicados y conservación de Properties personalizadas y cuerpo.
+- [ ] Verificar la vista en un panel estrecho y en uno ancho con los temas claro y oscuro de Obsidian; confirmar que una acción de problema abre la nota afectada.
+- [ ] Commit como `docs: documentar la V1 del dashboard y su verificación`.
 
-## Final Verification
+## Verificación final
 
-Run from the project root:
+Ejecutar desde la raíz del proyecto:
 
 ```powershell
 npm test
@@ -163,4 +172,4 @@ npm run build
 git status --short
 ```
 
-Expected: all tests pass, TypeScript reports no errors, the production bundle builds, and only intentional user-visible changes remain in the working tree.
+Esperado: todos los tests pasan, TypeScript no reporta errores, el bundle de producción se construye y solo quedan en el árbol de trabajo los cambios intencionales visibles para el usuario.

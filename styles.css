@@ -1,6 +1,253 @@
-/* DevHelper Dashboard - theme-aware styles.
-   Real layout rules arrive with the dashboard view in a later task. */
+/* ============================================================================
+   DevHelper Dashboard - theme-aware styles.
+
+   Palette mapping (kept in sync with the design spec):
+     --background-primary      -> the dark canvas behind the dashboard.
+     --background-secondary    -> the light, rounded "panel" surfaces
+                                  (header, project section, issues).
+     --background-primary-alt  -> the dark task-card surfaces (intentionally
+                                  darker than the canvas so the cards read
+                                  as distinct foreground chips).
+     --background-modifier-border -> hairline borders on panels and cards.
+
+   Layout contract:
+     - Wide panels (>= 480px): header + project section + issues stack
+       vertically but the header controls spread horizontally.
+     - Narrow panels (< 320px): header controls and task card actions
+       collapse to a single column so nothing is clipped on phones or in
+       a sidebar.
+   ========================================================================== */
 
 .devhelper-dashboard-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
   color: var(--text-normal);
+  background: var(--background-primary);
+}
+
+/* --- Header --------------------------------------------------------------- */
+.devhelper-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.devhelper-header h2 {
+  margin: 0;
+  font-size: 1.2em;
+  color: var(--text-normal);
+}
+
+.devhelper-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.devhelper-project-select {
+  min-width: 160px;
+  flex: 1 1 200px;
+  padding: 4px 8px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+/* --- Main panels ---------------------------------------------------------- */
+.devhelper-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.devhelper-project-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.devhelper-project-header h3 {
+  margin: 0;
+  color: var(--text-normal);
+}
+
+.devhelper-project-path {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.devhelper-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* --- Task list / cards ---------------------------------------------------- */
+.devhelper-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.devhelper-task-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.devhelper-task-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.devhelper-task-card.is-done .devhelper-task-title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.devhelper-task-title {
+  margin: 0;
+  font-size: 1em;
+}
+
+.devhelper-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.devhelper-task-status {
+  font-size: 0.8em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.devhelper-task-status--open {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.devhelper-task-status--done {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.devhelper-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* --- Issues panel --------------------------------------------------------- */
+.devhelper-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.devhelper-issues h3 {
+  margin: 0;
+  color: var(--text-normal);
+}
+
+.devhelper-issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.devhelper-issue-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.devhelper-issue-item p {
+  margin: 4px 0;
+  color: var(--text-muted);
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+.devhelper-button {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.devhelper-button:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* --- Modals --------------------------------------------------------------- */
+.devhelper-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.devhelper-form-row {
+  width: 100%;
+}
+
+.devhelper-form-error {
+  margin: 0;
+  color: var(--text-error);
+  font-size: 0.9em;
+}
+
+.devhelper-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* --- Narrow layout -------------------------------------------------------- */
+@media (max-width: 320px) {
+  .devhelper-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .devhelper-project-select {
+    width: 100%;
+  }
+  .devhelper-task-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
