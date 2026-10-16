@@ -349,7 +349,7 @@ body.theme-dark::after {
 }
 
 /* Mobile: toolbar inferior, safe areas, objetivos táctiles y modales */
-.theme-dark .mobile-toolbar {
+.theme-dark .is-mobile .mobile-toolbar {
   background: var(--background-secondary);
   border-top: 1px solid var(--background-modifier-border);
   padding-left: env(safe-area-inset-left);
@@ -374,7 +374,7 @@ body.is-phone .workspace-leaf-content {
   max-width: calc(100vw - 16px);
 }
 
-.theme-dark .is-mobile button,
+.theme-dark .is-mobile .mobile-toolbar button,
 .theme-dark .is-mobile .clickable-icon,
 .theme-dark .is-mobile .nav-buttons-container .nav-action-button,
 .theme-dark .is-mobile .view-actions .clickable-icon {
