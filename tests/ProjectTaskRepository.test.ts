@@ -530,6 +530,41 @@ describe("ProjectTaskRepository", () => {
       expect(alphaContent).toMatch(/# Task/);
       expect(alphaContent).toMatch(/status: open/);
     });
+
+    it("picks up multi-line folded-scalar project values written by hand", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/Old.md", projectNote());
+      // A hand-written frontmatter where `project` spans two physical
+      // lines via YAML's `|` (literal) block-scalar indicator. The
+      // previous regex probe could not match this form because it
+      // only looked at single lines; the new `js-yaml`-backed
+      // `extractProjectWikilink` helper must surface it.
+      const foldedTask = [
+        "---",
+        "type: task",
+        "project: |",
+        "  [[Projects/Old]]",
+        "status: open",
+        "---",
+        "# Folded",
+        "",
+        "Body.",
+      ].join("\n");
+      seedFile(fake, "Tasks/Folded.md", foldedTask);
+
+      const repo = makeRepo(fake);
+      await repo.renameProject("Projects/Old.md", "New");
+
+      // The task was rewritten; the exact bytes depend on the fake's
+      // own line-based YAML reader, but it must end up with the new
+      // wikilink and must not be left with the folded scalar literal.
+      const updated = fake.files.get("Tasks/Folded.md")!;
+      expect(updated).toMatch(/project: "\[\[Projects\/New\]\]"/);
+      expect(updated).not.toMatch(/^project: \|/m);
+      // Body and unrelated keys are preserved.
+      expect(updated).toMatch(/# Folded/);
+      expect(updated).toMatch(/status: open/);
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -17,6 +17,7 @@
  * fake adapter in `tests/ProjectTaskRepository.test.ts`.
  */
 
+import yaml from "js-yaml";
 import { parseProjectTaskNote } from "../domain/parseNote";
 import type {
   DashboardData,
@@ -136,11 +137,20 @@ export class ProjectTaskRepository {
     // authoritative regardless of that setting.
     const oldWikilinkInner = projectPathToWikilinkInner(path);
     const newWikilinkInner = projectPathToWikilinkInner(targetPath);
+    // The user may have hand-written the project link with the `.md`
+    // extension included; accept both forms so the rename still applies
+    // when the frontmatter deviates from what `createTask` writes.
+    const oldLinkNoExt = wrapWikilink(oldWikilinkInner);
+    const oldLinkWithExt = `${wrapWikilink(oldWikilinkInner)}.md`;
 
     const taskRefs = this.adapter.listMarkdownFiles(this.settings.tasksFolder);
     for (const taskRef of taskRefs) {
       const current = await this.adapter.read(taskRef);
-      if (!frontmatterHasWikilink(current, oldWikilinkInner)) continue;
+      const projectValue = extractProjectWikilink(current);
+      if (projectValue === null) continue;
+      if (projectValue !== oldLinkNoExt && projectValue !== oldLinkWithExt) {
+        continue;
+      }
       await this.adapter.processFrontMatter(taskRef, (frontmatter) => {
         frontmatter["project"] = wrapWikilink(newWikilinkInner);
       });
@@ -351,40 +361,47 @@ function renderTaskFrontmatter(title: string, projectWikilink: string): string {
 }
 
 /**
- * Cheap frontmatter probe used by `renameProject` to decide whether a
- * task note's `project` key still points at the old project path. We
- * only need to detect a textual match for `[[oldPath]]` inside the
- * frontmatter; the full YAML parse happens later in `load()`.
+ * Extract the raw string value of the `project` frontmatter key from a
+ * Markdown note. Returns the value unchanged (including any
+ * surrounding `[[…]]` wikilink brackets if present) or `null` when the
+ * note has no frontmatter, no `project` key, or an unparseable block.
  *
- * The probe intentionally avoids parsing YAML so we do not depend on
- * `js-yaml` here and so we can short-circuit before the
- * `processFrontMatter` rewrite.
+ * Uses the same `js-yaml` parser that `parseProjectTaskNote` uses so
+ * the rename flow accepts hand-written values the regex probe would
+ * have missed (multi-line folded scalars, unquoted flow forms, etc.).
  */
-function frontmatterHasWikilink(content: string, innerTarget: string): boolean {
-  const normalized = content.replace(/\r\n/g, "\n");
-  if (!normalized.startsWith("---\n")) return false;
-  const end = normalized.indexOf("\n---", 3);
-  if (end < 0) return false;
-  const yaml = normalized.slice(4, end);
-  const needle = `[[${innerTarget}]]`;
-  // Scan each `project:` line; other keys that happen to mention the
-  // string are not actionable.
-  for (const line of yaml.split("\n")) {
-    const match = /^project\s*:\s*(.*)$/.exec(line);
-    if (!match) continue;
-    const raw = match[1]!.trim();
-    const unquoted = stripQuotes(raw);
-    if (unquoted === needle) return true;
+function extractProjectWikilink(content: string): string | null {
+  const sliced = sliceFrontmatterBlock(content);
+  if (sliced === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = yaml.load(sliced);
+  } catch {
+    return null;
   }
-  return false;
+  if (parsed === null || parsed === undefined) return null;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const properties = parsed as Record<string, unknown>;
+  const value = properties["project"];
+  if (typeof value !== "string") return null;
+  return value.trim();
 }
 
-function stripQuotes(value: string): string {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1);
+/**
+ * Slice a `---\n…\n---` frontmatter block from raw note content and
+ * return the YAML between the markers, or `null` if the block is
+ * missing or unclosed. Mirrors `sliceFrontmatter` in
+ * `src/domain/parseNote.ts` but returns a flat string so callers that
+ * only need the YAML text (not the body) can stay allocation-light.
+ */
+function sliceFrontmatterBlock(content: string): string | null {
+  const normalized = content.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) return null;
+  const lines = normalized.split("\n");
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === "---") {
+      return lines.slice(1, i).join("\n");
+    }
   }
-  return value;
+  return null;
 }

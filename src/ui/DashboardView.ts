@@ -76,13 +76,10 @@ export class DashboardView extends ItemView {
   /**
    * Reload data from the repository and rebuild the DOM. Safe to call
    * from anywhere (command palette, ribbon, vault event handler,
-   * in-view modal callbacks). Skips the rebuild when the leaf isn't
-   * visible so a background refresh doesn't allocate DOM nodes that
-   * nobody will look at.
+   * in-view modal callbacks).
    */
   async refresh(): Promise<void> {
     const data = await this.repository.load();
-    if (!this.isVisibleLeaf()) return;
     this.render(data);
   }
 
@@ -96,15 +93,6 @@ export class DashboardView extends ItemView {
   setSelectedProjectPath(path: string | null): void {
     this.selectedProjectPath = path;
     void this.refresh();
-  }
-
-  private isVisibleLeaf(): boolean {
-    const workspace = this.app.workspace;
-    // A leaf is "visible" when it is the active one OR it is in a
-    // split that is currently displayed. We keep this loose so a
-    // rebuild does not silently skip on first activation.
-    if (!workspace.activeLeaf) return true;
-    return true;
   }
 
   // -------------------------------------------------------------------------
