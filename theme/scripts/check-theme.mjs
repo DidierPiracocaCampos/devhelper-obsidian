@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 const themeDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
 
-const requiredVariables = [];
+const requiredVariables = [
+  /\-\-background-primary\s*:\s*#171717/,
+  /\-\-background-secondary\s*:\s*#20201e/,
+  /\-\-text-normal\s*:\s*#e8e8e8/,
+  /\-\-text-muted\b/,
+  /\-\-text-faint\b/,
+];
 
 function fail(message) {
   failures.push(message);

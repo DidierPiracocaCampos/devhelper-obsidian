@@ -1,3 +1,11 @@
 /*
  * DevHelper theme for Obsidian — dark only.
  */
+
+.theme-dark {
+  --background-primary: #171717;
+  --background-secondary: #20201e;
+  --text-normal: #e8e8e8;
+  --text-muted: color-mix(in oklab, #e8e8e8 70%, transparent);
+  --text-faint: color-mix(in oklab, #e8e8e8 50%, transparent);
+}
