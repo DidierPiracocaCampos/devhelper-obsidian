@@ -34,6 +34,8 @@ import {
   DEFAULT_TEMPLATE_CONTENT,
   FIXED_TEMPLATE_PROPERTIES,
   TEMPLATE_FILE_NAMES,
+  applyTemplate,
+  todayStamp,
   type TemplateKind,
 } from "../domain/templates";
 import type {
@@ -289,37 +291,94 @@ export class ProjectTaskRepository {
   // -------------------------------------------------------------------------
   // Mutations: create
   //
-  // T6 rewrites the mutation bodies to honour the V2 layout
-  // (`<projectFolder>/Tareas/…`). For T5 we keep the V1 surface intact
-  // but route the storage location to a V2-compatible path so the
-  // typecheck and the adapted tests can pass.
+  // T6 rewrites the mutation bodies to honour the V2 layout:
+  //  - `createProject` materialises the full project subtree
+  //    (`<F>/`, `<F>/Tareas/`, `<F>/Archivos/`, `<F>/<F>.md`,
+  //    `<F>/Credenciales.md`) seeded from the user's project and
+  //    credentials templates.
+  //  - `createTask` writes the new note inside `<F>/Tareas/`,
+  //    stamped from the user's task template.
+  //  - Mutations that target a single property only edit that
+  //    property — frontmatter rewrites always route through
+  //    `processFrontMatter` so the user's other keys and the body
+  //    survive untouched.
   // -------------------------------------------------------------------------
 
   async createProject(title: string): Promise<void> {
     const sanitized = sanitizeFilename(title);
-    const folder = this.settings.projectsFolder;
-    await this.adapter.createFolder(folder);
-    const path = await this.uniqueMarkdownPath(folder, sanitized);
-    const content = renderProjectFrontmatter(title);
-    await this.adapter.createMarkdown(path, content);
+
+    // Validate the templates BEFORE we touch the filesystem so a
+    // broken template never leaves a half-built folder behind.
+    const projectIssue = await this.templateIssue("project");
+    if (projectIssue !== null) {
+      throw new Error(projectIssue);
+    }
+    const credentialsIssue = await this.templateIssue("credentials");
+    if (credentialsIssue !== null) {
+      throw new Error(credentialsIssue);
+    }
+
+    await this.adapter.createFolder(this.settings.projectsFolder);
+    const folder = await this.uniqueFolderPath(
+      this.settings.projectsFolder,
+      sanitized,
+    );
+    await this.adapter.createFolder(`${folder}/Tareas`);
+    await this.adapter.createFolder(`${folder}/Archivos`);
+
+    const folderName = basenameOf(folder);
+    const hubPath = `${folder}/${folderName}.md`;
+    const hubTemplateRef: VaultNoteRef = {
+      path: this.templatePath("project"),
+      basename: TEMPLATE_FILE_NAMES.project,
+    };
+    const hubTemplateContent = await this.adapter.read(hubTemplateRef);
+    const hubContent = applyTemplate(hubTemplateContent, "project", {
+      title,
+      today: todayStamp(),
+    });
+    await this.adapter.createMarkdown(hubPath, hubContent);
+
+    const credPath = `${folder}/Credenciales.md`;
+    const credTemplateRef: VaultNoteRef = {
+      path: this.templatePath("credentials"),
+      basename: TEMPLATE_FILE_NAMES.credentials,
+    };
+    const credTemplateContent = await this.adapter.read(credTemplateRef);
+    const credContent = applyTemplate(credTemplateContent, "credentials", {
+      title,
+      today: todayStamp(),
+    });
+    await this.adapter.createMarkdown(credPath, credContent);
   }
 
   async createTask(
     title: string,
     projectPath: string,
   ): Promise<void> {
-    const sanitized = sanitizeFilename(title);
-    // V2: the task's owning project folder is `folderOf(projectPath)` and
-    // tasks live under `<thatFolder>/Tareas/`. T6 will revisit this
-    // surface but the redirect is enough to satisfy the typecheck and
-    // the adapted tests today.
-    const projectFolder = folderOf(projectPath);
-    const folder = `${projectFolder}/Tareas`;
-    await this.adapter.createFolder(folder);
-    const path = await this.uniqueMarkdownPath(folder, sanitized);
+    // Validate the task template before touching the filesystem.
+    const taskIssue = await this.templateIssue("task");
+    if (taskIssue !== null) {
+      throw new Error(taskIssue);
+    }
 
+    const sanitized = sanitizeFilename(title);
+    const projectFolder = folderOf(projectPath);
+    const tasksFolder = `${projectFolder}/Tareas`;
+    await this.adapter.createFolder(tasksFolder);
+    const path = await this.uniqueMarkdownPath(tasksFolder, sanitized);
+
+    const templateRef: VaultNoteRef = {
+      path: this.templatePath("task"),
+      basename: TEMPLATE_FILE_NAMES.task,
+    };
+    const templateContent = await this.adapter.read(templateRef);
     const inner = projectPathToWikilinkInner(projectPath);
-    const content = renderTaskFrontmatter(title, inner);
+    const content = applyTemplate(templateContent, "task", {
+      title,
+      today: todayStamp(),
+      projectLink: wrapWikilink(inner),
+    });
     await this.adapter.createMarkdown(path, content);
   }
 
@@ -333,28 +392,61 @@ export class ProjectTaskRepository {
   ): Promise<void> {
     const sanitized = sanitizeFilename(title);
     const folder = folderOf(path);
-    const targetPath = await this.uniqueMarkdownPath(folder, sanitized, path);
-    const ref = { path, basename: basenameOf(path) };
-    await this.adapter.rename(ref, targetPath);
+    const currentBasename = basenameOf(path);
 
-    // Update tasks whose `project` property still pointed at the old
-    // path. We do this manually because Obsidian's auto-update of links
-    // may be disabled by the user, and we want the frontmatter to be
-    // authoritative regardless of that setting.
+    // No-op when the sanitised title already matches the current hub
+    // basename (case-sensitive). This keeps a click that does not
+    // change anything from churning the vault.
+    if (sanitized === currentBasename.replace(/\.md$/, "")) {
+      return;
+    }
+
+    // Step A: rename the hub file inside its current folder. Use the
+    // existing file-uniqueness helper so we never overwrite a sibling
+    // task by accident.
+    const targetHubPath = await this.uniqueMarkdownPath(
+      folder,
+      sanitized,
+      path,
+    );
+    const hubRef: VaultNoteRef = { path, basename: currentBasename };
+    await this.adapter.rename(hubRef, targetHubPath);
+
+    // Step B: rename the folder itself, disambiguating against every
+    // existing project folder under `projectsFolder`.
+    const newFolder = await this.uniqueFolderPath(
+      this.settings.projectsFolder,
+      sanitized,
+      folder,
+    );
+    await this.adapter.renameFolder(folder, newFolder);
+
+    // The hub now lives at `${newFolder}/${sanitized}.md`. Compute
+    // both the old and new wikilink inner so we can rewrite the
+    // `project` property on tasks that linked this project.
     const oldWikilinkInner = projectPathToWikilinkInner(path);
-    const newWikilinkInner = projectPathToWikilinkInner(targetPath);
-    // The user may have hand-written the project link with the `.md`
-    // extension included; accept both forms so the rename still applies
-    // when the frontmatter deviates from what `createTask` writes.
+    const newHubPath = `${newFolder}/${sanitized}.md`;
+    const newWikilinkInner = projectPathToWikilinkInner(newHubPath);
+
+    // Accept both the bare and the `.md`-suffixed form so the rename
+    // applies even when the user wrote the link with the extension.
     const oldLinkNoExt = wrapWikilink(oldWikilinkInner);
     const oldLinkWithExt = `${wrapWikilink(oldWikilinkInner)}.md`;
 
-    // V2: tasks live under each project's `<F>/Tareas/`. Scan every
-    // subfolder of `projectsFolder` and patch matching tasks in place.
+    // Walk every project's `<F>/Tareas/`. After the folder rename,
+    // any task that lived in the renamed folder is now at
+    // `${newFolder}/Tareas/...`. We patch only those whose
+    // frontmatter `project` still points at the old path.
     const subfolders = this.adapter.listSubfolders(
       this.settings.projectsFolder,
     );
     for (const projectFolder of subfolders) {
+      if (
+        normalizePathForCompare(projectFolder) ===
+        normalizePathForCompare(this.settings.templatesFolder)
+      ) {
+        continue;
+      }
       const tasksFolder = `${projectFolder}/Tareas`;
       if (!this.adapter.exists(tasksFolder)) continue;
       const taskRefs = this.adapter.listMarkdownFiles(tasksFolder);
@@ -393,9 +485,24 @@ export class ProjectTaskRepository {
   ): Promise<void> {
     const inner = projectPathToWikilinkInner(projectPath);
     const ref = { path, basename: basenameOf(path) };
+    // Update the frontmatter at the OLD path first so the file is
+    // never observed with a wikilink that does not match its
+    // physical location.
     await this.adapter.processFrontMatter(ref, (frontmatter) => {
       frontmatter["project"] = wrapWikilink(inner);
     });
+
+    // Then physically move the note to the new project's `Tareas/`,
+    // disambiguating against any existing sibling.
+    const projectFolder = folderOf(projectPath);
+    const newTasksFolder = `${projectFolder}/Tareas`;
+    await this.adapter.createFolder(newTasksFolder);
+    const newPath = await this.uniqueMarkdownPath(
+      newTasksFolder,
+      basenameOf(path).replace(/\.md$/, ""),
+      path,
+    );
+    await this.adapter.rename(ref, newPath);
   }
 
   async setTaskStatus(
@@ -486,6 +593,57 @@ export class ProjectTaskRepository {
       `ProjectTaskRepository: could not disambiguate ${sanitized} inside ${folderPath}`,
     );
   }
+
+  /**
+   * Return a unique folder path inside `parent` derived from
+   * `sanitized`. If a folder already exists at the candidate location
+   * (other than `ignorePath` itself, used by `renameProject`), append
+   * a trailing space + number (`" 2"`, `" 3"`, ...).
+   *
+   * Mirrors `uniqueMarkdownPath` but operates on the folder name space
+   * — used by `createProject` and `renameProject` to pick the new
+   * project's parent folder.
+   */
+  private async uniqueFolderPath(
+    parent: string,
+    sanitized: string,
+    ignorePath?: string,
+  ): Promise<string> {
+    if (sanitized.includes("/") || sanitized.includes("..")) {
+      throw new Error(
+        `ProjectTaskRepository: unsafe folder name after sanitization: ${sanitized}`,
+      );
+    }
+    const basePath = `${parent}/${sanitized}`;
+    if (
+      !this.adapter.exists(basePath) ||
+      (ignorePath !== undefined && basePath === ignorePath)
+    ) {
+      return basePath;
+    }
+
+    for (let counter = 2; counter < 10_000; counter++) {
+      const candidate = `${parent}/${sanitized} ${counter}`;
+      if (
+        !this.adapter.exists(candidate) ||
+        (ignorePath !== undefined && candidate === ignorePath)
+      ) {
+        return candidate;
+      }
+    }
+    throw new Error(
+      `ProjectTaskRepository: could not disambiguate folder ${sanitized} inside ${parent}`,
+    );
+  }
+
+  /**
+   * Resolve the absolute vault-relative path of the template file for
+   * `kind`. The repository owns the canonical naming
+   * (`TEMPLATE_FILE_NAMES`) so the call sites stay short.
+   */
+  private templatePath(kind: TemplateKind): string {
+    return joinPath(this.settings.templatesFolder, TEMPLATE_FILE_NAMES[kind]);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -567,34 +725,6 @@ function projectPathToWikilinkInner(projectPath: string): string {
  */
 function wrapWikilink(inner: string): string {
   return `[[${inner}]]`;
-}
-
-/**
- * Render the frontmatter + minimal body for a new project note. The
- * body is intentionally short so the user owns the Markdown content;
- * the frontmatter is the only thing the plugin requires.
- */
-function renderProjectFrontmatter(title: string): string {
-  return ["---", "type: project", "---", "", `# ${title}`, "", ""].join("\n");
-}
-
-/**
- * Render the frontmatter + minimal body for a new task note. The
- * `project` value is the full wikilink form (`[[…]]`) the parser
- * expects.
- */
-function renderTaskFrontmatter(title: string, projectWikilink: string): string {
-  return [
-    "---",
-    "type: task",
-    `project: "[[${projectWikilink}]]"`,
-    "status: open",
-    "---",
-    "",
-    `# ${title}`,
-    "",
-    "",
-  ].join("\n");
 }
 
 /**

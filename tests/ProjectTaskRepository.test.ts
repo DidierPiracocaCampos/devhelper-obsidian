@@ -316,6 +316,25 @@ function seedFolder(
   fake.folders.add(path);
 }
 
+/**
+ * Seed the three V2 templates so the mutation tests that bypass
+ * `load()` (and therefore the seeding it does) still see a healthy
+ * template file on disk. Pass `templatesFolder` to override the
+ * default; defaults to `DEFAULT_SETTINGS.templatesFolder`.
+ */
+function seedTemplates(
+  fake: FakeVaultState & VaultAdapter,
+  templatesFolder: string = DEFAULT_SETTINGS.templatesFolder,
+): void {
+  for (const [kind, content] of Object.entries(DEFAULT_TEMPLATE_CONTENT) as [
+    keyof typeof DEFAULT_TEMPLATE_CONTENT,
+    string,
+  ][]) {
+    const fileName = TEMPLATE_FILE_NAMES[kind];
+    seedFile(fake, `${templatesFolder}/${fileName}`, content);
+  }
+}
+
 function projectNote(props: Record<string, unknown> = {}): string {
   // V2 fixed-property bag. The parser requires these specific keys for
   // a `type: project` note to validate cleanly.
@@ -937,62 +956,183 @@ describe("ProjectTaskRepository", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Creation tests
+  // Creation tests — V2 mutation surface (brief tests 1, 2, 3, 4, 8)
   // -------------------------------------------------------------------------
 
   describe("createProject", () => {
-    it("creates a project note inside the configured projectsFolder", async () => {
+    it("createsFullStructure", async () => {
       const fake = createFakeVault();
+      // Seed a healthy project template so `createProject` does not
+      // throw the "invalid template" branch. The default seed lives
+      // on disk only after `load()`, so we mimic it here for an
+      // isolated mutation test.
+      seedTemplates(fake);
       const repo = makeRepo(fake);
+
+      await repo.createProject("Foo");
+
+      // The folder, both subfolders, the hub and Credenciales.md must
+      // all materialise.
+      expect(fake.folders.has(`${DEFAULT_SETTINGS.projectsFolder}/Foo`)).toBe(true);
+      expect(fake.folders.has(`${DEFAULT_SETTINGS.projectsFolder}/Foo/Tareas`)).toBe(true);
+      expect(fake.folders.has(`${DEFAULT_SETTINGS.projectsFolder}/Foo/Archivos`)).toBe(true);
+
+      const hubPath = `${DEFAULT_SETTINGS.projectsFolder}/Foo/Foo.md`;
+      expect(fake.files.has(hubPath)).toBe(true);
+      const hubContent = fake.files.get(hubPath)!;
+      // The hub carries the six fixed properties. js-yaml dumps
+      // string values with single quotes; the assertions accept either
+      // form so the test stays robust across dump styles.
+      expect(hubContent).toMatch(/type: project/);
+      expect(hubContent).toMatch(/status: active/);
+      expect(hubContent).toMatch(/created: ['"]?(\d{4}-\d{2}-\d{2})['"]?/);
+      expect(hubContent).toMatch(/tags: \[\]/);
+      expect(hubContent).toMatch(/description:/);
+      expect(hubContent).toMatch(/client:/);
+
+      const credPath = `${DEFAULT_SETTINGS.projectsFolder}/Foo/Credenciales.md`;
+      expect(fake.files.has(credPath)).toBe(true);
+      const credContent = fake.files.get(credPath)!;
+      expect(credContent).toMatch(/type: credentials/);
+      expect(credContent).toMatch(/credentials: \[\]/);
+    });
+
+    it("appliesCustomTemplateProperties", async () => {
+      const fake = createFakeVault();
+      // Pre-seed a project template that carries an extra `color`
+      // property. The hub should round-trip that property through
+      // `applyTemplate`. Seed the credentials template too because
+      // `createProject` reads it as well.
+      const customTemplate = [
+        "---",
+        "type: project",
+        "status: active",
+        "created: 1970-01-01",
+        "tags: []",
+        "description:",
+        "client:",
+        "color: blue",
+        "---",
+        "",
+      ].join("\n");
+      seedFile(
+        fake,
+        `${DEFAULT_SETTINGS.templatesFolder}/${TEMPLATE_FILE_NAMES.project}`,
+        customTemplate,
+      );
+      seedFile(
+        fake,
+        `${DEFAULT_SETTINGS.templatesFolder}/${TEMPLATE_FILE_NAMES.credentials}`,
+        DEFAULT_TEMPLATE_CONTENT.credentials,
+      );
+      const repo = makeRepo(fake);
+
+      await repo.createProject("Foo");
+
+      const hubContent = fake.files.get(
+        `${DEFAULT_SETTINGS.projectsFolder}/Foo/Foo.md`,
+      )!;
+      expect(hubContent).toMatch(/color: blue/);
+    });
+
+    it("blockedByInvalidTemplate", async () => {
+      const fake = createFakeVault();
+      // Pre-seed a broken project template (missing `status`).
+      const broken = DEFAULT_TEMPLATE_CONTENT.project
+        .split("\n")
+        .filter((line) => !line.startsWith("status:"))
+        .join("\n");
+      seedFile(
+        fake,
+        `${DEFAULT_SETTINGS.templatesFolder}/${TEMPLATE_FILE_NAMES.project}`,
+        broken,
+      );
+      const repo = makeRepo(fake);
+
+      // createProject must throw with a Spanish message.
+      await expect(repo.createProject("Foo")).rejects.toThrowError(
+        /La plantilla/,
+      );
+      // No folder, no file should have been created.
+      expect(fake.folders.has(`${DEFAULT_SETTINGS.projectsFolder}/Foo`)).toBe(false);
+      expect(
+        fake.files.has(`${DEFAULT_SETTINGS.projectsFolder}/Foo/Foo.md`),
+      ).toBe(false);
+    });
+
+    it("createsTheProjectsFolderWhenMissing", async () => {
+      const fake = createFakeVault();
+      const repo = makeRepo(fake, {
+        projectsFolder: "Areas/Web",
+        templatesFolder: "Areas/Web/_templates",
+      });
+      // Seed the project + credentials templates under the customised
+      // templates folder so `createProject` can read them.
+      seedTemplates(fake, "Areas/Web/_templates");
 
       await repo.createProject("Website");
 
-      // The create path is still V1 (T6 will rewrite it). For now we
-      // only assert the file exists at the sanitised name in the
-      // configured folder.
-      const created = Array.from(fake.files.keys()).filter((k) =>
-        k.startsWith(`${DEFAULT_SETTINGS.projectsFolder}/`),
-      );
-      expect(created).toContain(`${DEFAULT_SETTINGS.projectsFolder}/Website.md`);
+      // The configured projects folder (and every level below it) is
+      // materialised by the mutation, even when it never existed.
+      expect(fake.folders.has("Areas/Web")).toBe(true);
+      expect(fake.folders.has("Areas/Web/Website")).toBe(true);
+      expect(fake.folders.has("Areas/Web/Website/Tareas")).toBe(true);
+      expect(fake.folders.has("Areas/Web/Website/Archivos")).toBe(true);
     });
   });
 
   describe("createTask", () => {
-    it("creates a task note linked to the given project", async () => {
+    it("writesIntoProjectTasksFolder", async () => {
       const fake = createFakeVault();
       seedFile(
         fake,
         "Projects/Website/Website.md",
         projectNote(),
       );
+      // `createTask` reads the task template — seed it.
+      seedTemplates(fake);
       const repo = makeRepo(fake);
 
       await repo.createTask("Write copy", "Projects/Website/Website.md");
 
-      const created = Array.from(fake.files.keys()).filter((k) =>
-        k.startsWith(`${DEFAULT_SETTINGS.projectsFolder}/`),
-      );
-      // The task file lives somewhere inside the projects tree (V2
-      // will move it to Projects/Website/Tareas/, but for now we only
-      // assert the file was created and carries the right frontmatter).
-      expect(created.length).toBeGreaterThan(0);
-      const taskPath = created.find((k) => k.endsWith("/Write copy.md"))!;
+      const taskPath = "Projects/Website/Tareas/Write copy.md";
+      expect(fake.files.has(taskPath)).toBe(true);
       const content = fake.files.get(taskPath)!;
       expect(content).toMatch(/type: task/);
-      expect(content).toMatch(/project: "\[\[Projects\/Website\/Website\]\]"/);
+      // js-yaml may quote the wikilink with single or double quotes.
+      expect(content).toMatch(/project: ['"]\[\[Projects\/Website\/Website\]\]['"]?/);
       expect(content).toMatch(/status: open/);
+      // The task template's fixed properties survive the apply step.
+      expect(content).toMatch(/priority: medium/);
+      expect(content).toMatch(/created: ['"]?(\d{4}-\d{2}-\d{2})['"]?/);
     });
 
-    it("creates the projects folder when missing", async () => {
+    it("blockedByInvalidTemplate", async () => {
       const fake = createFakeVault();
-      const repo = makeRepo(fake, {
-        projectsFolder: "Areas/Web",
-        templatesFolder: "Areas/Web/_templates",
-      });
+      seedFile(
+        fake,
+        "Projects/Website/Website.md",
+        projectNote(),
+      );
+      // Pre-seed a broken task template (missing `priority`).
+      const broken = DEFAULT_TEMPLATE_CONTENT.task
+        .split("\n")
+        .filter((line) => !line.startsWith("priority:"))
+        .join("\n");
+      seedFile(
+        fake,
+        `${DEFAULT_SETTINGS.templatesFolder}/${TEMPLATE_FILE_NAMES.task}`,
+        broken,
+      );
+      const repo = makeRepo(fake);
 
-      await repo.createProject("Website");
-
-      expect(fake.folders.has("Areas/Web")).toBe(true);
+      await expect(
+        repo.createTask("Write copy", "Projects/Website/Website.md"),
+      ).rejects.toThrowError(/La plantilla/);
+      // No file landed inside Tareas/.
+      expect(
+        fake.files.has("Projects/Website/Tareas/Write copy.md"),
+      ).toBe(false);
     });
   });
 
@@ -1022,8 +1162,8 @@ describe("ProjectTaskRepository", () => {
     });
   });
 
-  describe("renamingProjectUpdatesLinkedTasks", () => {
-    it("updates the project property of every task that linked the old path", async () => {
+  describe("renamingProjectUpdatesLinkedTasksAtNewPaths", () => {
+    it("moves the folder, the hub, and patches the project link on every task that linked the old path", async () => {
       const fake = createFakeVault();
       seedFile(
         fake,
@@ -1055,27 +1195,68 @@ describe("ProjectTaskRepository", () => {
 
       await repo.renameProject("Projects/Old/Old.md", "New");
 
-      // The project file itself was renamed (still in its original
-      // folder — T6 will move the folder; today the rename just
-      // touches the filename).
-      expect(fake.files.has("Projects/Old/New.md")).toBe(true);
+      // The folder itself moved (Obsidian auto-link-update is OFF in
+      // this scenario; the plugin is the only thing rewriting the
+      // frontmatter).
+      expect(fake.folders.has("Projects/New")).toBe(true);
+      expect(fake.folders.has("Projects/Old")).toBe(false);
+      // The hub landed inside the new folder with the new name.
+      expect(fake.files.has("Projects/New/New.md")).toBe(true);
       expect(fake.files.has("Projects/Old/Old.md")).toBe(false);
 
-      // Alpha + Beta have their project link updated to the new wikilink.
-      const alphaContent = fake.files.get("Projects/Old/Tareas/Alpha.md")!;
-      const betaContent = fake.files.get("Projects/Old/Tareas/Beta.md")!;
-      expect(alphaContent).toMatch(/project: "\[\[Projects\/Old\/New\]\]"/);
-      expect(betaContent).toMatch(/project: "\[\[Projects\/Old\/New\]\]"/);
+      // Tasks physically moved with the folder, and their project
+      // link was rewritten to the new path.
+      expect(fake.files.has("Projects/New/Tareas/Alpha.md")).toBe(true);
+      expect(fake.files.has("Projects/New/Tareas/Beta.md")).toBe(true);
+      expect(fake.files.has("Projects/Old/Tareas/Alpha.md")).toBe(false);
+      expect(fake.files.has("Projects/Old/Tareas/Beta.md")).toBe(false);
 
-      // The 'Other' task is untouched.
+      const alphaContent = fake.files.get("Projects/New/Tareas/Alpha.md")!;
+      const betaContent = fake.files.get("Projects/New/Tareas/Beta.md")!;
+      expect(alphaContent).toMatch(/project: "\[\[Projects\/New\/New\]\]"/);
+      expect(betaContent).toMatch(/project: "\[\[Projects\/New\/New\]\]"/);
+
+      // The 'Other' task belongs to a different project and must be
+      // untouched.
       const otherContent = fake.files.get(
         "Projects/Other/Tareas/Other.md",
       )!;
       expect(otherContent).toMatch(/project: "\[\[Projects\/Other\/Other\]\]"/);
 
-      // Bodies and other frontmatter properties are preserved.
+      // Bodies and other frontmatter properties are preserved on
+      // the moved tasks.
       expect(alphaContent).toMatch(/# Task/);
       expect(alphaContent).toMatch(/status: open/);
+    });
+  });
+
+  describe("renameProjectDisambiguatesExistingFolder", () => {
+    it("appends ' 2' when the requested folder name collides with an existing project", async () => {
+      const fake = createFakeVault();
+      // Two project folders with hubs. Rename `Original` to `Foo`,
+      // which is already taken by the sibling.
+      seedFile(
+        fake,
+        "Projects/Foo/Foo.md",
+        projectNote(),
+      );
+      seedFile(
+        fake,
+        "Projects/Original/Original.md",
+        projectNote(),
+      );
+
+      const repo = makeRepo(fake);
+
+      await repo.renameProject("Projects/Original/Original.md", "Foo");
+
+      // The renamed project lives in the disambiguated folder.
+      expect(fake.folders.has("Projects/Foo 2")).toBe(true);
+      expect(fake.files.has("Projects/Foo 2/Foo.md")).toBe(true);
+      // The original folder is gone.
+      expect(fake.folders.has("Projects/Original")).toBe(false);
+      // The pre-existing Foo project is untouched.
+      expect(fake.files.has("Projects/Foo/Foo.md")).toBe(true);
     });
   });
 
@@ -1084,7 +1265,7 @@ describe("ProjectTaskRepository", () => {
   // -------------------------------------------------------------------------
 
   describe("reassignTask", () => {
-    it("updates only the project property and preserves the body and other keys", async () => {
+    it("moves the file to the new project's Tareas/ and rewrites the project wikilink", async () => {
       const fake = createFakeVault();
       seedFile(
         fake,
@@ -1118,7 +1299,11 @@ describe("ProjectTaskRepository", () => {
         "Projects/B/B.md",
       );
 
-      const updated = fake.files.get("Projects/A/Tareas/Alpha.md")!;
+      // The file physically moved to the new project's Tareas/ folder.
+      expect(fake.files.has("Projects/B/Tareas/Alpha.md")).toBe(true);
+      expect(fake.files.has("Projects/A/Tareas/Alpha.md")).toBe(false);
+
+      const updated = fake.files.get("Projects/B/Tareas/Alpha.md")!;
       expect(updated).toMatch(/project: "\[\[Projects\/B\/B\]\]"/);
       expect(updated).toMatch(/owner: alice/);
       expect(updated).toMatch(/estimate: 3/);
@@ -1173,6 +1358,7 @@ describe("ProjectTaskRepository", () => {
         "Projects/A/A.md",
         projectNote(),
       );
+      seedTemplates(fake);
       const repo = makeRepo(fake);
 
       await repo.createTask(
@@ -1203,6 +1389,7 @@ describe("ProjectTaskRepository", () => {
         "Projects/A/A.md",
         projectNote(),
       );
+      seedTemplates(fake);
       const repo = makeRepo(fake);
 
       await repo.createTask("////", "Projects/A/A.md");
@@ -1227,6 +1414,7 @@ describe("ProjectTaskRepository", () => {
         "Projects/A/Tareas/Shared.md",
         taskNote("Projects/A/A"),
       );
+      seedTemplates(fake);
       const repo = makeRepo(fake);
 
       await repo.createTask("Shared", "Projects/A/A.md");
@@ -1256,6 +1444,7 @@ describe("ProjectTaskRepository", () => {
         "Projects/A/A.md",
         projectNote(),
       );
+      seedTemplates(fake);
       const repo = makeRepo(fake);
 
       await repo.createTask("Has props", "Projects/A/A.md");
