@@ -7,11 +7,11 @@ import {
 
 describe("settings", () => {
   describe("usesDefaultFolders", () => {
-    it("exposes Projects and Tasks as the default folder names", () => {
+    it("exposes Projects and Projects/_templates as the default folder names", () => {
       const defaults: PluginSettings = DEFAULT_SETTINGS;
 
       expect(defaults.projectsFolder).toBe("Projects");
-      expect(defaults.tasksFolder).toBe("Tasks");
+      expect(defaults.templatesFolder).toBe("Projects/_templates");
     });
   });
 

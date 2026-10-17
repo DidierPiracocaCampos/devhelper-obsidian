@@ -37,13 +37,15 @@ export class SettingsTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Tasks folder")
-      .setDesc("Vault-relative folder that stores task Markdown notes.")
+      .setName("Carpeta de plantillas")
+      .setDesc(
+        "Carpeta del vault donde se siembran las plantillas. Por defecto «Projects/_templates».",
+      )
       .addText((text) => {
-        text.setValue(settings.tasksFolder).onChange(async (value) => {
-          settings.tasksFolder = normalizeVaultFolderPath(
+        text.setValue(settings.templatesFolder).onChange(async (value) => {
+          settings.templatesFolder = normalizeVaultFolderPath(
             value,
-            this.defaults.tasksFolder,
+            this.defaults.templatesFolder,
           );
           await this.writeSettings(settings);
         });
@@ -58,7 +60,7 @@ export class SettingsTab extends PluginSettingTab {
     if (!pluginWithSettings.settings) {
       return {
         projectsFolder: this.defaults.projectsFolder,
-        tasksFolder: this.defaults.tasksFolder,
+        templatesFolder: this.defaults.templatesFolder,
       };
     }
     return {
@@ -66,9 +68,9 @@ export class SettingsTab extends PluginSettingTab {
         pluginWithSettings.settings.projectsFolder,
         this.defaults.projectsFolder,
       ),
-      tasksFolder: normalizeVaultFolderPath(
-        pluginWithSettings.settings.tasksFolder,
-        this.defaults.tasksFolder,
+      templatesFolder: normalizeVaultFolderPath(
+        pluginWithSettings.settings.templatesFolder,
+        this.defaults.templatesFolder,
       ),
     };
   }

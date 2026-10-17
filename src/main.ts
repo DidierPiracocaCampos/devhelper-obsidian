@@ -34,7 +34,11 @@ export default class DevHelperDashboardPlugin extends Plugin {
   private refreshTimer: number | null = null;
 
   async onload(): Promise<void> {
-    this.settings = mergeSettings(DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign(
+      {},
+      DEFAULT_SETTINGS,
+      (await this.loadData()) as Partial<PluginSettings> | undefined,
+    );
 
     const adapter = new ObsidianVaultAdapter(this.app);
     this.repository = new ProjectTaskRepository(adapter, this.settings);
@@ -143,26 +147,3 @@ export default class DevHelperDashboardPlugin extends Plugin {
 
 /** Time window (in ms) used to coalesce bursty vault events. */
 const DEBOUNCE_MS = 250;
-
-/**
- * Merge persisted plugin data over the defaults. Unknown keys in the
- * persisted blob are ignored so a future schema can extend defaults
- * without losing the user's existing values.
- */
-function mergeSettings(
-  defaults: PluginSettings,
-  persisted: unknown,
-): PluginSettings {
-  if (!persisted || typeof persisted !== "object") return { ...defaults };
-  const candidate = persisted as Partial<PluginSettings>;
-  return {
-    projectsFolder:
-      typeof candidate.projectsFolder === "string"
-        ? candidate.projectsFolder
-        : defaults.projectsFolder,
-    tasksFolder:
-      typeof candidate.tasksFolder === "string"
-        ? candidate.tasksFolder
-        : defaults.tasksFolder,
-  };
-}

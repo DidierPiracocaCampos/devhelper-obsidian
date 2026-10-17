@@ -7,12 +7,12 @@
 
 export interface PluginSettings {
   projectsFolder: string;
-  tasksFolder: string;
+  templatesFolder: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   projectsFolder: "Projects",
-  tasksFolder: "Tasks",
+  templatesFolder: "Projects/_templates",
 };
 
 /**
