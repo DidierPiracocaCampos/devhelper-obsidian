@@ -482,6 +482,34 @@ describe("parseProjectTaskNote", () => {
       expect(result.kind).toBe("task");
     });
   });
+
+  describe("acceptsEmptyDueProperty", () => {
+    it("parses a task with due set to an empty quoted string as open", () => {
+      const note = snapshot(
+        "Tasks/EmptyDue.md",
+        "EmptyDue.md",
+        [
+          "---",
+          "type: task",
+          'project: "[[Projects/Foo]]"',
+          "status: open",
+          "created: \"2026-01-15\"",
+          "priority: high",
+          'due: ""',
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Foo.md");
+
+      expect(result.kind).toBe("task");
+      if (result.kind !== "task") return;
+      expect(result.task.status).toBe("open");
+      expect(result.task.projectPath).toBe("Projects/Foo.md");
+      expect(result.task.path).toBe("Tasks/EmptyDue.md");
+      expect(result.task.properties.due).toBe("");
+    });
+  });
 });
 
 describe("parseCredentialsNote", () => {

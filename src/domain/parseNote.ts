@@ -314,6 +314,9 @@ function validateProjectFixedProperties(
   if (properties.created === undefined || properties.created === null) {
     return "Falta la propiedad requerida 'created' (esperado 'YYYY-MM-DD').";
   }
+  // Comprobación defensiva: 'created' debe ser cadena no vacía. El brief sólo
+  // enumera el mensaje de ausente, pero conservamos este segundo mensaje
+  // para que un valor no-cadena o vacío quede reportado y no pase silencioso.
   if (
     typeof properties.created !== "string" ||
     properties.created.length === 0
@@ -372,10 +375,11 @@ function validateTaskFixedProperties(
 
   if ("due" in properties && properties.due !== undefined && properties.due !== null) {
     const due = properties.due;
-    if (typeof due !== "string" || due.length === 0 || !DATE_REGEX.test(due)) {
-      return `La propiedad 'due' debe ser una fecha 'YYYY-MM-DD' válida o estar vacía, se recibió: ${String(
-        due,
-      )}.`;
+    if (typeof due !== "string") {
+      return `La propiedad 'due' debe ser una fecha 'YYYY-MM-DD' válida o estar vacía, se recibió: ${String(due)}.`;
+    }
+    if (due.length > 0 && !DATE_REGEX.test(due)) {
+      return `La propiedad 'due' debe ser una fecha 'YYYY-MM-DD' válida o estar vacía, se recibió: ${due}.`;
     }
   }
 
