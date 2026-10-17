@@ -9,7 +9,7 @@ Plugin de Obsidian escrito en TypeScript: **DevHelper Dashboard**. Presenta proy
 tareas respaldados por notas Markdown (`type: project`, `type: task`, `project: "[[…]]"`,
 `status: open|done`) en una vista propia del plugin.
 
-Estado: **V1 entregada** (8 commits, `0df6689` → `e4102dc` en `master`). 51 tests pasan,
+Estado: **V2 entregada** (8 commits V1 + 8 commits V2, `0df6689` → `13a4109` en `master`). 86 tests pasan,
 `main.js` se construye, `manifest.json` y `styles.css` están listos para instalarse.
 
 ## Comandos
@@ -33,7 +33,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   y listeners `vault.on('create|modify|delete|rename')` + `metadataCache.on('changed')`
   con debounce de 250 ms. `onunload` cancela el timer pendiente.
 - `src/settings.ts` — `PluginSettings`, `DEFAULT_SETTINGS = { projectsFolder: "Projects",
-  tasksFolder: "Tasks" }`, y `normalizeVaultFolderPath(path, fallback): string`. La
+  templatesFolder: "Projects/_templates" }`, y `normalizeVaultFolderPath(path, fallback): string`. La
   normalización RECHAZA rutas absolutas, letras de unidad y `..` ANTES de trim barras.
 - `src/ui/SettingsTab.ts` — `PluginSettingTab` con dos `TextComponent`, persiste vía
   `plugin.saveData()`.
@@ -48,7 +48,9 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 - `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
   sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
   del mes en español.
-- `src/data/VaultAdapter.ts` — interface pura (`VaultNoteRef`, 7 métodos).
+- `src/data/VaultAdapter.ts` — interface pura (`VaultNoteRef`, 10 métodos:
+  `listMarkdownFiles`, `read`, `createFolder`, `createMarkdown`, `rename`,
+  `processFrontMatter`, `resolveLink`, `listSubfolders`, `exists`, `renameFolder`).
 - `src/data/ObsidianVaultAdapter.ts` — única con `import "obsidian"`. `createFolder` crea
   cada nivel por separado (Obsidian sólo crea uno). `processFrontMatter` usa
   `app.fileManager.processFrontMatter`. `rename` devuelve ref del nuevo path.
@@ -83,11 +85,12 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 ## Tests (`tests/`)
 
 - `tests/settings.test.ts` — 10 tests.
-- `tests/parseNote.test.ts` — 12 tests con casos específicos por modo de error.
+- `tests/parseNote.test.ts` — 25 tests con casos específicos por modo de error.
 - `tests/presentDashboard.test.ts` — 8 tests sobre orden determinista y fallback.
 - `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
-- `tests/ProjectTaskRepository.test.ts` — 17 tests con un `VaultAdapter` falso en
+- `tests/templates.test.ts` — 8 tests; cubre validación y aplicación de plantillas.
+- `tests/ProjectTaskRepository.test.ts` — 31 tests con un `VaultAdapter` falso en
   memoria. Cubre sanitize, disambiguate, propiedades y cuerpo preservados, renombrado
   que actualiza tareas, edición manual round-tripped.
 
@@ -118,7 +121,7 @@ determinísticamente los métodos del API.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 51/51 verde
+npm test            # 86/86 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
@@ -160,6 +163,10 @@ falta; no se commitea al repo.
 
 - Spec: `docs/superpowers/specs/2026-10-04-obsidian-project-dashboard-design.md`
 - Plan ejecutado: `docs/superpowers/plans/2026-10-04-devhelper-dashboard-v1.md`
+- Spec V2 (estructura de carpetas por proyecto, plantillas y credenciales):
+  `docs/superpowers/specs/2026-10-17-projects-structure-design.md`
+- Plan V2 (pendiente de ejecutar):
+  `docs/superpowers/plans/2026-10-17-projects-structure-v2.md`
 
 Si recibes un plan nuevo en el mismo formato, emplea `superpowers:subagent-driven-development`
 (o `superpowers:executing-plans` si no hay subagentes disponibles) para entregarlo

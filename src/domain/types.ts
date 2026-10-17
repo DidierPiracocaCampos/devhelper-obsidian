@@ -64,10 +64,18 @@ export interface CredentialEntry {
  * Parsed credentials note (without a project binding). The repository
  * (Task 4) upgrades this to a `CredentialsRecord` once it knows which
  * project folder the note lives in.
+ *
+ * `entryIssues` collects per-entry validation failures so a single
+ * malformed entry never drops the rest of the credentials list: the
+ * repository splits the two arrays back out at the boundary, surfacing
+ * the issues via `DashboardData.issues` while keeping the valid entries
+ * in `DashboardData.credentials`. The field is optional because it is
+ * parser-internal — `CredentialsRecord` does not carry it.
  */
 export interface ParsedCredentialsNote {
   path: string;
   entries: CredentialEntry[];
+  entryIssues?: DashboardIssue[];
 }
 
 /**

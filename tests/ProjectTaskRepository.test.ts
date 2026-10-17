@@ -924,8 +924,8 @@ describe("ProjectTaskRepository", () => {
       });
     });
 
-    describe("invalidCredentialEntrySurfacesIssue", () => {
-      it("produces a single issue for a credentials entry missing the password key", async () => {
+    describe("preservesValidCredentialEntriesAlongsideInvalidOne", () => {
+      it("keeps the valid entry in data.credentials while surfacing the invalid one as an issue", async () => {
         const fake = createFakeVault();
         seedFile(
           fake,
@@ -938,19 +938,31 @@ describe("ProjectTaskRepository", () => {
           credentialsNote([
             // Missing `password` on the first entry.
             { service: "Hosting", user: "ops" },
+            // Valid second entry.
+            { service: "GitHub", user: "alice", password: "hunter2" },
           ]),
         );
 
         const repo = makeRepo(fake);
         const data = await repo.load();
 
+        // The credentials record still appears with the valid row intact.
+        expect(data.credentials).toHaveLength(1);
+        expect(data.credentials[0].projectPath).toBe(
+          "Projects/Website/Website.md",
+        );
+        expect(data.credentials[0].entries).toHaveLength(1);
+        expect(data.credentials[0].entries[0].service).toBe("GitHub");
+        expect(data.credentials[0].entries[0].user).toBe("alice");
+        expect(data.credentials[0].entries[0].password).toBe("hunter2");
+
+        // The broken row surfaces as a per-entry issue indexed at 0.
         const credsIssue = data.issues.find(
           (i) => i.path === "Projects/Website/Credenciales.md",
         );
         expect(credsIssue).toBeDefined();
+        expect(credsIssue!.message).toMatch(/0/);
         expect(credsIssue!.message).toMatch(/password/i);
-        // No credentials record was produced.
-        expect(data.credentials).toHaveLength(0);
       });
     });
   });

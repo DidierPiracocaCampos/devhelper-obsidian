@@ -202,13 +202,17 @@ export class ProjectTaskRepository {
         const credSnapshot = await this.readSnapshot(credRef);
         const credParsed = parseCredentialsNote(credSnapshot);
         switch (credParsed.kind) {
-          case "credentials":
-            credentials.push({
-              path: credParsed.credentials.path,
-              entries: credParsed.credentials.entries,
-              projectPath: hubPath,
-            });
+          case "credentials": {
+            const { path, entries, entryIssues } = credParsed.credentials;
+            credentials.push({ path, entries, projectPath: hubPath });
+            // `entryIssues` is parser-internal: lift each one into the
+            // global issues list so the dashboard surfaces them. The
+            // `CredentialsRecord` does not carry the field.
+            for (const ei of entryIssues ?? []) {
+              issues.push(ei);
+            }
             break;
+          }
           case "issue":
             issues.push(credParsed.issue);
             break;
@@ -738,11 +742,11 @@ function wrapWikilink(inner: string): string {
  * have missed (multi-line folded scalars, unquoted flow forms, etc.).
  */
 function extractProjectWikilink(content: string): string | null {
-  const sliced = sliceFrontmatterBlock(content);
-  if (sliced === null) return null;
+  const sliced = sliceFrontmatter(content);
+  if (sliced.kind !== "ok") return null;
   let parsed: unknown;
   try {
-    parsed = yaml.load(sliced);
+    parsed = yaml.load(sliced.yaml);
   } catch {
     return null;
   }
@@ -752,23 +756,4 @@ function extractProjectWikilink(content: string): string | null {
   const value = properties["project"];
   if (typeof value !== "string") return null;
   return value.trim();
-}
-
-/**
- * Slice a `---\n…\n---` frontmatter block from raw note content and
- * return the YAML between the markers, or `null` if the block is
- * missing or unclosed. Mirrors `sliceFrontmatter` in
- * `src/domain/parseNote.ts` but returns a flat string so callers that
- * only need the YAML text (not the body) can stay allocation-light.
- */
-function sliceFrontmatterBlock(content: string): string | null {
-  const normalized = content.replace(/\r\n/g, "\n");
-  if (!normalized.startsWith("---\n")) return null;
-  const lines = normalized.split("\n");
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i] === "---") {
-      return lines.slice(1, i).join("\n");
-    }
-  }
-  return null;
 }

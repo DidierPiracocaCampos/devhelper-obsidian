@@ -177,11 +177,13 @@ export function parseCredentialsNote(note: NoteSnapshot): ParsedNote {
   }
 
   const entries: CredentialEntry[] = [];
+  const entryIssues: DashboardIssue[] = [];
   for (let i = 0; i < raw.length; i++) {
     const entry = raw[i];
     const validation = validateCredentialEntry(entry, i);
     if (validation !== null) {
-      return issue(note.path, validation);
+      entryIssues.push({ path: note.path, message: validation });
+      continue;
     }
     entries.push(entry as CredentialEntry);
   }
@@ -189,6 +191,7 @@ export function parseCredentialsNote(note: NoteSnapshot): ParsedNote {
   const credentials: ParsedCredentialsNote = {
     path: note.path,
     entries,
+    entryIssues,
   };
   return { kind: "credentials", credentials };
 }

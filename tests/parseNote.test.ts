@@ -558,8 +558,8 @@ describe("parseCredentialsNote", () => {
     });
   });
 
-  describe("reportsCredentialEntryMissingField", () => {
-    it("returns a single issue mentioning the entry index", () => {
+  describe("preservesValidCredentialEntriesAlongsideInvalidOne", () => {
+    it("keeps the valid entry and surfaces the invalid one as a per-entry issue", () => {
       const note = snapshot(
         "Projects/Website/Credentials.md",
         "Credentials.md",
@@ -578,13 +578,51 @@ describe("parseCredentialsNote", () => {
 
       const result = parseCredentialsNote(note);
 
-      expect(result.kind).toBe("issue");
-      if (result.kind !== "issue") return;
-      expect(result.issue.path).toBe(
+      // The parser no longer bails on the first broken entry: it returns
+      // a credentials record so the valid row survives.
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+
+      expect(result.credentials.path).toBe(
         "Projects/Website/Credentials.md",
       );
-      expect(result.issue.message).toContain("1");
-      expect(result.issue.message).toContain("password");
+      expect(result.credentials.entries).toHaveLength(1);
+      expect(result.credentials.entries[0]).toMatchObject({
+        service: "GitHub",
+        user: "alice",
+        password: "hunter2",
+      });
+
+      // The invalid row surfaces as a per-entry issue indexed at 1.
+      expect(result.credentials.entryIssues).toHaveLength(1);
+      expect(result.credentials.entryIssues![0].path).toBe(
+        "Projects/Website/Credentials.md",
+      );
+      expect(result.credentials.entryIssues![0].message).toContain("1");
+      expect(result.credentials.entryIssues![0].message).toContain("password");
+    });
+
+    it("drops the entry but still produces a credentials record when only the invalid entry is present", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          "  - service: AWS",
+          "    user: bob",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+      expect(result.credentials.entries).toHaveLength(0);
+      expect(result.credentials.entryIssues).toHaveLength(1);
+      expect(result.credentials.entryIssues![0].message).toContain("password");
     });
   });
 
