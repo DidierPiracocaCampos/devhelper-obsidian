@@ -127,7 +127,7 @@ export class DashboardView extends ItemView {
     if (presentation.selectedProject === null) {
       this.renderEmptyState();
     } else {
-      this.renderProjectSection(presentation.selectedProject, presentation.tasks);
+      this.renderTasksPanel(presentation.selectedProject, presentation.tasks);
     }
     this.renderIssues(presentation.issues);
   }
@@ -253,14 +253,21 @@ export class DashboardView extends ItemView {
     });
   }
 
-  private renderProjectSection(
+  private renderTasksPanel(
     project: ProjectRecord,
     tasks: TaskRecord[],
   ): void {
     const main = this.contentEl.createEl("section", {
-      cls: "devhelper-main",
+      cls: "devhelper-tasks-panel",
     });
-    const projectHeader = main.createEl("div", {
+
+    // Header row: the project title/path on the left and the panel FABs
+    // stacked on the right edge. The task list below wraps onto its
+    // own row (`.devhelper-task-list` gets `flex-basis: 100%`).
+    const panelHeader = main.createEl("div", {
+      cls: "devhelper-tasks-panel-header",
+    });
+    const projectHeader = panelHeader.createEl("div", {
       cls: "devhelper-project-header",
     });
     projectHeader.createEl("h3", { text: project.title });
@@ -269,17 +276,25 @@ export class DashboardView extends ItemView {
       text: project.path,
     });
 
-    const editButton = main.createEl("button", {
-      cls: "devhelper-button",
-      text: "Editar",
+    const fabs = panelHeader.createEl("div", {
+      cls: "devhelper-panel-fabs",
     });
-    editButton.addEventListener("click", () => this.openEditProject(project));
 
-    const openButton = main.createEl("button", {
-      cls: "devhelper-button",
-      text: "Abrir",
+    // Placeholder filter: no click listener on purpose (spec rule).
+    const filterButton = fabs.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: { "aria-label": "Filtrar", type: "button" },
     });
-    openButton.addEventListener("click", () => this.openNote(project.path));
+    setIcon(filterButton, "funnel");
+
+    const createTaskButton = fabs.createEl("button", {
+      cls: "devhelper-fab",
+      attr: { "aria-label": "Nueva tarea", type: "button" },
+    });
+    setIcon(createTaskButton, "plus");
+    createTaskButton.addEventListener("click", () =>
+      void this.openCreateTask(),
+    );
 
     const list = main.createEl("ul", { cls: "devhelper-task-list" });
     if (tasks.length === 0) {
@@ -299,36 +314,50 @@ export class DashboardView extends ItemView {
     const card = createEl("li", { cls: "devhelper-task-card" });
     if (task.status === "done") card.addClass("is-done");
 
-    const titleEl = card.createEl("h4", { text: task.title });
-    titleEl.addClass("devhelper-task-title");
+    // The title is the primary affordance: clicking it opens the note.
+    const titleEl = card.createEl("h4", {
+      cls: "devhelper-task-title",
+      text: task.title,
+    });
+    titleEl.addEventListener("click", () => this.openNote(task.path));
 
-    const meta = card.createEl("div", { cls: "devhelper-task-meta" });
-    meta.createEl("span", {
-      cls: `devhelper-task-status devhelper-task-status--${task.status}`,
-      text: task.status === "done" ? "Hecho" : "Pendiente",
+    // Placeholder subtitle until the `description` property lands (spec
+    // roadmap); always rendered so the card height is stable.
+    card.createEl("p", {
+      cls: "devhelper-task-subtitle",
+      text: "Sin descripción",
     });
 
     const actions = card.createEl("div", { cls: "devhelper-task-actions" });
 
-    const toggleBtn = actions.createEl("button", {
-      cls: "devhelper-button",
-      text: task.status === "done" ? "Reabrir" : "Marcar como hecho",
+    // Delete is not part of v1: the button is rendered but inert.
+    const deleteBtn = actions.createEl("button", {
+      cls: "devhelper-icon-button devhelper-task-icon",
+      attr: {
+        "aria-label": "Eliminar tarea",
+        type: "button",
+        title: "Disponible en una versión futura",
+      },
     });
-    toggleBtn.addEventListener("click", () =>
-      this.toggleTaskStatus(task),
-    );
+    setIcon(deleteBtn, "trash-2");
+    deleteBtn.disabled = true;
 
     const editBtn = actions.createEl("button", {
-      cls: "devhelper-button",
-      text: "Editar",
+      cls: "devhelper-icon-button devhelper-task-icon",
+      attr: { "aria-label": "Editar tarea", type: "button" },
     });
-    editBtn.addEventListener("click", () => this.openEditTask(task));
+    setIcon(editBtn, "pencil");
+    editBtn.addEventListener("click", () => void this.openEditTask(task));
 
-    const openBtn = actions.createEl("button", {
-      cls: "devhelper-button",
-      text: "Abrir",
+    // The status circle carries no text/icon: its appearance is pure
+    // CSS (`--open` hollow, `--done` filled green).
+    const statusCircle = actions.createEl("button", {
+      cls: `devhelper-status-circle devhelper-status-circle--${task.status}`,
+      attr: { "aria-label": "Cambiar estado", type: "button" },
     });
-    openBtn.addEventListener("click", () => this.openNote(task.path));
+    statusCircle.addEventListener("click", () =>
+      void this.toggleTaskStatus(task),
+    );
 
     return card;
   }

@@ -167,6 +167,38 @@
   border: 1px solid var(--background-modifier-border);
 }
 
+/* The tasks panel reuses the panel chrome above and lays the header and
+   the FABs column on one row; the task list wraps to a full-width row. */
+.devhelper-tasks-panel {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.devhelper-tasks-panel-header {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.devhelper-tasks-panel-header .devhelper-project-header {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.devhelper-panel-fabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
 .devhelper-project-header {
   display: flex;
   flex-wrap: wrap;
@@ -199,6 +231,11 @@
   gap: 8px;
 }
 
+/* Force the list onto its own row inside the row-wrapped tasks panel. */
+.devhelper-tasks-panel .devhelper-task-list {
+  flex: 1 1 100%;
+}
+
 .devhelper-task-empty {
   color: var(--text-muted);
   font-style: italic;
@@ -208,7 +245,7 @@
 .devhelper-task-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--background-primary-alt);
@@ -224,37 +261,50 @@
 .devhelper-task-title {
   margin: 0;
   font-size: 1em;
+  cursor: pointer;
 }
 
-.devhelper-task-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.devhelper-task-status {
-  font-size: 0.8em;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--background-modifier-border);
-  color: var(--text-normal);
-}
-
-.devhelper-task-status--open {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
-}
-
-.devhelper-task-status--done {
-  background: var(--background-modifier-border);
+.devhelper-task-subtitle {
+  margin: 0;
   color: var(--text-muted);
+  font-size: 0.85em;
 }
 
 .devhelper-task-actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+/* Slightly smaller round buttons than the 32px default, scoped to the
+   task action row so the toolbar stays compact. */
+.devhelper-task-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.devhelper-status-circle {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.devhelper-status-circle--open {
+  background: transparent;
+}
+
+.devhelper-status-circle--done {
+  background: #22c55e;
+  border-color: #22c55e;
+}
+
+.devhelper-task-actions button[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* --- Issues panel --------------------------------------------------------- */
