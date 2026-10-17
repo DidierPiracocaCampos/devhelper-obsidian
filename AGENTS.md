@@ -9,7 +9,7 @@ Plugin de Obsidian escrito en TypeScript: **DevHelper Dashboard**. Presenta proy
 tareas respaldados por notas Markdown (`type: project`, `type: task`, `project: "[[…]]"`,
 `status: open|done`) en una vista propia del plugin.
 
-Estado: **V1 entregada** (8 commits, `0df6689` → `e4102dc` en `master`). 47 tests pasan,
+Estado: **V1 entregada** (8 commits, `0df6689` → `e4102dc` en `master`). 51 tests pasan,
 `main.js` se construye, `manifest.json` y `styles.css` están listos para instalarse.
 
 ## Comandos
@@ -118,7 +118,7 @@ determinísticamente los métodos del API.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 47/47 verde
+npm test            # 51/51 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```

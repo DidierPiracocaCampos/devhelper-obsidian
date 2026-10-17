@@ -104,8 +104,9 @@ export class DashboardView extends ItemView {
   private renderEmpty(): void {
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-dashboard-root");
-    this.contentEl.createEl("h2", { text: "Dashboard DevHelper" });
-    this.contentEl.createEl("p", {
+    const main = this.contentEl.createEl("div", { cls: "devhelper-main" });
+    main.createEl("h2", { text: "Dashboard DevHelper" });
+    main.createEl("p", {
       cls: "devhelper-empty",
       text: "Cargando proyectos y tareas…",
     });
@@ -252,7 +253,7 @@ export class DashboardView extends ItemView {
     });
     main.createEl("p", {
       cls: "devhelper-empty",
-      text: "No hay proyectos todavía. Crea el primero con «Nuevo proyecto».",
+      text: "No hay proyectos todavía. Crea el primero con el botón + de arriba.",
     });
   }
 
