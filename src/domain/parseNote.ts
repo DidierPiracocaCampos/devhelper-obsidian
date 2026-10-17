@@ -23,6 +23,7 @@
  */
 
 import yaml from "js-yaml";
+import { sliceFrontmatter } from "./frontmatter";
 import type {
   DashboardIssue,
   NoteSnapshot,
@@ -32,7 +33,6 @@ import type {
   TaskRecord,
 } from "./types";
 
-const FRONTMATTER_DELIMITER = "---";
 const ALLOWED_TASK_STATUSES = new Set(["open", "done"]);
 
 /**
@@ -47,7 +47,7 @@ export function parseProjectTaskNote(
 ): ParsedNote {
   const title = basenameToTitle(note.basename);
 
-  const sliced = sliceFrontmatter(note);
+  const sliced = sliceFrontmatter(note.content);
   if (sliced.kind === "missing") {
     return issue(note.path, "Falta bloque de frontmatter (--- … ---).");
   }
@@ -109,47 +109,6 @@ export function parseProjectTaskNote(
     note.path,
     `Tipo desconocido '${type}' (esperado 'project' o 'task').`,
   );
-}
-
-// ---------------------------------------------------------------------------
-// Frontmatter slicing
-// ---------------------------------------------------------------------------
-
-type SlicedFrontmatter =
-  | { kind: "ok"; yaml: string }
-  | { kind: "missing" }
-  | { kind: "unclosed" };
-
-/**
- * Find the first `---` line at the start of the note and the next `---`
- * line that closes it. Anything between is handed to js-yaml.
- *
- * - If the note does not start with `---`, returns `{ kind: "missing" }`.
- * - If there is no closing `---`, returns `{ kind: "unclosed" }`.
- *
- * The first `---` must be on the very first line; a `---` in the middle
- * of a Markdown document is not frontmatter.
- */
-function sliceFrontmatter(note: NoteSnapshot): SlicedFrontmatter {
-  // Normalise CRLF to LF for predictable line scanning.
-  const text = note.content.replace(/\r\n/g, "\n");
-
-  // Must start with `---` on the first line.
-  if (!text.startsWith(`${FRONTMATTER_DELIMITER}\n`)) {
-    return { kind: "missing" };
-  }
-
-  // Scan for the closing `---` line after the first one.
-  const lines = text.split("\n");
-  // lines[0] is the opening `---`, search from index 1 onwards.
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i] === FRONTMATTER_DELIMITER) {
-      const yamlText = lines.slice(1, i).join("\n");
-      return { kind: "ok", yaml: yamlText };
-    }
-  }
-
-  return { kind: "unclosed" };
 }
 
 // ---------------------------------------------------------------------------
