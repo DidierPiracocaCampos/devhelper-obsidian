@@ -497,9 +497,41 @@
 }
 
 /* --- Narrow layout -------------------------------------------------------- */
+@media (max-width: 640px) {
+  .devhelper-dashboard-root {
+    grid-template-columns: 1fr;
+  }
+  .devhelper-icon-rail {
+    display: none;
+  }
+  .devhelper-bottom-sections {
+    flex-direction: column;
+  }
+}
+
 @media (max-width: 320px) {
-  .devhelper-task-actions {
+  /* Keep the existing column stretch behaviour, but make sure the new
+     icon-only buttons don't get elongated to full panel width. */
+  .devhelper-controls,
+  .devhelper-task-actions,
+  .devhelper-task-actions button[disabled] {
     flex-direction: column;
     align-items: stretch;
+  }
+  .devhelper-task-actions button {
+    /* Allow the 28x28 icon buttons to keep their size rather than
+       stretching to panel width. */
+    align-self: flex-start;
+  }
+  .devhelper-topbar-controls {
+    width: 100%;
+    margin-left: 0;
+  }
+  .devhelper-search,
+  .devhelper-search-hint {
+    width: 100%;
+  }
+  .devhelper-task-list {
+    width: 100%;
   }
 }

@@ -45,6 +45,9 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 - `src/domain/presentDashboard.ts` — `presentDashboard(data, selectedProjectPath)`.
   Orden determinista: proyectos por `title` asc case-insensitive con desempate `path`;
   tareas del proyecto seleccionado por `status` (`open` antes que `done`) y luego título.
+- `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
+  sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
+  del mes en español.
 - `src/data/VaultAdapter.ts` — interface pura (`VaultNoteRef`, 7 métodos).
 - `src/data/ObsidianVaultAdapter.ts` — única con `import "obsidian"`. `createFolder` crea
   cada nivel por separado (Obsidian sólo crea uno). `processFrontMatter` usa
@@ -55,23 +58,35 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   actualiza la prop `project` de las tareas afectadas aunque Obsidian tenga
   auto-link-update desactivado (lee la nota raw, parsea con `js-yaml`, compara, y
   reescribe sólo esa prop con `processFrontMatter`).
-- `src/ui/DashboardView.ts` — `ItemView` (`VIEW_TYPE_DEVHELPER_DASHBOARD =
-  "devhelper-dashboard"`). `selectedProjectPath` vive aquí (en memoria, nunca
-  persistido). Cada `refresh()` re-llama `repository.load()` + `presentDashboard` —
-  **no hay snapshot en memoria**. Sin botones de borrar.
+- `src/ui/DashboardView.ts` — `ItemView`
+  (`VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard"`).
+  `selectedProjectPath` vive aquí (en memoria, nunca persistido).
+  Cada `refresh()` re-llama `repository.load()` + `presentDashboard` —
+  **no hay snapshot en memoria**. El render se organiza en métodos
+  `renderTopBar`, `renderProjectChips`, `renderTasksPanel`,
+  `renderTaskCard`, `renderEmptyState`, `renderSideColumn` (rail + calendario),
+  `renderBottomSections` (Archivos + Contraseña) y `renderIssues`. Sin acciones
+  de borrado: la papelera está deshabilitada y es decorativa.
 - `src/ui/ProjectFormModal.ts`, `src/ui/TaskFormModal.ts` — `obsidian.Modal` con
   validación inline. `TaskFormModal` recibe `defaultProjectPath` y por defecto usa el
   proyecto seleccionado.
 - `styles.css` — usa variables Obsidian (`--background-primary`, `--background-secondary`,
   `--text-normal`, `--interactive-accent`, etc.). Lienzo oscuro, paneles claros
-  redondeados, tarjetas de tarea oscuras. `@media (max-width: 320px)` para panel
-  estrecho.
+  redondeados, tarjetas de tarea oscuras. Layout en grid de dos columnas (`1fr auto`)
+  con la barra superior (`grid-column: 1 / -1`) y la fila inferior (Archivos +
+  Contraseña) ocupando ambas columnas. Chips de proyecto con `is-selected` claro;
+  tarjeta de tarea con círculo de estado (`#22c55e` para `--done`); FABs circulares;
+  placeholder sections inertes. Breakpoints: `@media (max-width: 640px)` → una
+  columna, oculta el rail; `@media (max-width: 320px)` → controles y acciones
+  apilados sin recorte.
 
 ## Tests (`tests/`)
 
 - `tests/settings.test.ts` — 10 tests.
 - `tests/parseNote.test.ts` — 12 tests con casos específicos por modo de error.
 - `tests/presentDashboard.test.ts` — 8 tests sobre orden determinista y fallback.
+- `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
+  `monthLabel` y marca exacta de `isToday`.
 - `tests/ProjectTaskRepository.test.ts` — 17 tests con un `VaultAdapter` falso en
   memoria. Cubre sanitize, disambiguate, propiedades y cuerpo preservados, renombrado
   que actualiza tareas, edición manual round-tripped.
@@ -88,7 +103,11 @@ determinísticamente los métodos del API.
 - **Sanitización de nombres de archivo** (en `ProjectTaskRepository`):
   `\ / : * ? " < > |` y `#` → `-`; colapsar `-` repetidos; trim `.`/espacios al borde;
   vacío → `"Untitled"`. En caso de colisión, sufija ` 2`, ` 3`, … antes de `.md`.
-- **Borrado de proyectos/tareas NO está en V1.** No añadas botones ni métodos delete.
+- **Borrado es placeholder.** No se crean métodos `delete*` ni confirmaciones de
+  borrado. Los iconos de papelera que aparezcan en la UI son puramente decorativos
+  y van deshabilitados; la papelera sigue activa sólo en el roadmap futuro. Hoy la
+  única forma de retirar una nota es a través de las utilidades estándar del vault
+  (file explorer, ribbon de notas, etc.).
 - **Las notas Markdown son la única fuente de verdad.** No crees un store paralelo en
   la config del plugin; `data.json` sólo guarda las dos carpetas configurables.
 - **Las propiedades del usuario y el cuerpo se preservan al editar.** Es un requisito
