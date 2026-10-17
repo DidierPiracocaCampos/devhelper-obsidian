@@ -109,6 +109,41 @@
   cursor: pointer;
 }
 
+/* --- Project chip status indicator (V2) ----------------------------------- */
+/* A tiny dot inserted between the chip title and the "···" menu button. The
+   base wrapper is a fixed 8x8 circle; the lucide `circle` glyph inside is
+   recolored via `color` so the dot blends with the modifier background.
+   The chip's `display: inline-flex; gap` already keeps the indicator inline. */
+.devhelper-project-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.devhelper-project-status svg {
+  width: 8px;
+  height: 8px;
+}
+
+.devhelper-project-status--active {
+  background-color: var(--color-green, #22c55e);
+  color: var(--color-green, #22c55e);
+}
+
+.devhelper-project-status--on-hold {
+  background-color: var(--color-yellow, #eab308);
+  color: var(--color-yellow, #eab308);
+}
+
+.devhelper-project-status--done {
+  background-color: var(--color-base-50, #8a8a8a);
+  color: var(--color-base-50, #8a8a8a);
+}
+
 /* --- Round icon buttons --------------------------------------------------- */
 .devhelper-icon-button {
   width: 32px;

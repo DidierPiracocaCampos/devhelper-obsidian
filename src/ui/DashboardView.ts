@@ -218,6 +218,29 @@ export class DashboardView extends ItemView {
       if (project.path === this.selectedProjectPath) {
         chip.addClass("is-selected");
       }
+
+      // V2 status indicator on the chip (active / on-hold / done).
+      // The CSS sizes and colors the dot; this only wires the markup.
+      // We default to "active" for any value the parser didn't constrain
+      // so an invalid status can't crash the render.
+      const statusValue =
+        project.properties.status === "active" ||
+        project.properties.status === "on-hold" ||
+        project.properties.status === "done"
+          ? project.properties.status
+          : "active";
+      const statusLabels: Record<string, string> = {
+        active: "Activo",
+        "on-hold": "En pausa",
+        done: "Terminado",
+      };
+      const statusLabel = statusLabels[statusValue] ?? "Activo";
+      const status = chip.createEl("span", {
+        cls: `devhelper-project-status devhelper-project-status--${statusValue}`,
+        attr: { "aria-label": statusLabel, role: "img" },
+      });
+      setIcon(status, "circle");
+
       chip.addEventListener("click", () =>
         this.setSelectedProjectPath(project.path),
       );
