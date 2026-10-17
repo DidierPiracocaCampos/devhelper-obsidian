@@ -127,6 +127,70 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
       const basename = chosen.slice(chosen.lastIndexOf("/") + 1);
       return { path: chosen, basename };
     },
+
+    listSubfolders(folderPath: string): string[] {
+      // The fake's `folders` set holds every path that has ever been
+      // created or implied. Direct children are those entries whose
+      // parent is exactly `folderPath`, i.e. the entry equals
+      // `${folderPath}/${name}` with no further `/` in `name`.
+      const out: string[] = [];
+      for (const path of folders) {
+        const lastSlash = path.lastIndexOf("/");
+        const parent = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
+        if (parent !== folderPath) continue;
+        if (path.slice(lastSlash + 1).startsWith(".")) continue;
+        out.push(path);
+      }
+      return out.sort();
+    },
+
+    exists(path: string): boolean {
+      return files.has(path) || folders.has(path);
+    },
+
+    async renameFolder(folderPath: string, newPath: string): Promise<void> {
+      if (!folders.has(folderPath)) {
+        throw new Error(
+          `Fake vault: cannot rename missing folder: ${folderPath}`,
+        );
+      }
+      const oldPrefix = `${folderPath}/`;
+      const newPrefix = `${newPath}/`;
+
+      // Rewrite every file whose path lives inside the renamed folder.
+      for (const path of Array.from(files.keys())) {
+        if (!path.startsWith(oldPrefix)) continue;
+        const suffix = path.slice(oldPrefix.length);
+        const next = `${newPrefix}${suffix}`;
+        const content = files.get(path)!;
+        files.delete(path);
+        files.set(next, content);
+      }
+
+      // Rewrite every descendant folder entry.
+      for (const path of Array.from(folders)) {
+        if (!path.startsWith(oldPrefix)) continue;
+        const suffix = path.slice(oldPrefix.length);
+        const next = `${newPrefix}${suffix}`;
+        folders.delete(path);
+        folders.add(next);
+      }
+
+      // Move the folder itself last so descendants resolve before the
+      // parent's own key is rewritten.
+      folders.delete(folderPath);
+      folders.add(newPath);
+
+      // Materialise every ancestor of `newPath` so the new subtree
+      // lives inside a fully-connected tree, mirroring what
+      // `createFolder` does when called on a fresh path.
+      const segments = newPath.split("/");
+      let current = "";
+      for (const segment of segments) {
+        current = current.length === 0 ? segment : `${current}/${segment}`;
+        folders.add(current);
+      }
+    },
   };
 
   return { files, folders, ...adapter };

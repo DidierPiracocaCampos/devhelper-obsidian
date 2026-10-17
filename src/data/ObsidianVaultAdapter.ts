@@ -27,7 +27,7 @@
  *    a round-trip through the dashboard.
  */
 
-import { App, TFile } from "obsidian";
+import { App, TFile, TFolder } from "obsidian";
 import type { VaultAdapter, VaultNoteRef } from "./VaultAdapter";
 
 export class ObsidianVaultAdapter implements VaultAdapter {
@@ -120,6 +120,32 @@ export class ObsidianVaultAdapter implements VaultAdapter {
     if (!target) return null;
     if (!(target instanceof TFile)) return null;
     return { path: target.path, basename: target.basename + ".md" };
+  }
+
+  listSubfolders(folderPath: string): string[] {
+    const folder = this.app.vault.getAbstractFileByPath(folderPath);
+    if (!folder || !(folder instanceof TFolder)) return [];
+    const out: string[] = [];
+    for (const child of folder.children) {
+      if (!(child instanceof TFolder)) continue;
+      if (child.name.startsWith(".")) continue;
+      out.push(child.path);
+    }
+    return out.sort();
+  }
+
+  exists(path: string): boolean {
+    return this.app.vault.getAbstractFileByPath(path) !== null;
+  }
+
+  async renameFolder(folderPath: string, newPath: string): Promise<void> {
+    const folder = this.app.vault.getAbstractFileByPath(folderPath);
+    if (!folder || !(folder instanceof TFolder)) {
+      throw new Error(
+        `ObsidianVaultAdapter.renameFolder: source folder not found: ${folderPath}`,
+      );
+    }
+    await this.app.fileManager.renameFile(folder, newPath);
   }
 
   /**

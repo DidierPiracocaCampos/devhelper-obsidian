@@ -83,4 +83,27 @@ export interface VaultAdapter {
    * `null` when the link cannot be resolved to a Markdown note.
    */
   resolveLink(linkPath: string, sourcePath: string): VaultNoteRef | null;
+
+  /**
+   * Return the direct subfolders of `folderPath` (non-recursive).
+   * Each returned path is a vault-relative path WITHOUT trailing
+   * slash. Folders starting with `.` are filtered out (Obsidian hides
+   * them in the file explorer and they would be noise on the
+   * dashboard).
+   */
+  listSubfolders(folderPath: string): string[];
+
+  /**
+   * True if a file OR folder exists at the given vault-relative
+   * path. Used by the repository to disambiguate paths.
+   */
+  exists(path: string): boolean;
+
+  /**
+   * Rename a folder. Obsidian moves every contained file and folder
+   * along with it. Implementations must update any cached indices so
+   * subsequent `listMarkdownFiles` / `listSubfolders` / `read` calls
+   * reflect the new layout.
+   */
+  renameFolder(folderPath: string, newPath: string): Promise<void>;
 }
