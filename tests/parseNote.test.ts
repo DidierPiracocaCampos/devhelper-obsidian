@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { parseProjectTaskNote } from "../src/domain/parseNote";
+import {
+  parseCredentialsNote,
+  parseProjectTaskNote,
+} from "../src/domain/parseNote";
 import type { NoteSnapshot } from "../src/domain/types";
 
 /**
@@ -7,8 +10,9 @@ import type { NoteSnapshot } from "../src/domain/types";
  *
  * The parser is the seam between the vault adapter (Task 4) and the
  * presentation layer (Task 5). It must:
- *  - Return a `{ kind: "project" }` or `{ kind: "task" }` record for valid
- *    notes, preserving the user-defined properties bag untouched.
+ *  - Return a `{ kind: "project" }`, `{ kind: "task" }` or
+ *    `{ kind: "credentials" }` record for valid notes, preserving the
+ *    user-defined properties bag untouched.
  *  - Return a single `{ kind: "issue" }` per invalid note (never throw) so
  *    a single malformed file does not abort the whole folder scan.
  */
@@ -32,6 +36,13 @@ describe("parseProjectTaskNote", () => {
         [
           "---",
           "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags:",
+          "  - web",
+          "  - blog",
+          "description: Web presence",
+          "client: ACME",
           "key: value",
           "color: blue",
           "---",
@@ -48,9 +59,15 @@ describe("parseProjectTaskNote", () => {
 
       expect(result.project.path).toBe("Projects/Website.md");
       expect(result.project.title).toBe("Website");
+      expect(result.project.folderPath).toBe("Projects");
       // Custom property bag is preserved untouched.
       expect(result.project.properties).toEqual({
         type: "project",
+        status: "active",
+        created: "2026-01-15",
+        tags: ["web", "blog"],
+        description: "Web presence",
+        client: "ACME",
         key: "value",
         color: "blue",
       });
@@ -66,10 +83,11 @@ describe("parseProjectTaskNote", () => {
         "Write copy.md",
         [
           "---",
-          'type: task',
+          "type: task",
           'project: "[[Projects/Foo]]"',
           "status: open",
-          "priority: high",
+          "created: \"2026-01-15\"",
+          "priority: medium",
           "---",
           "Body of the task.",
         ].join("\n"),
@@ -96,12 +114,13 @@ describe("parseProjectTaskNote", () => {
       // are not interpreted as YAML flow-sequence syntax in the
       // quoted form.
       expect(Object.keys(result.task.properties).sort()).toEqual(
-        ["priority", "project", "status", "type"].sort(),
+        ["created", "priority", "project", "status", "type"].sort(),
       );
       expect(result.task.properties.type).toBe("task");
       expect(result.task.properties.status).toBe("open");
-      expect(result.task.properties.priority).toBe("high");
+      expect(result.task.properties.priority).toBe("medium");
       expect(result.task.properties.project).toBe("[[Projects/Foo]]");
+      expect(result.task.properties.created).toBe("2026-01-15");
     });
 
     it("appends .md to a resolved project path that lacks the extension", () => {
@@ -113,6 +132,8 @@ describe("parseProjectTaskNote", () => {
           "type: task",
           'project: "[[Projects/Bar]]"',
           "status: done",
+          "created: \"2026-01-15\"",
+          "priority: low",
           "---",
         ].join("\n"),
       );
@@ -277,6 +298,315 @@ describe("parseProjectTaskNote", () => {
       // The unresolved link should be quoted in the message so the user
       // can find the broken reference.
       expect(result.issue.message).toContain("Projects/Ghost");
+    });
+  });
+
+  describe("parsesValidProjectV2", () => {
+    it("parses a project with all six fixed properties and exposes folderPath", () => {
+      const note = snapshot(
+        "Projects/Website.md",
+        "Website.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags:",
+          "  - web",
+          "description: Web presence",
+          "client: ACME",
+          "---",
+          "# Website",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("project");
+      if (result.kind !== "project") return;
+      expect(result.project.path).toBe("Projects/Website.md");
+      expect(result.project.title).toBe("Website");
+      expect(result.project.folderPath).toBe("Projects");
+      expect(result.project.properties.type).toBe("project");
+      expect(result.project.properties.status).toBe("active");
+      expect(result.project.properties.created).toBe("2026-01-15");
+      expect(result.project.properties.tags).toEqual(["web"]);
+      expect(result.project.properties.description).toBe("Web presence");
+      expect(result.project.properties.client).toBe("ACME");
+    });
+
+    it("parses a project note at the vault root with an empty folderPath", () => {
+      const note = snapshot(
+        "Root.md",
+        "Root.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags: []",
+          "description: x",
+          "client: y",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("project");
+      if (result.kind !== "project") return;
+      expect(result.project.folderPath).toBe("");
+    });
+  });
+
+  describe("reportsInvalidProjectStatus", () => {
+    it("returns a single issue when project status is not in the allowed set", () => {
+      const note = snapshot(
+        "Projects/BadStatus.md",
+        "BadStatus.md",
+        [
+          "---",
+          "type: project",
+          "status: weird",
+          "created: \"2026-01-15\"",
+          "tags: []",
+          "description: x",
+          "client: y",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("issue");
+      if (result.kind !== "issue") return;
+      expect(result.issue.path).toBe("Projects/BadStatus.md");
+      expect(result.issue.message).toContain("status");
+      expect(result.issue.message).toContain("weird");
+    });
+  });
+
+  describe("reportsMissingProjectFixedProperty", () => {
+    it("returns a single issue when a required project property is missing", () => {
+      const note = snapshot(
+        "Projects/NoClient.md",
+        "NoClient.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags: []",
+          "description: x",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("issue");
+      if (result.kind !== "issue") return;
+      expect(result.issue.path).toBe("Projects/NoClient.md");
+      expect(result.issue.message).toContain("client");
+    });
+  });
+
+  describe("reportsInvalidTaskPriority", () => {
+    it("returns a single issue when task priority is not in the allowed set", () => {
+      const note = snapshot(
+        "Tasks/BadPriority.md",
+        "BadPriority.md",
+        [
+          "---",
+          "type: task",
+          'project: "[[Projects/Foo]]"',
+          "status: open",
+          "created: \"2026-01-15\"",
+          "priority: urgent",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Foo.md");
+
+      expect(result.kind).toBe("issue");
+      if (result.kind !== "issue") return;
+      expect(result.issue.path).toBe("Tasks/BadPriority.md");
+      expect(result.issue.message).toContain("priority");
+      expect(result.issue.message).toContain("urgent");
+    });
+  });
+
+  describe("reportsInvalidTaskDue", () => {
+    it("returns a single issue when task due is not a YYYY-MM-DD date", () => {
+      const note = snapshot(
+        "Tasks/BadDue.md",
+        "BadDue.md",
+        [
+          "---",
+          "type: task",
+          'project: "[[Projects/Foo]]"',
+          "status: open",
+          "created: \"2026-01-15\"",
+          "priority: high",
+          "due: 2026/01/15",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Foo.md");
+
+      expect(result.kind).toBe("issue");
+      if (result.kind !== "issue") return;
+      expect(result.issue.path).toBe("Tasks/BadDue.md");
+      expect(result.issue.message).toContain("due");
+    });
+
+    it("accepts a task with no due property", () => {
+      const note = snapshot(
+        "Tasks/NoDue.md",
+        "NoDue.md",
+        [
+          "---",
+          "type: task",
+          'project: "[[Projects/Foo]]"',
+          "status: open",
+          "created: \"2026-01-15\"",
+          "priority: high",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Foo.md");
+
+      expect(result.kind).toBe("task");
+    });
+  });
+});
+
+describe("parseCredentialsNote", () => {
+  describe("parsesValidCredentials", () => {
+    it("returns a credentials record with both entries", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          "  - service: GitHub",
+          "    user: alice",
+          "    password: hunter2",
+          "  - service: AWS",
+          "    user: bob",
+          "    password: secret",
+          "    url: https://aws.example.com",
+          "    notes: production account",
+          "---",
+          "# Credentials",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+      expect(result.credentials.path).toBe(
+        "Projects/Website/Credentials.md",
+      );
+      expect(result.credentials.entries).toHaveLength(2);
+      expect(result.credentials.entries[0]).toMatchObject({
+        service: "GitHub",
+        user: "alice",
+        password: "hunter2",
+      });
+      expect(result.credentials.entries[1]).toMatchObject({
+        service: "AWS",
+        user: "bob",
+        password: "secret",
+        url: "https://aws.example.com",
+        notes: "production account",
+      });
+    });
+  });
+
+  describe("reportsCredentialEntryMissingField", () => {
+    it("returns a single issue mentioning the entry index", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          "  - service: GitHub",
+          "    user: alice",
+          "    password: hunter2",
+          "  - service: AWS",
+          "    user: bob",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("issue");
+      if (result.kind !== "issue") return;
+      expect(result.issue.path).toBe(
+        "Projects/Website/Credentials.md",
+      );
+      expect(result.issue.message).toContain("1");
+      expect(result.issue.message).toContain("password");
+    });
+  });
+
+  describe("preservesExtraCredentialFields", () => {
+    it("keeps unknown keys on the parsed entry", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          "  - service: GitHub",
+          "    user: alice",
+          "    password: hunter2",
+          "    rotation: 30",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+      expect(result.credentials.entries[0].rotation).toBe(30);
+    });
+  });
+
+  describe("reportsCredentialsNotAList", () => {
+    it("returns a single issue when credentials is not an array", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          'credentials: "not-a-list"',
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("issue");
+      if (result.kind !== "issue") return;
+      expect(result.issue.path).toBe(
+        "Projects/Website/Credentials.md",
+      );
+      expect(result.issue.message).toContain("credentials");
+      expect(result.issue.message).toContain("lista");
     });
   });
 });

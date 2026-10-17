@@ -25,7 +25,12 @@ import type {
  */
 
 function project(path: string, title: string): ProjectRecord {
-  return { path, title, properties: {} };
+  return { path, title, folderPath: folderOf(path), properties: {} };
+}
+
+function folderOf(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx < 0 ? "" : path.slice(0, idx);
 }
 
 function task(
@@ -44,7 +49,7 @@ function issue(path: string, message: string): DashboardIssue {
 describe("presentDashboard", () => {
   describe("showsEmptyDashboard", () => {
     it("returns null selected project and empty arrays for empty data", () => {
-      const data: DashboardData = { projects: [], tasks: [], issues: [] };
+      const data: DashboardData = { projects: [], tasks: [], credentials: [], issues: [] };
       const result = presentDashboard(data, null);
 
       expect(result.selectedProject).toBeNull();
@@ -64,6 +69,7 @@ describe("presentDashboard", () => {
       const data: DashboardData = {
         projects: [a, c, b],
         tasks: [],
+        credentials: [],
         issues: [],
       };
 
@@ -86,6 +92,7 @@ describe("presentDashboard", () => {
           task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
           task("Tasks/Alfa-2.md", "Alfa task 2", alfa.path, "done"),
         ],
+        credentials: [],
         issues: [],
       };
 
@@ -109,6 +116,7 @@ describe("presentDashboard", () => {
           task("Tasks/done.md", "Done task", p.path, "done"),
           task("Tasks/open.md", "Open task", p.path, "open"),
         ],
+        credentials: [],
         issues: [],
       };
 
@@ -131,6 +139,7 @@ describe("presentDashboard", () => {
       const data: DashboardData = {
         projects: [p],
         tasks: [],
+        credentials: [],
         issues,
       };
 
@@ -148,6 +157,7 @@ describe("presentDashboard", () => {
       const data: DashboardData = {
         projects: [zeta, ALFA, middle],
         tasks: [],
+        credentials: [],
         issues: [],
       };
 
@@ -168,6 +178,7 @@ describe("presentDashboard", () => {
           task("Tasks/a.md", "ALFA", p.path, "open"),
           task("Tasks/m.md", "Middle", p.path, "open"),
         ],
+        credentials: [],
         issues: [],
       };
 
@@ -188,6 +199,7 @@ describe("presentDashboard", () => {
       const data: DashboardData = {
         projects: [beta, alfa],
         tasks: [],
+        credentials: [],
         issues: [],
       };
 

@@ -87,7 +87,7 @@ export class ProjectTaskRepository {
       this.collect(parsed, projects, tasks, issues);
     }
 
-    return { projects, tasks, issues };
+    return { projects, tasks, credentials: [], issues };
   }
 
   // -------------------------------------------------------------------------

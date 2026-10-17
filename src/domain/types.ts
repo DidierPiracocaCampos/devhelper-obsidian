@@ -12,10 +12,14 @@
  * A validated project record derived from a single Markdown note.
  * `properties` is the full frontmatter bag parsed from the note so the
  * user's custom properties survive a round-trip through the dashboard.
+ * `folderPath` is the parent directory of `path` inside the vault
+ * (empty string for notes saved at the vault root); V2 surfaces this
+ * so the UI can group projects by folder.
  */
 export interface ProjectRecord {
   path: string;
   title: string;
+  folderPath: string;
   properties: Record<string, unknown>;
 }
 
@@ -41,11 +45,47 @@ export interface DashboardIssue {
 }
 
 /**
+ * A single credential entry inside a `type: credentials` note. The
+ * three required keys (`service`, `user`, `password`) are exposed as
+ * named strings so the UI can render them without knowing the rest of
+ * the bag; the index signature lets callers preserve arbitrary
+ * user-defined keys (rotation cadence, tags, etc.).
+ */
+export interface CredentialEntry {
+  service: string;
+  user: string;
+  password: string;
+  url?: string;
+  notes?: string;
+  [extra: string]: unknown;
+}
+
+/**
+ * Parsed credentials note (without a project binding). The repository
+ * (Task 4) upgrades this to a `CredentialsRecord` once it knows which
+ * project folder the note lives in.
+ */
+export interface ParsedCredentialsNote {
+  path: string;
+  entries: CredentialEntry[];
+}
+
+/**
+ * A credentials note bound to a specific project folder. `projectPath`
+ * is the vault-relative path of the owning project note (always ending
+ * in `.md`).
+ */
+export interface CredentialsRecord extends ParsedCredentialsNote {
+  projectPath: string;
+}
+
+/**
  * The aggregate payload produced by the repository on every `load()`.
  */
 export interface DashboardData {
   projects: ProjectRecord[];
   tasks: TaskRecord[];
+  credentials: CredentialsRecord[];
   issues: DashboardIssue[];
 }
 
@@ -62,14 +102,16 @@ export interface NoteSnapshot {
 /**
  * The result of parsing a single note. Discriminated by `kind`:
  *
- *  - `"project"` => the note is a valid project.
- *  - `"task"`    => the note is a valid task.
- *  - `"issue"`   => the note is malformed or fails validation; exactly
- *    one issue is returned so the folder scan can continue.
+ *  - `"project"`     => the note is a valid project.
+ *  - `"task"`        => the note is a valid task.
+ *  - `"credentials"` => the note is a valid credentials file.
+ *  - `"issue"`       => the note is malformed or fails validation;
+ *    exactly one issue is returned so the folder scan can continue.
  */
 export type ParsedNote =
   | { kind: "project"; project: ProjectRecord }
   | { kind: "task"; task: TaskRecord }
+  | { kind: "credentials"; credentials: ParsedCredentialsNote }
   | { kind: "issue"; issue: DashboardIssue };
 
 /**
