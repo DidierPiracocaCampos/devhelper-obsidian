@@ -22,9 +22,13 @@
    (flex row: `h2` + `.devhelper-chip-list` + `.devhelper-topbar-controls`
    pushed right with `margin-left: auto`), `.devhelper-chip` (pill; light when
    `.is-selected`, dark otherwise), `.devhelper-icon-button` / `.devhelper-fab`
-   (round icon buttons, the FAB is the accent-colored `+`), and
-   `.devhelper-search` + `.devhelper-search-hint` (decorative search field
-   with a monospace Ctrl+K cue).
+   (round icon buttons, the FAB is the accent-colored `+`), `.devhelper-search`
+   + `.devhelper-search-hint` (decorative search field with a monospace Ctrl+K
+   cue), `.devhelper-side-column` (narrow column: `.devhelper-icon-rail` above
+   `.devhelper-calendar`), and `.devhelper-bottom-sections` (full-width row of
+   `.devhelper-section` placeholder panels with `.devhelper-placeholder-empty`
+   bodies). The tasks panel and the issues panel live in the wide column;
+   `.devhelper-issues` and `.devhelper-bottom-sections` span both columns.
    ========================================================================== */
 
 .devhelper-dashboard-root {
@@ -309,6 +313,7 @@
 
 /* --- Issues panel --------------------------------------------------------- */
 .devhelper-issues {
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -343,6 +348,115 @@
 .devhelper-issue-item p {
   margin: 4px 0;
   color: var(--text-muted);
+}
+
+/* --- Side column (icon rail + calendar) ----------------------------------- */
+/* Stacks the rail above the calendar in the narrow second grid column and
+   hugs the top of its cell (`align-self: start`). */
+.devhelper-side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-self: start;
+}
+
+.devhelper-icon-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+.devhelper-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.devhelper-calendar-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Push the trailing `+` control to the right edge of the header. */
+.devhelper-calendar-header .devhelper-icon-button:last-child {
+  margin-left: auto;
+}
+
+.devhelper-calendar-weekdays {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+/* Small uppercase chip per weekday, sized to line up with the day cells. */
+.devhelper-calendar-weekdays span {
+  width: 32px;
+  padding: 2px 0;
+  text-align: center;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--background-primary-alt);
+  border-radius: 6px;
+}
+
+.devhelper-calendar-days {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.devhelper-calendar-day {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.85em;
+  color: var(--text-normal);
+}
+
+.devhelper-calendar-day.is-today {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 50%;
+  font-weight: 600;
+}
+
+/* --- Bottom row (Archivos + Contraseña) ----------------------------------- */
+.devhelper-bottom-sections {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+}
+
+.devhelper-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.devhelper-section h3 {
+  margin: 0;
+  color: var(--text-normal);
+}
+
+.devhelper-placeholder-empty {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* --- Buttons -------------------------------------------------------------- */

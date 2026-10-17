@@ -1,4 +1,4 @@
-import { ItemView, Menu, setIcon, Setting, WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, setIcon, WorkspaceLeaf } from "obsidian";
 import type { PluginSettings } from "../settings";
 import type {
   DashboardData,
@@ -7,6 +7,7 @@ import type {
   TaskRecord,
 } from "../domain/types";
 import { presentDashboard } from "../domain/presentDashboard";
+import { getWeekStrip } from "../domain/weekStrip";
 import type { ProjectTaskRepository } from "../data/ProjectTaskRepository";
 import { ProjectFormModal } from "./ProjectFormModal";
 import { TaskFormModal } from "./TaskFormModal";
@@ -129,6 +130,8 @@ export class DashboardView extends ItemView {
     } else {
       this.renderTasksPanel(presentation.selectedProject, presentation.tasks);
     }
+    this.renderSideColumn();
+    this.renderBottomSections();
     this.renderIssues(presentation.issues);
   }
 
@@ -379,6 +382,135 @@ export class DashboardView extends ItemView {
       });
       openBtn.addEventListener("click", () => this.openNote(issue.path));
     }
+  }
+
+  /**
+   * Right-hand column of the layout: the icon rail stacked above the
+   * weekly calendar card.
+   *
+   * Everything here is a visual placeholder — the controls are rendered
+   * for the silhouette only and carry no listeners, so they cannot
+   * mutate the repository or the vault.
+   */
+  private renderSideColumn(): void {
+    const column = this.contentEl.createEl("div", {
+      cls: "devhelper-side-column",
+    });
+
+    // 1. Icon rail: four inert round buttons.
+    const rail = column.createEl("div", { cls: "devhelper-icon-rail" });
+    const railIcons: Array<{ icon: string; label: string }> = [
+      { icon: "funnel", label: "Filtrar" },
+      { icon: "code", label: "Código" },
+      { icon: "settings", label: "Ajustes" },
+      { icon: "log-out", label: "Salir" },
+    ];
+    for (const entry of railIcons) {
+      const button = rail.createEl("button", {
+        cls: "devhelper-icon-button",
+        attr: {
+          "aria-label": entry.label,
+          title: entry.label,
+          type: "button",
+        },
+      });
+      setIcon(button, entry.icon);
+    }
+
+    // 2. Calendar card: month label, inert controls, weekday header,
+    //    the seven days of the current ISO week and an empty state.
+    const strip = getWeekStrip(new Date());
+    const calendar = column.createEl("section", {
+      cls: "devhelper-calendar",
+    });
+
+    const header = calendar.createEl("div", {
+      cls: "devhelper-calendar-header",
+    });
+    header.createEl("strong", { text: strip.monthLabel });
+
+    const calendarControls: Array<{ icon: string; label: string }> = [
+      { icon: "chevron-left", label: "Mes anterior" },
+      { icon: "plus", label: "Hoy" },
+      { icon: "chevron-right", label: "Mes siguiente" },
+      { icon: "plus", label: "Añadir evento" },
+    ];
+    for (const entry of calendarControls) {
+      const button = header.createEl("button", {
+        cls: "devhelper-icon-button",
+        attr: {
+          "aria-label": entry.label,
+          title: entry.label,
+          type: "button",
+        },
+      });
+      setIcon(button, entry.icon);
+    }
+
+    const weekdays = calendar.createEl("div", {
+      cls: "devhelper-calendar-weekdays",
+    });
+    for (const letter of ["L", "M", "X", "J", "V", "S", "D"]) {
+      weekdays.createEl("span", { text: letter });
+    }
+
+    const days = calendar.createEl("div", { cls: "devhelper-calendar-days" });
+    for (const day of strip.days) {
+      const cell = days.createEl("span", {
+        cls: "devhelper-calendar-day",
+        text: String(day.day),
+      });
+      if (day.isToday) cell.addClass("is-today");
+    }
+
+    calendar.createEl("p", {
+      cls: "devhelper-placeholder-empty",
+      text: "No hay eventos este día",
+    });
+  }
+
+  /**
+   * Bottom row of the layout: two side-by-side placeholder panels. Both
+   * are empty silhouettes — the FABs carry no listeners (the `+` is
+   * additionally disabled) and the bodies only show an empty state.
+   */
+  private renderBottomSections(): void {
+    const row = this.contentEl.createEl("div", {
+      cls: "devhelper-bottom-sections",
+    });
+
+    const renderSection = (
+      title: string,
+      emptyText: string,
+      addLabel: string,
+    ): void => {
+      const section = row.createEl("section", { cls: "devhelper-section" });
+      section.createEl("h3", { text: title });
+      section.createEl("p", {
+        cls: "devhelper-placeholder-empty",
+        text: emptyText,
+      });
+
+      const fabs = section.createEl("div", { cls: "devhelper-panel-fabs" });
+
+      // Placeholder filter: no click listener on purpose (spec rule).
+      const filterButton = fabs.createEl("button", {
+        cls: "devhelper-icon-button",
+        attr: { "aria-label": "Filtrar", title: "Filtrar", type: "button" },
+      });
+      setIcon(filterButton, "funnel");
+
+      // Decorative `+`: disabled, same signalling as the task trash.
+      const addButton = fabs.createEl("button", {
+        cls: "devhelper-fab",
+        attr: { "aria-label": addLabel, title: addLabel, type: "button" },
+      });
+      setIcon(addButton, "plus");
+      addButton.disabled = true;
+    };
+
+    renderSection("Archivos", "No hay archivos", "Añadir archivo");
+    renderSection("Contraseña", "Sin contraseñas", "Añadir contraseña");
   }
 
   // -------------------------------------------------------------------------
