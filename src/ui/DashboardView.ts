@@ -1,4 +1,4 @@
-import { ItemView, Setting, WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, setIcon, Setting, WorkspaceLeaf } from "obsidian";
 import type { PluginSettings } from "../settings";
 import type {
   DashboardData,
@@ -84,7 +84,8 @@ export class DashboardView extends ItemView {
   }
 
   /**
-   * Update the selected project. Called from the project dropdown.
+   * Update the selected project. Called from the project chips in the
+   * top bar.
    * The selection lives on the view instance so it survives every
    * refresh but does NOT leak into plugin storage. We trigger a full
    * `refresh()` so the re-render uses live vault data instead of a
@@ -122,7 +123,7 @@ export class DashboardView extends ItemView {
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-dashboard-root");
 
-    this.renderHeader(data);
+    this.renderTopBar(data);
     if (presentation.selectedProject === null) {
       this.renderEmptyState();
     } else {
@@ -131,46 +132,115 @@ export class DashboardView extends ItemView {
     this.renderIssues(presentation.issues);
   }
 
-  private renderHeader(data: DashboardData): void {
-    const header = this.contentEl.createEl("header", {
-      cls: "devhelper-header",
+  /**
+   * Top bar of the new layout: title at the left, project chips next
+   * to it, and (pushed to the right edge by `margin-left: auto` on
+   * `.devhelper-topbar-controls`) the filter / + / search controls.
+   *
+   * The filter button is intentionally inert and the search input is
+   * disabled — per the spec both are decorative placeholders.
+   */
+  private renderTopBar(data: DashboardData): void {
+    const topbar = this.contentEl.createEl("div", {
+      cls: "devhelper-topbar",
     });
-    header.createEl("h2", { text: "Dashboard DevHelper" });
+    topbar.createEl("h2", { text: "Proyectos" });
 
-    const controls = header.createEl("div", { cls: "devhelper-controls" });
+    this.renderProjectChips(data);
 
-    if (data.projects.length > 0) {
-      const select = controls.createEl("select", {
-        cls: "devhelper-project-select",
-        attr: { "aria-label": "Proyecto seleccionado" },
+    const controls = topbar.createEl("div", {
+      cls: "devhelper-topbar-controls",
+    });
+
+    // Placeholder filter: no click listener on purpose (spec rule).
+    const filterButton = controls.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: { "aria-label": "Filtrar", type: "button" },
+    });
+    setIcon(filterButton, "funnel");
+
+    const createProjectButton = controls.createEl("button", {
+      cls: "devhelper-fab",
+      attr: { "aria-label": "Nuevo proyecto", type: "button" },
+    });
+    setIcon(createProjectButton, "plus");
+    createProjectButton.addEventListener("click", () =>
+      this.openCreateProject(),
+    );
+
+    const search = controls.createEl("input", {
+      cls: "devhelper-search",
+      type: "search",
+      placeholder: "Pregunta sobre tu workspace…",
+      attr: { "aria-label": "Búsqueda del workspace" },
+    });
+    search.disabled = true;
+    controls.createEl("span", {
+      cls: "devhelper-search-hint",
+      text: "Ctrl+K",
+    });
+  }
+
+  /**
+   * Chip row that replaces the old project `<select>`. Each chip
+   * selects its project; the trailing "···" button opens the Obsidian
+   * context menu for that project (Editar / Abrir nota).
+   *
+   * When there are no projects at all we still render a placeholder
+   * chip so the always-visible top bar is never blank.
+   */
+  private renderProjectChips(data: DashboardData): void {
+    const topbar = this.contentEl.querySelector<HTMLElement>(
+      ".devhelper-topbar",
+    );
+    if (topbar === null) return;
+    const chipList = topbar.createEl("div", { cls: "devhelper-chip-list" });
+
+    const projects = this.sortProjectsForSelect(data.projects);
+    if (projects.length === 0) {
+      chipList.createEl("span", {
+        cls: "devhelper-chip is-placeholder",
+        text: "Sin proyectos",
       });
-      for (const project of this.sortProjectsForSelect(data.projects)) {
-        const option = select.createEl("option", { value: project.path });
-        option.textContent = project.title;
-        if (
-          this.selectedProjectPath !== null &&
-          project.path === this.selectedProjectPath
-        ) {
-          option.selected = true;
-        }
-      }
-      select.addEventListener("change", () => {
-        this.setSelectedProjectPath(select.value);
-      });
+      return;
     }
 
-    new Setting(controls)
-      .addButton((btn) =>
-        btn
-          .setButtonText("Nuevo proyecto")
-          .onClick(() => this.openCreateProject()),
-      )
-      .addButton((btn) =>
-        btn
-          .setButtonText("Nueva tarea")
-          .setCta()
-          .onClick(() => this.openCreateTask()),
+    for (const project of projects) {
+      const chip = chipList.createEl("button", {
+        cls: "devhelper-chip",
+        text: project.title,
+        attr: { "aria-label": project.title, type: "button" },
+      });
+      if (project.path === this.selectedProjectPath) {
+        chip.addClass("is-selected");
+      }
+      chip.addEventListener("click", () =>
+        this.setSelectedProjectPath(project.path),
       );
+
+      const menuButton = chip.createEl("button", {
+        cls: "devhelper-chip-menu",
+        attr: { "aria-label": "Opciones de proyecto", type: "button" },
+      });
+      setIcon(menuButton, "more-horizontal");
+      menuButton.addEventListener("click", (evt) => {
+        // The menu button lives inside the chip: without stopping
+        // propagation the click would also select the project.
+        evt.stopPropagation();
+        const menu = new Menu();
+        menu.addItem((item) =>
+          item
+            .setTitle("Editar")
+            .onClick(() => this.openEditProject(project)),
+        );
+        menu.addItem((item) =>
+          item
+            .setTitle("Abrir nota")
+            .onClick(() => this.openNote(project.path)),
+        );
+        menu.showAtMouseEvent(evt);
+      });
+    }
   }
 
   private renderEmptyState(): void {
@@ -284,8 +354,8 @@ export class DashboardView extends ItemView {
 
   // -------------------------------------------------------------------------
   // Sort helper used by the view (the presenter already sorts projects
-  // internally; we expose the same ordering here so the header dropdown
-  // matches the rest of the dashboard).
+  // internally; we expose the same ordering here so the project chips
+  // match the rest of the dashboard).
   // -------------------------------------------------------------------------
 
   private sortProjectsForSelect(projects: ProjectRecord[]): ProjectRecord[] {

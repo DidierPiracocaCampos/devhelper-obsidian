@@ -3,34 +3,45 @@
 
    Palette mapping (kept in sync with the design spec):
      --background-primary      -> the dark canvas behind the dashboard.
-     --background-secondary    -> the light, rounded "panel" surfaces
-                                  (header, project section, issues).
-     --background-primary-alt  -> the dark task-card surfaces (intentionally
-                                  darker than the canvas so the cards read
-                                  as distinct foreground chips).
-     --background-modifier-border -> hairline borders on panels and cards.
+     --background-secondary    -> the light, rounded "panel" surfaces (topbar,
+                                  tasks panel, issues) and the selected chip.
+     --background-primary-alt  -> the dark chip and task-card surfaces
+                                  (deliberately darker than the canvas so they
+                                  read as distinct foreground pills).
+     --background-modifier-border -> hairline borders on panels, chips, cards.
 
    Layout contract:
-     - Wide panels (>= 480px): header + project section + issues stack
-       vertically but the header controls spread horizontally.
-     - Narrow panels (< 320px): header controls and task card actions
-       collapse to a single column so nothing is clipped on phones or in
-       a sidebar.
+     - Desktop (default): `.devhelper-dashboard-root` is a two-column grid
+       (`1fr auto`) with `gap: 12px`; the topbar spans both columns, the
+       tasks panel takes the wide column and the side rail lives in the
+       narrow one.
+     - Narrow panels (< 640px, added by the responsive pass): the grid
+       collapses to a single column; task card actions stack below 320px.
+
+   Layout primitives: `.devhelper-dashboard-root` (grid), `.devhelper-topbar`
+   (flex row: `h2` + `.devhelper-chip-list` + `.devhelper-topbar-controls`
+   pushed right with `margin-left: auto`), `.devhelper-chip` (pill; light when
+   `.is-selected`, dark otherwise), `.devhelper-icon-button` / `.devhelper-fab`
+   (round icon buttons, the FAB is the accent-colored `+`), and
+   `.devhelper-search` + `.devhelper-search-hint` (decorative search field
+   with a monospace Ctrl+K cue).
    ========================================================================== */
 
 .devhelper-dashboard-root {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   padding: 12px;
   color: var(--text-normal);
   background: var(--background-primary);
 }
 
-/* --- Header --------------------------------------------------------------- */
-.devhelper-header {
+/* --- Top bar -------------------------------------------------------------- */
+.devhelper-topbar {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   padding: 12px 16px;
   border-radius: 8px;
@@ -38,27 +49,111 @@
   border: 1px solid var(--background-modifier-border);
 }
 
-.devhelper-header h2 {
+.devhelper-topbar h2 {
   margin: 0;
   font-size: 1.2em;
   color: var(--text-normal);
 }
 
-.devhelper-controls {
+.devhelper-topbar-controls {
+  margin-left: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.devhelper-project-select {
-  min-width: 160px;
-  flex: 1 1 200px;
-  padding: 4px 8px;
-  background: var(--background-primary);
+/* --- Project chips -------------------------------------------------------- */
+.devhelper-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.devhelper-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
   color: var(--text-normal);
+  cursor: pointer;
+}
+
+.devhelper-chip.is-selected {
+  background: var(--background-secondary);
+}
+
+.devhelper-chip.is-placeholder {
+  cursor: default;
+  color: var(--text-muted);
+}
+
+.devhelper-chip-menu {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* --- Round icon buttons --------------------------------------------------- */
+.devhelper-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.devhelper-fab {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: 1px solid var(--interactive-accent);
+  cursor: pointer;
+}
+
+/* --- Search (decorative) -------------------------------------------------- */
+.devhelper-search {
+  flex: 1;
+  min-width: 180px;
+  padding: 4px 8px;
+  opacity: 0.6;
+  background: var(--background-primary-alt);
+  color: var(--text-muted);
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
+}
+
+.devhelper-search-hint {
+  font-family: var(--font-monospace);
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
 }
 
 /* --- Main panels ---------------------------------------------------------- */
@@ -239,13 +334,6 @@
 
 /* --- Narrow layout -------------------------------------------------------- */
 @media (max-width: 320px) {
-  .devhelper-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .devhelper-project-select {
-    width: 100%;
-  }
   .devhelper-task-actions {
     flex-direction: column;
     align-items: stretch;
