@@ -137,7 +137,7 @@ export class DashboardView extends ItemView {
     if (presentation.showAll && presentation.selectedProject === null && noProjects) {
       this.renderEmptyState();
     } else {
-      this.renderTasksPanel(presentation, presentation.tasks);
+      this.renderTasksPanel(presentation, data);
     }
     this.renderSideColumn();
     this.renderBottomSections();
@@ -169,16 +169,23 @@ export class DashboardView extends ItemView {
       cls: "devhelper-topbar-controls",
     });
 
-    const search = controls.createEl("input", {
+    // Task 5: input + hint now share a single wrapper so the hint can
+    // sit *inside* the field (positioned absolute on the right). The
+    // placeholder copy has been refreshed and the "+" between
+    // "Ctrl" and "K" was dropped — the hint now reads plain "Ctrl K".
+    const searchWrap = controls.createEl("div", {
+      cls: "devhelper-search-wrap",
+    });
+    const search = searchWrap.createEl("input", {
       cls: "devhelper-search",
       type: "search",
-      placeholder: "Pregunta sobre tu workspace…",
+      placeholder: "Busca en el vault…",
       attr: { "aria-label": "Búsqueda del workspace" },
     });
     search.disabled = true;
-    controls.createEl("span", {
+    searchWrap.createEl("span", {
       cls: "devhelper-search-hint",
-      text: "Ctrl+K",
+      text: "Ctrl K",
     });
   }
 
@@ -293,8 +300,9 @@ export class DashboardView extends ItemView {
 
   private renderTasksPanel(
     presentation: DashboardPresentation,
-    tasks: TaskRecord[],
+    data: DashboardData,
   ): void {
+    const tasks = presentation.tasks;
     const main = this.contentEl.createEl("section", {
       cls: "devhelper-tasks-panel",
     });
@@ -354,12 +362,26 @@ export class DashboardView extends ItemView {
       return;
     }
 
+    // Per the Task 5 spec: in `showAll` mode every card gets a small
+    // pill showing the parent project's title. In project mode the
+    // pill would just repeat the panel header, so it is omitted.
+    const titleByPath = presentation.showAll
+      ? new Map(data.projects.map((p) => [p.path, p.title]))
+      : null;
+
     for (const task of tasks) {
-      list.appendChild(this.renderTaskCard(task));
+      const projectTitle =
+        titleByPath === null
+          ? undefined
+          : titleByPath.get(task.projectPath) ?? task.projectPath;
+      list.appendChild(this.renderTaskCard(task, projectTitle));
     }
   }
 
-  private renderTaskCard(task: TaskRecord): HTMLElement {
+  private renderTaskCard(
+    task: TaskRecord,
+    projectTitle?: string,
+  ): HTMLElement {
     const card = createEl("li", { cls: "devhelper-task-card" });
     if (task.status === "done") card.addClass("is-done");
 
@@ -369,6 +391,15 @@ export class DashboardView extends ItemView {
       text: task.title,
     });
     titleEl.addEventListener("click", () => this.openNote(task.path));
+
+    // In `showAll` mode the parent project is not obvious from the
+    // panel header, so each card gets a small pill next to its title.
+    if (projectTitle !== undefined) {
+      card.createEl("span", {
+        cls: "devhelper-task-project-badge",
+        text: projectTitle,
+      });
+    }
 
     // Placeholder subtitle until the `description` property lands (spec
     // roadmap); always rendered so the card height is stable.

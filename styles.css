@@ -3,32 +3,38 @@
 
    Palette mapping (kept in sync with the design spec):
      --background-primary      -> the dark canvas behind the dashboard.
-     --background-secondary    -> the light, rounded "panel" surfaces (topbar,
-                                  tasks panel, issues) and the selected chip.
-     --background-primary-alt  -> the dark chip and task-card surfaces
-                                  (deliberately darker than the canvas so they
-                                  read as distinct foreground pills).
+     --background-secondary    -> the light, rounded "panel" surfaces (tasks
+                                  panel, issues) and the selected chip.
+     --background-primary-alt  -> the dark chip / task-card / search-field
+                                  surfaces (deliberately a bit darker than the
+                                  canvas so they read as distinct foreground
+                                  pills).
      --background-modifier-border -> hairline borders on panels, chips, cards.
 
    Layout contract:
      - Desktop (default): `.devhelper-dashboard-root` is a two-column grid
-       (`1fr auto`) with `gap: 12px`; the topbar spans both columns, the
-       tasks panel takes the wide column and the side rail lives in the
-       narrow one.
+       (1fr auto) with gap: 12px; the topbar spans both columns (and is just a
+       transparent row of chips + the search field - no longer a panel of its
+       own), the tasks panel takes the wide column and the side rail lives
+       in the narrow one.
      - Narrow panels (< 640px, added by the responsive pass): the grid
        collapses to a single column; task card actions stack below 320px.
 
    Layout primitives: `.devhelper-dashboard-root` (grid), `.devhelper-topbar`
-   (flex row: `h2` + `.devhelper-chip-list` + `.devhelper-topbar-controls`
+   (transparent row holding `.devhelper-chip-list` + `.devhelper-topbar-controls`
    pushed right with `margin-left: auto`), `.devhelper-chip` (pill; light when
-   `.is-selected`, dark otherwise), `.devhelper-icon-button` / `.devhelper-fab`
-   (round icon buttons, the FAB is the accent-colored `+`), `.devhelper-search`
-   + `.devhelper-search-hint` (decorative search field with a monospace Ctrl+K
-   cue), `.devhelper-side-column` (narrow column: `.devhelper-icon-rail` above
-   `.devhelper-calendar`), and `.devhelper-bottom-sections` (full-width row of
-   `.devhelper-section` placeholder panels with `.devhelper-placeholder-empty`
-   bodies). The tasks panel and the issues panel live in the wide column;
-   `.devhelper-issues` and `.devhelper-bottom-sections` span both columns.
+   `.is-selected`, dark otherwise), `.devhelper-chip-add` (small transparent
+   round `+` chip), `.devhelper-icon-button` / `.devhelper-fab` (round icon
+   buttons, the FAB is the accent-colored `+`), `.devhelper-search-wrap`
+   + `.devhelper-search` + `.devhelper-search-hint` (decorative search field
+   with an inline Ctrl-K cue), `.devhelper-side-column` (narrow column:
+   `.devhelper-icon-rail` above `.devhelper-calendar`), and
+   `.devhelper-bottom-sections` (full-width row of `.devhelper-section`
+   placeholder panels with `.devhelper-placeholder-empty` bodies). Task
+   cards carry an optional `.devhelper-task-project-badge` next to the title
+   in the "Todas las tareas" view. The tasks panel and the issues panel
+   live in the wide column; `.devhelper-issues` and
+   `.devhelper-bottom-sections` span both columns.
    ========================================================================== */
 
 .devhelper-dashboard-root {
@@ -41,22 +47,17 @@
 }
 
 /* --- Top bar -------------------------------------------------------------- */
+/* Task 5: the topbar is no longer a panel - it's just a row of favorites
+   chips plus the search field, sitting directly on the dark canvas. We
+   drop the background/border and shrink the padding to keep the chips
+   on the same visual plane as the rest of the layout. */
 .devhelper-topbar {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-}
-
-.devhelper-topbar h2 {
-  margin: 0;
-  font-size: 1.2em;
-  color: var(--text-normal);
+  padding: 4px 2px;
 }
 
 .devhelper-topbar-controls {
@@ -87,7 +88,10 @@
 }
 
 .devhelper-chip.is-selected {
+  /* Selected = light pill with dark text; matches the panel surface. */
   background: var(--background-secondary);
+  color: var(--background-primary);
+  border-color: transparent;
 }
 
 .devhelper-chip.is-placeholder {
@@ -95,53 +99,22 @@
   color: var(--text-muted);
 }
 
-.devhelper-chip-menu {
+/* The trailing "+" chip that opens the favorite picker. Sits on the dark
+   canvas, no border, slightly muted so it doesn't compete with the real
+   project pills. Hover lifts the colour to `text-normal` for affordance. */
+.devhelper-chip-add {
   width: 24px;
   height: 24px;
   padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: inherit;
+  color: var(--text-muted);
   cursor: pointer;
 }
 
-/* --- Project chip status indicator (V2) ----------------------------------- */
-/* A tiny dot inserted between the chip title and the "···" menu button. The
-   base wrapper is a fixed 8x8 circle; the lucide `circle` glyph inside is
-   recolored via `color` so the dot blends with the modifier background.
-   The chip's `display: inline-flex; gap` already keeps the indicator inline. */
-.devhelper-project-status {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.devhelper-project-status svg {
-  width: 8px;
-  height: 8px;
-}
-
-.devhelper-project-status--active {
-  background-color: var(--color-green, #22c55e);
-  color: var(--color-green, #22c55e);
-}
-
-.devhelper-project-status--on-hold {
-  background-color: var(--color-yellow, #eab308);
-  color: var(--color-yellow, #eab308);
-}
-
-.devhelper-project-status--done {
-  background-color: var(--color-base-50, #8a8a8a);
-  color: var(--color-base-50, #8a8a8a);
+.devhelper-chip-add:hover {
+  color: var(--text-normal);
 }
 
 /* --- Round icon buttons --------------------------------------------------- */
@@ -174,25 +147,38 @@
 }
 
 /* --- Search (decorative) -------------------------------------------------- */
+/* Task 5: input + hint are siblings inside `.devhelper-search-wrap`. The
+   wrapper is the positioning context for the absolutely-placed hint,
+   and the field gets a generous right padding so the hint never overlaps
+   the placeholder text. */
+.devhelper-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .devhelper-search {
   flex: 1;
   min-width: 180px;
-  padding: 4px 8px;
+  padding: 4px 56px 4px 8px;
   opacity: 0.6;
   background: var(--background-primary-alt);
   color: var(--text-muted);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 .devhelper-search-hint {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   font-family: var(--font-monospace);
   font-size: 0.75em;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--background-primary-alt);
-  border: 1px solid var(--background-modifier-border);
   color: var(--text-muted);
+  pointer-events: none;
 }
 
 /* --- Main panels ---------------------------------------------------------- */
@@ -301,6 +287,19 @@
   margin: 0;
   font-size: 1em;
   cursor: pointer;
+}
+
+/* Small pill rendered next to a task title in the "Todas las tareas"
+   view, showing which project the task belongs to. Matches the muted
+   tone of the task subtitle so it doesn't compete with the title. */
+.devhelper-task-project-badge {
+  display: inline-block;
+  align-self: center;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  background: var(--background-primary-alt);
+  border-radius: 999px;
+  padding: 1px 8px;
 }
 
 .devhelper-task-subtitle {
