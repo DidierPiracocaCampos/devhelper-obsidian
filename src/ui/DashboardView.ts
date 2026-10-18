@@ -1,4 +1,4 @@
-import { ItemView, Menu, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import type { PluginSettings } from "../settings";
 import type {
   DashboardData,
@@ -14,6 +14,7 @@ import {
 import { getWeekStrip } from "../domain/weekStrip";
 import type { ProjectTaskRepository } from "../data/ProjectTaskRepository";
 import { ProjectFormModal } from "./ProjectFormModal";
+import { ProjectPickerModal } from "./ProjectPickerModal";
 import { TaskFormModal } from "./TaskFormModal";
 
 export const VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard";
@@ -127,7 +128,7 @@ export class DashboardView extends ItemView {
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-dashboard-root");
 
-    this.renderTopBar(data);
+    this.renderTopBar(data, presentation);
     // `showAll === true` ⇒ no hay un proyecto en concreto; renderizamos
     // el panel con la cabecera genérica «Todas las tareas» para que el
     // usuario siempre vea algo. El empty state sólo aparece cuando NO
@@ -144,40 +145,29 @@ export class DashboardView extends ItemView {
   }
 
   /**
-   * Top bar of the new layout: title at the left, project chips next
-   * to it, and (pushed to the right edge by `margin-left: auto` on
-   * `.devhelper-topbar-controls`) the filter / + / search controls.
+   * Top bar of the layout: project chips on the left, and (pushed to
+   * the right edge by `margin-left: auto` on
+   * `.devhelper-topbar-controls`) the decorative search input with its
+   * hint.
    *
-   * The filter button is intentionally inert and the search input is
-   * disabled — per the spec both are decorative placeholders.
+   * The previous "Proyectos" h2, the inert filter button and the
+   * project-create FAB have been retired in Task 4: project creation
+   * now flows through the favorites row's "+" picker, and the search
+   * input is still a placeholder (per the spec).
    */
-  private renderTopBar(data: DashboardData): void {
+  private renderTopBar(
+    data: DashboardData,
+    presentation: DashboardPresentation,
+  ): void {
     const topbar = this.contentEl.createEl("div", {
       cls: "devhelper-topbar",
     });
-    topbar.createEl("h2", { text: "Proyectos" });
 
-    this.renderProjectChips(data);
+    this.renderProjectChips(presentation, data);
 
     const controls = topbar.createEl("div", {
       cls: "devhelper-topbar-controls",
     });
-
-    // Placeholder filter: no click listener on purpose (spec rule).
-    const filterButton = controls.createEl("button", {
-      cls: "devhelper-icon-button",
-      attr: { "aria-label": "Filtrar", type: "button" },
-    });
-    setIcon(filterButton, "funnel");
-
-    const createProjectButton = controls.createEl("button", {
-      cls: "devhelper-fab",
-      attr: { "aria-label": "Nuevo proyecto", type: "button" },
-    });
-    setIcon(createProjectButton, "plus");
-    createProjectButton.addEventListener("click", () =>
-      this.openCreateProject(),
-    );
 
     const search = controls.createEl("input", {
       cls: "devhelper-search",
@@ -193,30 +183,46 @@ export class DashboardView extends ItemView {
   }
 
   /**
-   * Chip row that replaces the old project `<select>`. Each chip
-   * selects its project; the trailing "···" button opens the Obsidian
-   * context menu for that project (Editar / Abrir nota).
+   * Favorites row that replaces the old project `<select>`. Layout:
    *
-   * When there are no projects at all we still render a placeholder
-   * chip so the always-visible top bar is never blank.
+   *  1. "Todos" chip — selects the `kind: "all"` scope; selected when
+   *     `presentation.showAll` is true.
+   *  2. One chip per favorite project, ordered with the same
+   *     `sortProjectsForSelect` comparator as before. Each chip
+   *     carries a `contextmenu` listener that opens the project
+   *     context menu (Abrir nota / Abrir carpeta / Quitar de mis
+   *     favoritos). The previous status dot and "···" menu button
+   *     have been retired per the Task 4 spec.
+   *  3. A trailing "+" chip that opens `openAddFavorite()` so the user
+   *     can promote a non-favorite project (or create a new one).
+   *
+   * The "Sin proyectos" placeholder chip is gone — the row is always
+   * at least the "Todos" chip + "+".
    */
-  private renderProjectChips(data: DashboardData): void {
+  private renderProjectChips(
+    presentation: DashboardPresentation,
+    data: DashboardData,
+  ): void {
     const topbar = this.contentEl.querySelector<HTMLElement>(
       ".devhelper-topbar",
     );
     if (topbar === null) return;
     const chipList = topbar.createEl("div", { cls: "devhelper-chip-list" });
 
-    const projects = this.sortProjectsForSelect(data.projects);
-    if (projects.length === 0) {
-      chipList.createEl("span", {
-        cls: "devhelper-chip is-placeholder",
-        text: "Sin proyectos",
-      });
-      return;
-    }
+    // 1. "Todos" chip.
+    const allChip = chipList.createEl("button", {
+      cls: "devhelper-chip",
+      text: "Todos",
+      attr: { "aria-label": "Todos los proyectos", type: "button" },
+    });
+    if (presentation.showAll) allChip.addClass("is-selected");
+    allChip.addEventListener("click", () => this.setSelection({ kind: "all" }));
 
-    for (const project of projects) {
+    // 2. One chip per favorite, in the same order as the old select.
+    const favorites = this.sortProjectsForSelect(
+      data.projects.filter((p) => p.favorite),
+    );
+    for (const project of favorites) {
       const chip = chipList.createEl("button", {
         cls: "devhelper-chip",
         text: project.title,
@@ -229,55 +235,50 @@ export class DashboardView extends ItemView {
         chip.addClass("is-selected");
       }
 
-      // V2 status indicator on the chip (active / on-hold / done).
-      // The CSS sizes and colors the dot; this only wires the markup.
-      // We default to "active" for any value the parser didn't constrain
-      // so an invalid status can't crash the render.
-      const statusValue =
-        project.properties.status === "active" ||
-        project.properties.status === "on-hold" ||
-        project.properties.status === "done"
-          ? project.properties.status
-          : "active";
-      const statusLabels: Record<string, string> = {
-        active: "Activo",
-        "on-hold": "En pausa",
-        done: "Terminado",
-      };
-      const statusLabel = statusLabels[statusValue] ?? "Activo";
-      const status = chip.createEl("span", {
-        cls: `devhelper-project-status devhelper-project-status--${statusValue}`,
-        attr: { "aria-label": statusLabel, role: "img" },
-      });
-      setIcon(status, "circle");
-
       chip.addEventListener("click", () =>
         this.setSelection({ kind: "project", path: project.path }),
       );
 
-      const menuButton = chip.createEl("button", {
-        cls: "devhelper-chip-menu",
-        attr: { "aria-label": "Opciones de proyecto", type: "button" },
-      });
-      setIcon(menuButton, "more-horizontal");
-      menuButton.addEventListener("click", (evt) => {
-        // The menu button lives inside the chip: without stopping
-        // propagation the click would also select the project.
-        evt.stopPropagation();
+      // Right-click context menu: Abrir nota / Abrir carpeta /
+      // Quitar de mis favoritos. We always `preventDefault()` so the
+      // native browser menu does not also appear.
+      chip.addEventListener("contextmenu", (evt) => {
+        evt.preventDefault();
         const menu = new Menu();
         menu.addItem((item) =>
-          item
-            .setTitle("Editar")
-            .onClick(() => this.openEditProject(project)),
+          item.setTitle("Abrir nota").onClick(() => this.openNote(project.path)),
         );
         menu.addItem((item) =>
           item
-            .setTitle("Abrir nota")
-            .onClick(() => this.openNote(project.path)),
+            .setTitle("Abrir carpeta")
+            .onClick(() => this.openProjectFolder(project.folderPath)),
+        );
+        menu.addItem((item) =>
+          item.setTitle("Quitar de mis favoritos").onClick(async () => {
+            await this.repository.setProjectFavorite(project.path, false);
+            if (
+              this.selection.kind === "project" &&
+              this.selection.path === project.path
+            ) {
+              this.setSelection({ kind: "all" });
+            } else {
+              await this.refresh();
+            }
+          }),
         );
         menu.showAtMouseEvent(evt);
       });
     }
+
+    // 3. "+" chip to add a favorite. `devhelper-chip-add` is the class
+    //    reserved by Task 5's `styles.css`; for now the markup just
+    //    needs to exist so the picker hook is wired.
+    const addChip = chipList.createEl("button", {
+      cls: "devhelper-chip devhelper-chip-add",
+      attr: { "aria-label": "Añadir proyecto a favoritos", type: "button" },
+    });
+    setIcon(addChip, "plus");
+    addChip.addEventListener("click", () => void this.openAddFavorite());
   }
 
   private renderEmptyState(): void {
@@ -585,8 +586,12 @@ export class DashboardView extends ItemView {
       mode: "create",
       onSubmit: async (payload) => {
         try {
-          await this.repository.createProject(payload.title);
-          await this.refresh();
+          const hubPath = await this.repository.createProject(payload.title);
+          // The picker flow (Task 4): a freshly created project is
+          // automatically promoted to favorites and selected so the
+          // user lands on it instead of staring at "Todos".
+          await this.repository.setProjectFavorite(hubPath, true);
+          this.setSelection({ kind: "project", path: hubPath });
         } catch (err) {
           // We surface the failure through the console for v1. A
           // dedicated error toast lands in a later iteration.
@@ -597,18 +602,54 @@ export class DashboardView extends ItemView {
     modal.open();
   }
 
-  private openEditProject(project: ProjectRecord): void {
-    const modal = new ProjectFormModal(this.app, {
-      mode: "edit",
-      initial: { title: project.title, path: project.path },
-      onSubmit: async (payload) => {
-        try {
-          await this.repository.renameProject(project.path, payload.title);
-          await this.refresh();
-        } catch (err) {
-          console.error("DevHelper: failed to rename project", err);
-        }
-      },
+  /**
+   * Reveal a project's folder in the Obsidian file explorer. The
+   * `revealInFolder` method is an internal API on the file explorer
+   * view (not exposed in `obsidian.d.ts`), so we narrow the type
+   * through `unknown` and guard at runtime. Falls back to a `Notice`
+   * when the file explorer isn't open or the file isn't found.
+   */
+  private openProjectFolder(folderPath: string): void {
+    const abstract = this.app.vault.getAbstractFileByPath(folderPath);
+    const leaf = this.app.workspace.getLeavesOfType("file-explorer")[0];
+    const view = leaf?.view as unknown as {
+      revealInFolder?: (f: unknown) => void;
+    };
+    if (abstract && view && typeof view.revealInFolder === "function") {
+      view.revealInFolder(abstract);
+    } else {
+      new Notice("No se pudo abrir la carpeta en el explorador de archivos.");
+    }
+  }
+
+  /**
+   * Open the fuzzy picker that lets the user promote a non-favorite
+   * project to favorites (or create a new one through the synthetic
+   * "Crear proyecto nuevo…" entry). The picker always operates on
+   * the freshest vault data so a project renamed in another pane
+   * shows up immediately.
+   */
+  private async openAddFavorite(): Promise<void> {
+    const projects = (await this.repository.load()).projects
+      .filter((p) => !p.favorite)
+      .sort((a, b) => {
+        const al = a.title.toLocaleLowerCase();
+        const bl = b.title.toLocaleLowerCase();
+        if (al < bl) return -1;
+        if (al > bl) return 1;
+        if (a.path < b.path) return -1;
+        if (a.path > b.path) return 1;
+        return 0;
+      });
+    const modal = new ProjectPickerModal(this.app, projects, (result) => {
+      if (result.kind === "create") {
+        this.openCreateProject();
+      } else {
+        void (async () => {
+          await this.repository.setProjectFavorite(result.project.path, true);
+          this.setSelection({ kind: "project", path: result.project.path });
+        })();
+      }
     });
     modal.open();
   }
