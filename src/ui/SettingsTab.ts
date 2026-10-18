@@ -1,6 +1,6 @@
 import { Plugin, PluginSettingTab, Setting } from "obsidian";
 import type { PluginSettings } from "../settings";
-import { normalizeVaultFolderPath } from "../settings";
+import { mergePluginSettings, normalizeVaultFolderPath } from "../settings";
 import type { CredentialSession } from "../data/CredentialSession";
 
 /**
@@ -70,23 +70,12 @@ export class SettingsTab extends PluginSettingTab {
 
   private readSettings(): PluginSettings {
     // The main plugin declares a `settings` field on itself; cast to read it.
+    // `mergePluginSettings` keeps the credential timeout + key material
+    // that this tab never edits, so a later `saveData` cannot wipe them.
     const pluginWithSettings = this.plugin as Plugin & {
       settings?: PluginSettings;
     };
-    if (!pluginWithSettings.settings) {
-      return { ...this.defaults };
-    }
-    return {
-      ...this.defaults,
-      projectsFolder: normalizeVaultFolderPath(
-        pluginWithSettings.settings.projectsFolder,
-        this.defaults.projectsFolder,
-      ),
-      templatesFolder: normalizeVaultFolderPath(
-        pluginWithSettings.settings.templatesFolder,
-        this.defaults.templatesFolder,
-      ),
-    };
+    return mergePluginSettings(this.defaults, pluginWithSettings.settings);
   }
 
   private async writeSettings(settings: PluginSettings): Promise<void> {
