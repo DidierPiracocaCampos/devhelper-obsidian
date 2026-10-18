@@ -1,6 +1,7 @@
 import { Plugin, PluginSettingTab, Setting } from "obsidian";
 import type { PluginSettings } from "../settings";
 import { normalizeVaultFolderPath } from "../settings";
+import type { CredentialSession } from "../data/CredentialSession";
 
 /**
  * Settings tab that exposes the two vault folder paths the plugin reads
@@ -50,6 +51,21 @@ export class SettingsTab extends PluginSettingTab {
           await this.writeSettings(settings);
         });
       });
+    new Setting(containerEl)
+      .setName("Bloqueo de credenciales (minutos)")
+      .setDesc(
+        "Minutos sin usar las credenciales antes de volver a pedir la contraseña maestra.",
+      )
+      .addText((text) => {
+        text.setValue(String(settings.credentialLockTimeoutMinutes)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          settings.credentialLockTimeoutMinutes =
+            Number.isFinite(parsed) && parsed > 0
+              ? parsed
+              : this.defaults.credentialLockTimeoutMinutes;
+          await this.writeSettings(settings);
+        });
+      });
   }
 
   private readSettings(): PluginSettings {
@@ -58,12 +74,10 @@ export class SettingsTab extends PluginSettingTab {
       settings?: PluginSettings;
     };
     if (!pluginWithSettings.settings) {
-      return {
-        projectsFolder: this.defaults.projectsFolder,
-        templatesFolder: this.defaults.templatesFolder,
-      };
+      return { ...this.defaults };
     }
     return {
+      ...this.defaults,
       projectsFolder: normalizeVaultFolderPath(
         pluginWithSettings.settings.projectsFolder,
         this.defaults.projectsFolder,
@@ -79,7 +93,13 @@ export class SettingsTab extends PluginSettingTab {
     await this.plugin.saveData(settings);
     const pluginWithSettings = this.plugin as Plugin & {
       settings?: PluginSettings;
+      credentialSession?: CredentialSession;
     };
     pluginWithSettings.settings = settings;
+    // A timeout change applies to the running session immediately;
+    // key material itself is never touched here.
+    pluginWithSettings.credentialSession?.setTimeoutMinutes(
+      settings.credentialLockTimeoutMinutes,
+    );
   }
 }

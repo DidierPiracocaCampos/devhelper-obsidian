@@ -1198,6 +1198,7 @@ describe("ProjectTaskRepository", () => {
     it("createsTheProjectsFolderWhenMissing", async () => {
       const fake = createFakeVault();
       const repo = makeRepo(fake, {
+        ...DEFAULT_SETTINGS,
         projectsFolder: "Areas/Web",
         templatesFolder: "Areas/Web/_templates",
       });

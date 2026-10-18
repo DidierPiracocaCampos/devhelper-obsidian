@@ -1,27 +1,61 @@
 import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import type { PluginSettings } from "../settings";
 import type {
+  CredentialsRecord,
+  CredentialEntry,
   DashboardData,
   DashboardIssue,
+  FileRecord,
   NoteRecord,
   ProjectRecord,
   TaskRecord,
 } from "../domain/types";
 import {
+  createSaltB64,
+  createVerifier,
+  decryptEntryForDisplay,
+  deriveKey,
+  isEncryptedValue,
+  type CredentialDisplay,
+} from "../domain/credentialsCrypto";
+import type { CredentialSession } from "../data/CredentialSession";
+import {
   presentDashboard,
+  resolveVisibleCredentialsRecord,
   type DashboardPresentation,
   type DashboardSelection,
 } from "../domain/presentDashboard";
 import { getWeekStrip } from "../domain/weekStrip";
-import type { ProjectTaskRepository } from "../data/ProjectTaskRepository";
+import type {
+  ProjectTaskRepository,
+  CredentialInput,
+} from "../data/ProjectTaskRepository";
 import { ProjectFormModal } from "./ProjectFormModal";
 import { ProjectPickerModal } from "./ProjectPickerModal";
 import { VaultSearchModal } from "./VaultSearchModal";
 import { TaskFormModal } from "./TaskFormModal";
 import { NoteFormModal } from "./NoteFormModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import {
+  CredentialFormModal,
+  ConfirmModal,
+  MasterPasswordModal,
+} from "./CredentialFormModal";
 
 export const VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard";
+
+/**
+ * Credentials wiring injected by the plugin: the in-memory session plus
+ * the persistence callbacks for the key material (salt + verifier live
+ * in `data.json` via `plugin.saveData`). The view never sees passwords.
+ */
+export interface CredentialDeps {
+  session: CredentialSession;
+  getSaltB64(): string | undefined;
+  getVerifier(): string | undefined;
+  saveKeyMaterial(saltB64: string, verifier: string): Promise<void>;
+  clearKeyMaterial(): Promise<void>;
+}
 
 /**
  * Top-level dashboard view. The view owns:
@@ -45,22 +79,29 @@ export class DashboardView extends ItemView {
   // `settings` is kept around so the view can re-read folder names if
   // it ever needs to; today the repository owns that mapping.
   private readonly settings: PluginSettings;
+  private readonly credentialsDeps: CredentialDeps;
+  /** Keys `${projectPath}:${index}` whose password is currently revealed. */
+  private revealedCredentials = new Set<string>();
 
   private selection: DashboardSelection = { kind: "all" };
   private showTaskFilters = false;
   private taskStatusFilter: "all" | "open" | "done" = "all";
   private taskKindFilter: "all" | "task" | "note" = "all";
   private taskQuery = "";
+  private showFileFilters = false;
+  private fileQuery = "";
 
   constructor(
     leaf: WorkspaceLeaf,
     repository: ProjectTaskRepository,
     settings: PluginSettings,
+    credentialsDeps: CredentialDeps,
   ) {
     super(leaf);
     // The plugin's `app` field is already set by `super(leaf)`.
     this.repository = repository;
     this.settings = settings;
+    this.credentialsDeps = credentialsDeps;
   }
 
   getViewType(): string {
@@ -94,7 +135,8 @@ export class DashboardView extends ItemView {
    */
   async refresh(): Promise<void> {
     const data = await this.repository.load();
-    this.render(data);
+    const decrypted = await this.decryptVisibleCredentials(data);
+    this.render(data, decrypted);
   }
 
   /**
@@ -142,7 +184,10 @@ export class DashboardView extends ItemView {
     this.appendEmptyState(main, "loader-circle", "Cargando proyectos y tareas…");
   }
 
-  private render(data: DashboardData): void {
+  private render(
+    data: DashboardData,
+    decrypted: Map<string, CredentialDisplay[]>,
+  ): void {
     const presentation = presentDashboard(data, this.selection);
     // Keep selection in sync with what the presenter chose. This is
     // how the "project disappeared" fall-back (plan rule) is wired
@@ -166,7 +211,7 @@ export class DashboardView extends ItemView {
     }
     this.renderToolbarRail();
     this.renderSideColumn();
-    this.renderBottomSections();
+    this.renderBottomSections(data, presentation, decrypted);
     this.renderIssues(presentation.issues);
   }
 
@@ -852,50 +897,775 @@ export class DashboardView extends ItemView {
     this.appendEmptyState(calendar, "calendar-x", "No hay eventos este día");
   }
 
-  /**
-   * Bottom row of the layout: two side-by-side placeholder panels. Both
-   * are empty silhouettes — the FABs carry no listeners (the `+` is
-   * additionally disabled) and the bodies only show an empty state.
-   */
-  private renderBottomSections(): void {
+  private renderBottomSections(
+    data: DashboardData,
+    presentation: DashboardPresentation,
+    decrypted: Map<string, CredentialDisplay[]>,
+  ): void {
     const row = this.contentEl.createEl("div", {
       cls: "devhelper-bottom-sections",
     });
 
-    const renderSection = (
-      title: string,
-      emptyText: string,
-      emptyIcon: string,
-      addLabel: string,
-    ): void => {
-      const section = row.createEl("section", { cls: "devhelper-section" });
-      const header = section.createEl("div", {
-        cls: "devhelper-section-header",
-      });
-      header.createEl("h3", { text: title });
+    this.renderFilesSection(row, data, presentation);
+    this.renderCredentialsSection(row, data, decrypted);
+  }
 
-      const fabs = header.createEl("div", { cls: "devhelper-panel-fabs" });
+  private renderFilesSection(
+    row: HTMLElement,
+    data: DashboardData,
+    presentation: DashboardPresentation,
+  ): void {
+    const section = row.createEl("section", { cls: "devhelper-section" });
+    const header = section.createEl("div", {
+      cls: "devhelper-section-header",
+    });
+    header.createEl("h3", { text: "Archivos" });
 
-      // Placeholder filter: no click listener on purpose (spec rule).
-      const filterButton = fabs.createEl("button", {
-        cls: "devhelper-icon-button",
-        attr: { "aria-label": "Filtrar", title: "Filtrar", type: "button" },
-      });
-      setIcon(filterButton, "funnel");
+    const fabs = header.createEl("div", { cls: "devhelper-panel-fabs" });
 
-      // Decorative `+`: disabled, same signalling as the task trash.
-      const addButton = fabs.createEl("button", {
-        cls: "devhelper-fab",
-        attr: { "aria-label": addLabel, title: addLabel, type: "button" },
-      });
-      setIcon(addButton, "plus");
+    const filterButton = fabs.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: { "aria-label": "Filtrar archivos", title: "Filtrar", type: "button" },
+    });
+    setIcon(filterButton, "funnel");
+    if (this.showFileFilters) filterButton.addClass("is-active");
+    filterButton.addEventListener("click", () => {
+      this.showFileFilters = !this.showFileFilters;
+      void this.refresh();
+    });
+
+    // Ámbito de copia: el proyecto en alcance, o General en «Todos».
+    // Sin General (hub roto/ausente) el `+` queda deshabilitado.
+    const scopePath = this.fileScopePath(data, presentation);
+    const addButton = fabs.createEl("button", {
+      cls: "devhelper-fab",
+      attr: {
+        "aria-label": "Añadir archivo",
+        title: "Añadir archivo",
+        type: "button",
+      },
+    });
+    setIcon(addButton, "plus");
+    if (scopePath === null) {
       addButton.disabled = true;
+    } else {
+      addButton.addEventListener("click", () => this.openAddFiles(scopePath));
+    }
 
-      this.appendEmptyState(section, emptyIcon, emptyText);
-    };
+    if (this.showFileFilters) {
+      this.renderFileFilters(section);
+    }
 
-    renderSection("Archivos", "No hay archivos", "files", "Añadir archivo");
-    renderSection("Contraseña", "Sin contraseñas", "key-round", "Añadir contraseña");
+    const list = section.createEl("ul", { cls: "devhelper-file-list" });
+    if (presentation.files.length === 0) {
+      const emptyItem = list.createEl("li", {
+        cls: "devhelper-task-empty",
+      });
+      this.appendEmptyState(emptyItem, "files", "No hay archivos");
+      this.applyFileQueryFilter(list);
+      return;
+    }
+
+    for (const file of presentation.files) {
+      list.appendChild(this.renderFileCard(file));
+    }
+    this.applyFileQueryFilter(list);
+  }
+
+  /**
+   * Fila de filtro de archivos: reutiliza las clases de tareas
+   * (`.devhelper-task-filters/-search`) para compartir silueta y CSS.
+   * Filtra en memoria sin `refresh()` para no robar el foco al teclear.
+   */
+  private renderFileFilters(section: HTMLElement): void {
+    const filters = section.createEl("div", {
+      cls: "devhelper-task-filters",
+    });
+    const search = filters.createEl("input", {
+      cls: "devhelper-task-search",
+      type: "search",
+      placeholder: "Buscar archivos…",
+      attr: { "aria-label": "Buscar archivos" },
+    });
+    search.value = this.fileQuery;
+    search.addEventListener("input", (evt) => {
+      this.fileQuery = (evt.target as HTMLInputElement).value;
+      const list = section.querySelector<HTMLElement>(".devhelper-file-list");
+      if (list !== null) this.applyFileQueryFilter(list);
+    });
+  }
+
+  /**
+   * Oculta/muestra las filas ya renderizadas por nombre de fichero
+   * (contiene, case-insensitive). Mantiene una fila «Sin resultados»
+   * sincronizada para no dejar nunca la lista en blanco.
+   */
+  private applyFileQueryFilter(list: HTMLElement): void {
+    const query = this.fileQuery.trim().toLocaleLowerCase();
+    let noResults = list.querySelector<HTMLElement>(
+      ".devhelper-file-no-results",
+    );
+    if (noResults === null) {
+      noResults = list.createEl("li", {
+        cls: "devhelper-task-empty devhelper-file-no-results",
+      });
+      this.appendEmptyState(noResults, "search-x", "Sin resultados");
+    }
+    if (query === "") {
+      for (const child of Array.from(list.children)) {
+        if (child !== noResults) (child as HTMLElement).style.display = "";
+      }
+      noResults.style.display = "none";
+      return;
+    }
+    let visible = 0;
+    for (const child of Array.from(list.children)) {
+      if (child === noResults) continue;
+      const el = child as HTMLElement;
+      const name = (el.dataset["title"] ?? "").toLocaleLowerCase();
+      const match = name.includes(query);
+      el.style.display = match ? "" : "none";
+      if (match) visible++;
+    }
+    noResults.style.display = visible === 0 ? "" : "none";
+  }
+
+  /**
+   * Fila de archivo: reutiliza la silueta de tarjeta de tarea
+   * (`.devhelper-task-card`) para compartir el CSS oscuro. El nombre
+   * abre el fichero al hacer clic; la lupa de carpeta lo muestra en el
+   * explorador; la papelera pide confirmación.
+   */
+  private renderFileCard(file: FileRecord): HTMLElement {
+    const card = createEl("li", {
+      cls: "devhelper-task-card devhelper-file-card",
+    });
+    // Clave del filtro en memoria (`applyFileQueryFilter`).
+    card.dataset["title"] = file.name;
+
+    const main = card.createEl("div", { cls: "devhelper-task-main" });
+    const titleRow = main.createEl("div", {
+      cls: "devhelper-task-title-row",
+    });
+    const iconEl = titleRow.createEl("span", {
+      cls: "devhelper-file-icon",
+      attr: { "aria-hidden": "true" },
+    });
+    setIcon(iconEl, "file");
+    const titleEl = titleRow.createEl("h4", {
+      cls: "devhelper-task-title",
+      text: file.name,
+      attr: { title: "Abrir archivo" },
+    });
+    titleEl.addEventListener("click", () => this.openFile(file.path));
+
+    const actions = card.createEl("div", { cls: "devhelper-task-actions" });
+
+    // Mostrar en el explorador de archivos (revela el fichero).
+    const revealBtn = actions.createEl("button", {
+      cls: "devhelper-icon-button devhelper-task-icon",
+      attr: {
+        "aria-label": "Ver en el explorador de archivos",
+        type: "button",
+        title: "Ver en el explorador de archivos",
+      },
+    });
+    setIcon(revealBtn, "folder-search");
+    revealBtn.addEventListener("click", () => this.openFileInExplorer(file.path));
+
+    const deleteBtn = actions.createEl("button", {
+      cls: "devhelper-icon-button devhelper-task-icon",
+      attr: {
+        "aria-label": "Eliminar archivo",
+        type: "button",
+        title: "Mover a la papelera",
+      },
+    });
+    setIcon(deleteBtn, "trash-2");
+    deleteBtn.addEventListener("click", () => this.openDeleteFile(file));
+
+    return card;
+  }
+
+  /**
+   * Proyecto dueño del ámbito de archivos: el seleccionado en modo
+   * proyecto; el proyecto sombra General en modo «Todos». `null` cuando
+   * General no existe (el `+` queda deshabilitado).
+   */
+  private fileScopePath(
+    data: DashboardData,
+    presentation: DashboardPresentation,
+  ): string | null {
+    if (!presentation.showAll && presentation.selectedProject !== null) {
+      return presentation.selectedProject.path;
+    }
+    const general = data.projects.find((p) => p.isGeneral === true);
+    return general ? general.path : null;
+  }
+
+  /**
+   * Credentials note the "Contraseña" section shows: the selected
+   * project's own record, or General's shared record in "all" mode
+   * (pure helper in the presenter layer, unit-tested there).
+   */
+  private credentialsRecordForSelection(
+    data: DashboardData,
+  ): { projectPath: string; record: CredentialsRecord | null } | null {
+    return resolveVisibleCredentialsRecord(data, this.selection);
+  }
+
+  /**
+   * Best-effort decrypted rows for the selected project. Empty when the
+   * session is locked or there is nothing to show; entries that fail to
+   * decrypt are flagged corrupt by `decryptEntryForDisplay`, never throw.
+   */
+  private async decryptVisibleCredentials(
+    data: DashboardData,
+  ): Promise<Map<string, CredentialDisplay[]>> {
+    const out = new Map<string, CredentialDisplay[]>();
+    const key = this.credentialsDeps.session.getKey();
+    if (key === null) {
+      return out;
+    }
+    const visible = this.credentialsRecordForSelection(data);
+    if (visible === null || visible.record === null) {
+      return out;
+    }
+    const displays = await Promise.all(
+      visible.record.entries.map((entry) =>
+        decryptEntryForDisplay(entry, key),
+      ),
+    );
+    out.set(visible.record.projectPath, displays);
+    return out;
+  }
+
+  private renderCredentialsSection(
+    row: HTMLElement,
+    data: DashboardData,
+    decrypted: Map<string, CredentialDisplay[]>,
+  ): void {
+    const section = row.createEl("section", { cls: "devhelper-section" });
+    const header = section.createEl("div", {
+      cls: "devhelper-section-header",
+    });
+    header.createEl("h3", { text: "Contraseña" });
+
+    const salt = this.credentialsDeps.getSaltB64();
+    const verifier = this.credentialsDeps.getVerifier();
+
+    if (!salt || !verifier) {
+      if (salt || verifier) {
+        // Hand-edited data.json with only half of the key material.
+        this.appendEmptyState(
+          section,
+          "triangle-alert",
+          "Configuración de cifrado incompleta. Restablece para empezar de cero.",
+        );
+        this.renderCredentialReset(section);
+      } else {
+        this.appendEmptyState(
+          section,
+          "key-round",
+          "Protege todas las credenciales con una única contraseña maestra.",
+        );
+        const createBtn = section.createEl("button", {
+          cls: "devhelper-button",
+          text: "Crear contraseña maestra",
+        });
+        createBtn.addEventListener("click", () =>
+          this.openCreateMasterPassword(),
+        );
+      }
+      return;
+    }
+
+    const visible = this.credentialsRecordForSelection(data);
+    if (visible === null) {
+      this.appendEmptyState(
+        section,
+        "key-round",
+        "Selecciona un proyecto para ver sus credenciales.",
+      );
+      return;
+    }
+
+    if (!this.credentialsDeps.session.isUnlocked()) {
+      this.revealedCredentials.clear();
+      this.renderLockedCredentials(section, visible);
+      return;
+    }
+    this.renderUnlockedCredentials(
+      section,
+      visible,
+      decrypted.get(visible.projectPath) ?? [],
+    );
+  }
+
+  private renderLockedCredentials(
+    section: HTMLElement,
+    visible: { projectPath: string; record: CredentialsRecord | null },
+  ): void {
+    const names = visible.record?.entries.map((e) => e.service) ?? [];
+    if (names.length === 0) {
+      this.appendEmptyState(
+        section,
+        "key-round",
+        "Este proyecto aún no tiene credenciales.",
+      );
+    } else {
+      const list = section.createEl("ul", {
+        cls: "devhelper-credential-list",
+      });
+      for (const name of names) {
+        const item = list.createEl("li", {
+          cls: "devhelper-credential-locked",
+        });
+        const icon = item.createEl("span", {
+          cls: "devhelper-credential-lock-icon",
+          attr: { "aria-hidden": "true" },
+        });
+        setIcon(icon, "lock");
+        item.createEl("span", { text: name });
+      }
+    }
+    const actions = section.createEl("div", {
+      cls: "devhelper-form-actions",
+    });
+    const unlockBtn = actions.createEl("button", {
+      cls: "devhelper-button",
+      text: "Desbloquear",
+    });
+    unlockBtn.addEventListener("click", () => this.openUnlockMasterPassword());
+    const forgotBtn = actions.createEl("button", {
+      cls: "devhelper-link-button",
+      text: "Olvidé mi contraseña",
+    });
+    forgotBtn.addEventListener("click", () =>
+      this.renderCredentialReset(section),
+    );
+  }
+
+  private renderUnlockedCredentials(
+    section: HTMLElement,
+    visible: { projectPath: string; record: CredentialsRecord | null },
+    displays: CredentialDisplay[],
+  ): void {
+    const session = this.credentialsDeps.session;
+    const mins = Math.ceil(session.msUntilLock() / 60000);
+    const status = section.createEl("div", {
+      cls: "devhelper-credential-status",
+    });
+    status.createEl("span", {
+      text: `Desbloqueado · se bloquea en ${mins <= 1 ? "menos de un minuto" : `~${mins} min`}`,
+    });
+    const lockBtn = status.createEl("button", {
+      cls: "devhelper-button",
+      text: "Bloquear ahora",
+    });
+    lockBtn.addEventListener("click", () => this.lockCredentials());
+
+    const record = visible.record;
+    if (record?.needsMigration) {
+      const count = record.entries.filter(
+        (e) =>
+          typeof e.password === "string" && !isEncryptedValue(e.password),
+      ).length;
+      const banner = section.createEl("div", {
+        cls: "devhelper-migration-banner",
+      });
+      banner.createEl("span", {
+        text: `Tienes ${count} credencial${count === 1 ? "" : "es"} sin cifrar.`,
+      });
+      const migrateBtn = banner.createEl("button", {
+        cls: "devhelper-button",
+        text: "Cifrar ahora",
+      });
+      migrateBtn.addEventListener("click", () =>
+        void this.migrateVisibleCredentials(visible.projectPath),
+      );
+    }
+
+    if (!record || displays.length === 0) {
+      this.appendEmptyState(
+        section,
+        "key-round",
+        "Este proyecto aún no tiene credenciales.",
+      );
+    } else {
+      const list = section.createEl("ul", {
+        cls: "devhelper-credential-list",
+      });
+      record.entries.forEach((entry, index) => {
+        const display = displays[index] ?? {
+          service: entry.service,
+          user: null,
+          password: null,
+          url: null,
+          notes: null,
+          corrupt: true,
+        };
+        list.appendChild(
+          this.renderCredentialRow(visible.projectPath, index, entry, display),
+        );
+      });
+    }
+
+    const addBtn = section.createEl("button", {
+      cls: "devhelper-fab",
+      attr: {
+        "aria-label": "Añadir contraseña",
+        title: "Añadir contraseña",
+        type: "button",
+      },
+    });
+    setIcon(addBtn, "plus");
+    addBtn.addEventListener("click", () =>
+      this.openCreateCredential(visible.projectPath),
+    );
+  }
+
+  /**
+   * One credential as a task-like dark card: service as the title, one
+   * muted subtitle line per field, icon actions on the right. Reuses the
+   * task-card classes so both panels read as the same component.
+   */
+  private renderCredentialRow(
+    projectPath: string,
+    index: number,
+    entry: CredentialEntry,
+    display: CredentialDisplay,
+  ): HTMLElement {
+    const item = createEl("li", { cls: "devhelper-task-card" });
+    const main = item.createEl("div", { cls: "devhelper-task-main" });
+
+    const titleRow = main.createEl("div", {
+      cls: "devhelper-task-title-row",
+    });
+    titleRow.createEl("h4", {
+      text: entry.service,
+      cls: "devhelper-task-title devhelper-credential-title",
+    });
+
+    if (display.corrupt) {
+      main.createEl("p", {
+        text: "No se pudo descifrar esta entrada (datos corruptos).",
+        cls: "devhelper-task-subtitle devhelper-credential-corrupt",
+      });
+    } else {
+      if (display.user !== null) {
+        this.renderCredentialField(main, "Usuario", display.user, () =>
+          this.copySecret(display.user ?? ""),
+        );
+      }
+      const revealKey = `${projectPath}:${index}`;
+      const revealed = this.revealedCredentials.has(revealKey);
+      this.renderCredentialField(
+        main,
+        "Contraseña",
+        revealed ? (display.password ?? "") : "••••••••",
+        () => this.copySecret(display.password ?? ""),
+        {
+          toggleLabel: revealed ? "Ocultar" : "Mostrar",
+          onToggle: () => {
+            if (revealed) {
+              this.revealedCredentials.delete(revealKey);
+            } else {
+              this.revealedCredentials.add(revealKey);
+            }
+            this.credentialsDeps.session.touch();
+            void this.refresh();
+          },
+        },
+      );
+      if (display.url !== null && display.url.length > 0) {
+        this.renderCredentialField(main, "URL", display.url, () =>
+          this.copySecret(display.url ?? ""),
+        );
+      }
+      if (display.notes !== null && display.notes.length > 0) {
+        main.createEl("p", {
+          text: display.notes,
+          cls: "devhelper-task-subtitle",
+        });
+      }
+    }
+
+    const actions = item.createEl("div", {
+      cls: "devhelper-task-actions",
+    });
+    if (!display.corrupt) {
+      const editBtn = actions.createEl("button", {
+        cls: "devhelper-icon-button devhelper-task-icon",
+        attr: { "aria-label": "Editar credencial", type: "button" },
+      });
+      setIcon(editBtn, "pencil");
+      editBtn.addEventListener("click", () =>
+        this.openEditCredential(projectPath, index, entry.service, display),
+      );
+    }
+    const deleteBtn = actions.createEl("button", {
+      cls: "devhelper-icon-button devhelper-task-icon",
+      attr: { "aria-label": "Eliminar credencial", type: "button" },
+    });
+    setIcon(deleteBtn, "trash-2");
+    deleteBtn.addEventListener("click", () =>
+      this.openDeleteCredential(projectPath, index, entry.service),
+    );
+    return item;
+  }
+
+  /**
+   * One muted subtitle line (`Etiqueta: valor`) with mini pill buttons
+   * for copying and, for the password, showing/hiding.
+   */
+  private renderCredentialField(
+    parent: HTMLElement,
+    label: string,
+    value: string,
+    onCopy: () => void,
+    toggle?: { toggleLabel: string; onToggle: () => void },
+  ): void {
+    const row = parent.createEl("p", { cls: "devhelper-task-subtitle" });
+    row.createEl("span", { text: `${label}: ${value} ` });
+    if (toggle) {
+      const toggleBtn = row.createEl("button", {
+        cls: "devhelper-credential-mini",
+        text: toggle.toggleLabel,
+        attr: { type: "button" },
+      });
+      toggleBtn.addEventListener("click", toggle.onToggle);
+      row.createEl("span", { text: " " });
+    }
+    const copyBtn = row.createEl("button", {
+      cls: "devhelper-credential-mini",
+      text: "Copiar",
+      attr: {
+        "aria-label": `Copiar ${label.toLocaleLowerCase()}`,
+        type: "button",
+      },
+    });
+    copyBtn.addEventListener("click", () => onCopy());
+  }
+
+  /**
+   * Danger zone for a forgotten master password. Clearing the key
+   * material is irreversible: existing blobs stay on disk but become
+   * undecryptable (they surface as corrupt rows the user can delete).
+   */
+  private renderCredentialReset(section: HTMLElement): void {
+    const warn = section.createEl("div", { cls: "devhelper-danger-zone" });
+    warn.createEl("p", {
+      text: "Sin la contraseña maestra no hay recuperación posible: las credenciales cifradas quedarán ilegibles. Solo sigue si asumes esa pérdida.",
+    });
+    const confirm = warn.createEl("button", {
+      cls: "devhelper-button devhelper-button-danger",
+      text: "Restablecer y empezar de cero",
+    });
+    confirm.addEventListener("click", () => void this.resetKeyMaterial());
+  }
+
+  private async resetKeyMaterial(): Promise<void> {
+    try {
+      await this.credentialsDeps.clearKeyMaterial();
+      this.revealedCredentials.clear();
+      await this.refresh();
+    } catch (err) {
+      console.error("DevHelper: failed to reset key material", err);
+      new Notice("No se pudo restablecer. Inténtalo de nuevo.");
+    }
+  }
+
+  private lockCredentials(): void {
+    this.credentialsDeps.session.lock();
+    this.revealedCredentials.clear();
+    void this.refresh();
+  }
+
+  private async copySecret(value: string): Promise<void> {
+    this.credentialsDeps.session.touch();
+    try {
+      await navigator.clipboard.writeText(value);
+      new Notice("Copiado.");
+    } catch {
+      new Notice("No se pudo copiar.");
+    }
+  }
+
+  private async migrateVisibleCredentials(
+    projectPath: string,
+  ): Promise<void> {
+    try {
+      const key = this.credentialsDeps.session.getKey();
+      const count = await this.repository.migratePlaintextCredentials(
+        projectPath,
+        key,
+      );
+      this.credentialsDeps.session.touch();
+      new Notice(
+        count === 0
+          ? "No había credenciales sin cifrar."
+          : `Migradas ${count} credencial${count === 1 ? "" : "es"}.`,
+      );
+      await this.refresh();
+    } catch (err) {
+      console.error("DevHelper: failed to migrate credentials", err);
+      new Notice("No se pudo migrar. Desbloquea e inténtalo de nuevo.");
+    }
+  }
+
+  private openCreateMasterPassword(): void {
+    const modal = new MasterPasswordModal(this.app, {
+      mode: "create",
+      onSubmit: (password) => {
+        void (async () => {
+          try {
+            const salt = await createSaltB64();
+            const key = await deriveKey(password, salt);
+            const verifier = await createVerifier(key);
+            await this.credentialsDeps.saveKeyMaterial(salt, verifier);
+            this.credentialsDeps.session.setTimeoutMinutes(
+              this.settings.credentialLockTimeoutMinutes,
+            );
+            await this.credentialsDeps.session.unlock(password, salt, verifier);
+            modal.close();
+            await this.refresh();
+          } catch (err) {
+            console.error("DevHelper: failed to create master password", err);
+            modal.showError("No se pudo crear la contraseña maestra.");
+          }
+        })();
+      },
+    });
+    modal.open();
+  }
+
+  /**
+   * Ask for the master password. On success the modal closes and either
+   * `afterUnlock` runs (chained save from an open credential form) or
+   * the view simply refreshes into the unlocked state. Failures keep
+   * the modal open with a generic message.
+   */
+  private openUnlockMasterPassword(afterUnlock?: () => void): void {
+    const modal = new MasterPasswordModal(this.app, {
+      mode: "unlock",
+      onSubmit: (password) => {
+        void (async () => {
+          const salt = this.credentialsDeps.getSaltB64();
+          const verifier = this.credentialsDeps.getVerifier();
+          if (!salt || !verifier) {
+            modal.showError("Configuración de cifrado incompleta.");
+            return;
+          }
+          try {
+            await this.credentialsDeps.session.unlock(password, salt, verifier);
+            modal.close();
+            if (afterUnlock) {
+              afterUnlock();
+            } else {
+              await this.refresh();
+            }
+          } catch {
+            modal.showError("Contraseña incorrecta.");
+          }
+        })();
+      },
+    });
+    modal.open();
+  }
+
+  private openCreateCredential(projectPath: string): void {
+    let modal: CredentialFormModal | null = null;
+    modal = new CredentialFormModal(this.app, {
+      mode: "create",
+      onSubmit: (payload) =>
+        this.persistCredential(modal, projectPath, null, null, payload),
+    });
+    modal.open();
+  }
+
+  private openEditCredential(
+    projectPath: string,
+    index: number,
+    service: string,
+    display: CredentialDisplay,
+  ): void {
+    let modal: CredentialFormModal | null = null;
+    modal = new CredentialFormModal(this.app, {
+      mode: "edit",
+      initial: {
+        service,
+        user: display.user ?? "",
+        password: display.password ?? "",
+        url: display.url ?? "",
+        notes: display.notes ?? "",
+      },
+      onSubmit: (payload: CredentialInput) =>
+        this.persistCredential(modal, projectPath, index, service, payload),
+    });
+    modal.open();
+  }
+
+  /**
+   * Persist a credential form. When the session expired while the modal
+   * was open, the modal keeps its text and an unlock prompt opens on
+   * top: unlocking retries the same payload instead of losing it.
+   */
+  private async persistCredential(
+    modal: CredentialFormModal | null,
+    projectPath: string,
+    index: number | null,
+    expectedService: string | null,
+    payload: CredentialInput,
+  ): Promise<void> {
+    const key = this.credentialsDeps.session.getKey();
+    if (key === null) {
+      this.openUnlockMasterPassword(() => {
+        void this.persistCredential(
+          modal,
+          projectPath,
+          index,
+          expectedService,
+          payload,
+        );
+      });
+      throw new Error("Sesión bloqueada. Desbloquea para guardar.");
+    }
+    if (index === null) {
+      await this.repository.createCredential(projectPath, payload, key);
+    } else {
+      await this.repository.updateCredential(
+        projectPath,
+        index,
+        expectedService ?? "",
+        payload,
+        key,
+      );
+    }
+    this.credentialsDeps.session.touch();
+    await this.refresh();
+  }
+
+  private openDeleteCredential(
+    projectPath: string,
+    index: number,
+    service: string,
+  ): void {
+    const modal = new ConfirmModal(this.app, {
+      title: "Eliminar credencial",
+      message: `¿Eliminar la credencial de «${service}»? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      onConfirm: async () => {
+        await this.repository.deleteCredential(
+          projectPath,
+          index,
+          this.credentialsDeps.session.getKey(),
+        );
+        this.credentialsDeps.session.touch();
+        await this.refresh();
+      },
+    });
+    modal.open();
   }
 
   // -------------------------------------------------------------------------
@@ -949,7 +1719,26 @@ export class DashboardView extends ItemView {
    * when the file explorer isn't open or the file isn't found.
    */
   private openProjectFolder(folderPath: string): void {
-    const abstract = this.app.vault.getAbstractFileByPath(folderPath);
+    this.revealInExplorer(
+      folderPath,
+      "No se pudo abrir la carpeta en el explorador de archivos.",
+    );
+  }
+
+  /**
+   * Reveal a file in the Obsidian file explorer. Shares the internal
+   * `revealInFolder` API with `openProjectFolder`; `revealInFolder`
+   * accepts both files and folders.
+   */
+  private openFileInExplorer(filePath: string): void {
+    this.revealInExplorer(
+      filePath,
+      "No se pudo mostrar el archivo en el explorador.",
+    );
+  }
+
+  private revealInExplorer(path: string, failureNotice: string): void {
+    const abstract = this.app.vault.getAbstractFileByPath(path);
     const leaf = this.app.workspace.getLeavesOfType("file-explorer")[0];
     const view = leaf?.view as unknown as {
       revealInFolder?: (f: unknown) => void;
@@ -957,7 +1746,7 @@ export class DashboardView extends ItemView {
     if (abstract && view && typeof view.revealInFolder === "function") {
       view.revealInFolder(abstract);
     } else {
-      new Notice("No se pudo abrir la carpeta en el explorador de archivos.");
+      new Notice(failureNotice);
     }
   }
 
@@ -982,7 +1771,7 @@ export class DashboardView extends ItemView {
    */
   private async openAddFavorite(): Promise<void> {
     const projects = (await this.repository.load()).projects
-      .filter((p) => !p.favorite)
+      .filter((p) => !p.favorite && !p.isGeneral)
       .sort((a, b) => {
         const al = a.title.toLocaleLowerCase();
         const bl = b.title.toLocaleLowerCase();
@@ -1087,6 +1876,70 @@ export class DashboardView extends ItemView {
       },
     });
     modal.open();
+  }
+
+  /**
+   * Copia uno o varios ficheros del sistema al `Archivos/` del proyecto
+   * en ámbito. Usa un `<input type=file multiple>` oculto: los bytes se
+   * leen con `arrayBuffer()` y entran por `repository.addFile()` (nunca
+   * por `app.vault.*` directo). Tras copiar, un `refresh()` muestra las
+   * filas nuevas sin recarga manual.
+   */
+  private openAddFiles(scopePath: string): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.style.display = "none";
+    const cleanup = (): void => {
+      input.remove();
+    };
+    input.addEventListener("change", () => {
+      const picked = input.files;
+      cleanup();
+      if (picked === null || picked.length === 0) return;
+      void (async () => {
+        try {
+          for (const pickedFile of Array.from(picked)) {
+            const data = await pickedFile.arrayBuffer();
+            await this.repository.addFile(
+              scopePath,
+              pickedFile.name,
+              data,
+            );
+          }
+          await this.refresh();
+        } catch (err) {
+          console.error("DevHelper: no se pudo añadir el archivo", err);
+          new Notice("No se pudo añadir el archivo.");
+        }
+      })();
+    });
+    // El diálogo puede cancelarse sin `change`: retirar el nodo huérfano.
+    input.addEventListener("cancel", cleanup);
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  private openDeleteFile(file: FileRecord): void {
+    const modal = new ConfirmDeleteModal(this.app, {
+      taskTitle: file.name,
+      onConfirm: async () => {
+        try {
+          await this.repository.deleteFile(file.path);
+          await this.refresh();
+        } catch (err) {
+          console.error("DevHelper: no se pudo mover el archivo a la papelera", err);
+          new Notice("No se pudo mover el archivo a la papelera.");
+        }
+      },
+    });
+    modal.open();
+  }
+
+  private openFile(path: string): void {
+    void this.app.workspace
+      .openLinkText(path, "")
+      .catch(() => new Notice("No se pudo abrir el archivo."));
   }
 
   private async toggleTaskStatus(task: TaskRecord): Promise<void> {

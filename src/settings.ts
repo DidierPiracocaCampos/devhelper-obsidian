@@ -8,11 +8,15 @@
 export interface PluginSettings {
   projectsFolder: string;
   templatesFolder: string;
+  credentialLockTimeoutMinutes: number;
+  credSaltB64?: string;
+  credVerifier?: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   projectsFolder: "Projects",
   templatesFolder: "Projects/_templates",
+  credentialLockTimeoutMinutes: 15,
 };
 
 /**

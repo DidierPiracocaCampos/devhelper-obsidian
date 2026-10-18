@@ -877,6 +877,49 @@
   color: #fafafa;
 }
 
+/* Funnel activo en la cabecera de sección: pastilla clara invertida,
+   igual que en el panel de tareas. */
+.devhelper-section-header .devhelper-icon-button.is-active {
+  background: #fafafa;
+  background-color: #fafafa;
+  border-color: #fafafa;
+  color: #111114;
+}
+
+/* --- File list ------------------------------------------------------------
+   Misma silueta que `.devhelper-task-list`: las filas reutilizan
+   `.devhelper-task-card` y el filtro reutiliza
+   `.devhelper-task-filters/-search`, así que aquí sólo vive la lista. */
+.devhelper-file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* La lista ocupa el alto libre de la sección y desplaza por dentro. */
+.devhelper-section .devhelper-file-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Icono de fichero junto al nombre, en el tono apagado del subtítulo. */
+.devhelper-file-card .devhelper-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #a1a1aa;
+}
+
+.devhelper-file-card .devhelper-file-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 .devhelper-placeholder-empty {
   color: var(--text-muted);
   font-style: italic;
@@ -917,6 +960,106 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* --- Credentials section -------------------------------------------------- */
+.devhelper-credential-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.devhelper-credential-locked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.devhelper-credential-lock-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Service title inside the reused task card: not clickable (there is
+   no note to open), so it drops the pointer cursor. */
+.devhelper-credential-title {
+  cursor: default;
+}
+
+/* Mini pill buttons living inside the muted subtitle lines
+   (Mostrar/Ocultar, Copiar). Same tone as the task badges so they sit
+   quietly on the dark card. */
+.devhelper-credential-mini {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75em;
+  color: #d4d4d8;
+  background: transparent;
+  border: 1px solid #3f3f46;
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.devhelper-credential-mini:hover {
+  background: #2b2b30;
+}
+
+.devhelper-credential-corrupt {
+  color: var(--text-error);
+}
+
+.devhelper-credential-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.devhelper-migration-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.devhelper-danger-zone {
+  border: 1px solid var(--text-error);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 12px;
+  font-size: 0.9em;
+}
+
+.devhelper-button-danger {
+  border-color: var(--text-error);
+  color: var(--text-error);
+}
+
+.devhelper-link-button {
+  background: none;
+  border: none;
+  padding: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.devhelper-link-button:hover {
+  color: var(--text-normal);
+  text-decoration: underline;
 }
 
 /* --- Narrow layout -------------------------------------------------------- */

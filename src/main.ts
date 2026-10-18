@@ -1,6 +1,7 @@
 import { Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, type PluginSettings } from "./settings";
 import { SettingsTab } from "./ui/SettingsTab";
+import { CredentialSession } from "./data/CredentialSession";
 import { ProjectTaskRepository } from "./data/ProjectTaskRepository";
 import { ObsidianVaultAdapter } from "./data/ObsidianVaultAdapter";
 import {
@@ -25,6 +26,8 @@ import {
 export default class DevHelperDashboardPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS };
   repository!: ProjectTaskRepository;
+  /** In-memory master-key session. Never persisted; see `CredentialSession`. */
+  credentialSession!: CredentialSession;
 
   /**
    * Handle for the pending debounced refresh. We use a `number` because
@@ -43,11 +46,36 @@ export default class DevHelperDashboardPlugin extends Plugin {
     const adapter = new ObsidianVaultAdapter(this.app);
     this.repository = new ProjectTaskRepository(adapter, this.settings);
 
+    this.credentialSession = new CredentialSession(
+      this.settings.credentialLockTimeoutMinutes,
+    );
+    // When the timeout fires behind the user's back, every open
+    // dashboard falls back to the locked state on its own.
+    this.credentialSession.setOnExpire(() => {
+      void this.refreshDashboard();
+    });
+
     this.addSettingTab(new SettingsTab(this, DEFAULT_SETTINGS));
 
     this.registerView(
       VIEW_TYPE_DEVHELPER_DASHBOARD,
-      (leaf) => new DashboardView(leaf, this.repository, this.settings!),
+      (leaf) =>
+        new DashboardView(leaf, this.repository, this.settings!, {
+          session: this.credentialSession,
+          getSaltB64: () => this.settings.credSaltB64,
+          getVerifier: () => this.settings.credVerifier,
+          saveKeyMaterial: async (saltB64, verifier) => {
+            this.settings.credSaltB64 = saltB64;
+            this.settings.credVerifier = verifier;
+            await this.saveData(this.settings);
+          },
+          clearKeyMaterial: async () => {
+            this.settings.credSaltB64 = undefined;
+            this.settings.credVerifier = undefined;
+            this.credentialSession.lock();
+            await this.saveData(this.settings);
+          },
+        }),
     );
 
     this.addCommand({
@@ -82,7 +110,9 @@ export default class DevHelperDashboardPlugin extends Plugin {
     // Nothing to clean up explicitly: Obsidian tears down every
     // `registerEvent`/`registerView` subscription when the plugin
     // unloads. Cancel any pending debounced refresh so it cannot fire
-    // against a half-torn-down vault.
+    // against a half-torn-down vault, and drop the master key so its
+    // expiry timer cannot fire post-unload.
+    this.credentialSession?.lock();
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
       this.refreshTimer = null;

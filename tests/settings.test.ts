@@ -15,6 +15,16 @@ describe("settings", () => {
     });
   });
 
+  describe("defaultsCredentialLock", () => {
+    it("locks credentials after 15 minutes with no key material by default", () => {
+      const defaults: PluginSettings = DEFAULT_SETTINGS;
+
+      expect(defaults.credentialLockTimeoutMinutes).toBe(15);
+      expect(defaults.credSaltB64).toBeUndefined();
+      expect(defaults.credVerifier).toBeUndefined();
+    });
+  });
+
   describe("normalizesFolderPath", () => {
     it("returns the fallback for an empty string", () => {
       expect(normalizeVaultFolderPath("", "Projects")).toBe("Projects");
