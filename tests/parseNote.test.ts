@@ -686,6 +686,60 @@ describe("parseProjectTaskNote", () => {
       expect(result.task.properties.due).toBe("2026-02-20");
     });
   });
+  describe("parsesValidNote", () => {
+    it("parses a note with only project and created", () => {
+      const note = snapshot(
+        "Projects/Website/Notas/Idea.md",
+        "Idea.md",
+        [
+          "---",
+          "type: note",
+          'project: "[[Projects/Website/Website]]"',
+          'created: "2026-01-15"',
+          "---",
+          "Cuerpo libre.",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Website/Website.md");
+
+      expect(result.kind).toBe("note");
+      if (result.kind !== "note") return;
+      expect(result.note.path).toBe("Projects/Website/Notas/Idea.md");
+      expect(result.note.title).toBe("Idea");
+      expect(result.note.projectPath).toBe("Projects/Website/Website.md");
+      expect(result.note.properties.type).toBe("note");
+    });
+
+    it("returns an issue for a note missing project", () => {
+      const note = snapshot(
+        "Projects/Website/Notas/SinProyecto.md",
+        "SinProyecto.md",
+        ["---", "type: note", 'created: "2026-01-15"', "---"].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Website/Website.md");
+
+      expect(result.kind).toBe("issue");
+    });
+
+    it("returns an issue for a note missing created", () => {
+      const note = snapshot(
+        "Projects/Website/Notas/SinFecha.md",
+        "SinFecha.md",
+        [
+          "---",
+          "type: note",
+          'project: "[[Projects/Website/Website]]"',
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Website/Website.md");
+
+      expect(result.kind).toBe("issue");
+    });
+  });
 });
 
 describe("parseCredentialsNote", () => {

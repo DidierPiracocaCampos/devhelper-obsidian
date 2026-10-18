@@ -42,6 +42,7 @@ import type {
   CredentialsRecord,
   DashboardData,
   DashboardIssue,
+  NoteRecord,
   NoteSnapshot,
   ParsedNote,
   ProjectRecord,
@@ -98,6 +99,7 @@ export class ProjectTaskRepository {
   async load(): Promise<DashboardData> {
     const projects: ProjectRecord[] = [];
     const tasks: TaskRecord[] = [];
+    const notes: NoteRecord[] = [];
     const credentials: CredentialsRecord[] = [];
     const issues: DashboardIssue[] = [];
 
@@ -105,7 +107,7 @@ export class ProjectTaskRepository {
 
     // 1. Seed + validate templates.
     await this.seedTemplates();
-    const kinds: TemplateKind[] = ["project", "task", "credentials"];
+    const kinds: TemplateKind[] = ["project", "task", "note", "credentials"];
     for (const kind of kinds) {
       const issueMessage = await this.templateIssue(kind);
       if (issueMessage !== null) {
@@ -176,6 +178,9 @@ export class ProjectTaskRepository {
             case "task":
               tasks.push(parsed.task);
               break;
+            case "note":
+              notes.push(parsed.note);
+              break;
             case "issue":
               issues.push(parsed.issue);
               break;
@@ -187,6 +192,35 @@ export class ProjectTaskRepository {
               break;
             case "credentials":
               // Ignored — credentials are not tasks.
+              break;
+          }
+        }
+      }
+
+      // 4b. Notes from <F>/Notas.
+      const notasFolder = `${folder}/Notas`;
+      if (this.adapter.exists(notasFolder)) {
+        for (const ref of this.adapter.listMarkdownFiles(notasFolder)) {
+          const snapshot = await this.readSnapshot(ref);
+          const parsed = parseProjectTaskNote(snapshot, this.resolveProject);
+          switch (parsed.kind) {
+            case "note":
+              notes.push(parsed.note);
+              break;
+            case "task":
+              tasks.push(parsed.task);
+              break;
+            case "issue":
+              issues.push(parsed.issue);
+              break;
+            case "project":
+              issues.push({
+                path: ref.path,
+                message: `Nota de proyecto fuera de lugar: sólo la nota hub de cada carpeta puede ser 'type: project'.`,
+              });
+              break;
+            case "credentials":
+              // Ignored — credentials are not notes.
               break;
           }
         }
@@ -226,7 +260,7 @@ export class ProjectTaskRepository {
       }
     }
 
-    return { projects, tasks, credentials, issues };
+    return { projects, tasks, notes, credentials, issues };
   }
 
   // -------------------------------------------------------------------------
@@ -240,7 +274,7 @@ export class ProjectTaskRepository {
    */
   private async seedTemplates(): Promise<void> {
     await this.adapter.createFolder(this.settings.templatesFolder);
-    const kinds: TemplateKind[] = ["project", "task", "credentials"];
+    const kinds: TemplateKind[] = ["project", "task", "note", "credentials"];
     for (const kind of kinds) {
       const fileName = TEMPLATE_FILE_NAMES[kind];
       const fullPath = joinPath(this.settings.templatesFolder, fileName);
@@ -321,6 +355,10 @@ export class ProjectTaskRepository {
     if (credentialsIssue !== null) {
       throw new Error(credentialsIssue);
     }
+    const noteIssue = await this.templateIssue("note");
+    if (noteIssue !== null) {
+      throw new Error(noteIssue);
+    }
 
     await this.adapter.createFolder(this.settings.projectsFolder);
     const folder = await this.uniqueFolderPath(
@@ -328,6 +366,7 @@ export class ProjectTaskRepository {
       sanitized,
     );
     await this.adapter.createFolder(`${folder}/Tareas`);
+    await this.adapter.createFolder(`${folder}/Notas`);
     await this.adapter.createFolder(`${folder}/Archivos`);
 
     const folderName = basenameOf(folder);
@@ -388,6 +427,72 @@ export class ProjectTaskRepository {
     await this.adapter.createMarkdown(path, content);
   }
 
+  async createNote(
+    title: string,
+    projectPath: string,
+  ): Promise<void> {
+    const noteIssue = await this.templateIssue("note");
+    if (noteIssue !== null) {
+      throw new Error(noteIssue);
+    }
+
+    const sanitized = sanitizeFilename(title);
+    const projectFolder = folderOf(projectPath);
+    const notasFolder = `${projectFolder}/Notas`;
+    await this.adapter.createFolder(notasFolder);
+    const path = await this.uniqueMarkdownPath(notasFolder, sanitized);
+
+    const templateRef: VaultNoteRef = {
+      path: this.templatePath("note"),
+      basename: TEMPLATE_FILE_NAMES.note,
+    };
+    const templateContent = await this.adapter.read(templateRef);
+    const inner = projectPathToWikilinkInner(projectPath);
+    const content = applyTemplate(templateContent, "note", {
+      title,
+      today: todayStamp(),
+      projectLink: wrapWikilink(inner),
+    });
+    await this.adapter.createMarkdown(path, content);
+  }
+
+  async renameNote(path: string, title: string): Promise<void> {
+    const sanitized = sanitizeFilename(title);
+    const folder = folderOf(path);
+    const targetPath = await this.uniqueMarkdownPath(folder, sanitized, path);
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.rename(ref, targetPath);
+  }
+
+  async reassignNote(
+    path: string,
+    projectPath: string,
+  ): Promise<void> {
+    const inner = projectPathToWikilinkInner(projectPath);
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["project"] = wrapWikilink(inner);
+    });
+
+    const projectFolder = folderOf(projectPath);
+    const newNotasFolder = `${projectFolder}/Notas`;
+    await this.adapter.createFolder(newNotasFolder);
+    const newPath = await this.uniqueMarkdownPath(
+      newNotasFolder,
+      basenameOf(path).replace(/\.md$/, ""),
+      path,
+    );
+    await this.adapter.rename(ref, newPath);
+  }
+
+  /**
+   * Move a simple note to the trash (recoverable).
+   */
+  async deleteNote(path: string): Promise<void> {
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.trash(ref);
+  }
+
   // -------------------------------------------------------------------------
   // Mutations: rename
   // -------------------------------------------------------------------------
@@ -439,9 +544,9 @@ export class ProjectTaskRepository {
     const oldLinkNoExt = wrapWikilink(oldWikilinkInner);
     const oldLinkWithExt = `${wrapWikilink(oldWikilinkInner)}.md`;
 
-    // Walk every project's `<F>/Tareas/`. After the folder rename,
-    // any task that lived in the renamed folder is now at
-    // `${newFolder}/Tareas/...`. We patch only those whose
+    // Walk every project's `<F>/Tareas/` and `<F>/Notas/`. After the folder rename,
+    // any task/note that lived in the renamed folder is now at
+    // `${newFolder}/Tareas/...` o `${newFolder}/Notas/...`. We patch only those whose
     // frontmatter `project` still points at the old path.
     const subfolders = this.adapter.listSubfolders(
       this.settings.projectsFolder,
@@ -453,19 +558,21 @@ export class ProjectTaskRepository {
       ) {
         continue;
       }
-      const tasksFolder = `${projectFolder}/Tareas`;
-      if (!this.adapter.exists(tasksFolder)) continue;
-      const taskRefs = this.adapter.listMarkdownFiles(tasksFolder);
-      for (const taskRef of taskRefs) {
-        const current = await this.adapter.read(taskRef);
-        const projectValue = extractProjectWikilink(current);
-        if (projectValue === null) continue;
-        if (projectValue !== oldLinkNoExt && projectValue !== oldLinkWithExt) {
-          continue;
+      for (const child of ["Tareas", "Notas"]) {
+        const childFolder = `${projectFolder}/${child}`;
+        if (!this.adapter.exists(childFolder)) continue;
+        const childRefs = this.adapter.listMarkdownFiles(childFolder);
+        for (const childRef of childRefs) {
+          const current = await this.adapter.read(childRef);
+          const projectValue = extractProjectWikilink(current);
+          if (projectValue === null) continue;
+          if (projectValue !== oldLinkNoExt && projectValue !== oldLinkWithExt) {
+            continue;
+          }
+          await this.adapter.processFrontMatter(childRef, (frontmatter) => {
+            frontmatter["project"] = wrapWikilink(newWikilinkInner);
+          });
         }
-        await this.adapter.processFrontMatter(taskRef, (frontmatter) => {
-          frontmatter["project"] = wrapWikilink(newWikilinkInner);
-        });
       }
     }
   }
@@ -550,6 +657,7 @@ export class ProjectTaskRepository {
     parsed: ParsedNote,
     projects: ProjectRecord[],
     tasks: TaskRecord[],
+    notes: NoteRecord[],
     issues: DashboardIssue[],
   ): void {
     switch (parsed.kind) {
@@ -558,6 +666,9 @@ export class ProjectTaskRepository {
         return;
       case "task":
         tasks.push(parsed.task);
+        return;
+      case "note":
+        notes.push(parsed.note);
         return;
       case "issue":
         issues.push(parsed.issue);

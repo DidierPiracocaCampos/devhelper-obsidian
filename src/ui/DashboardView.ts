@@ -3,6 +3,7 @@ import type { PluginSettings } from "../settings";
 import type {
   DashboardData,
   DashboardIssue,
+  NoteRecord,
   ProjectRecord,
   TaskRecord,
 } from "../domain/types";
@@ -17,6 +18,7 @@ import { ProjectFormModal } from "./ProjectFormModal";
 import { ProjectPickerModal } from "./ProjectPickerModal";
 import { VaultSearchModal } from "./VaultSearchModal";
 import { TaskFormModal } from "./TaskFormModal";
+import { NoteFormModal } from "./NoteFormModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 
 export const VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard";
@@ -47,6 +49,7 @@ export class DashboardView extends ItemView {
   private selection: DashboardSelection = { kind: "all" };
   private showTaskFilters = false;
   private taskStatusFilter: "all" | "open" | "done" = "all";
+  private taskKindFilter: "all" | "task" | "note" = "all";
   private taskQuery = "";
 
   constructor(
@@ -352,16 +355,15 @@ export class DashboardView extends ItemView {
       cls: "devhelper-tasks-panel",
     });
 
-    // Header row: fixed «Tareas» title on the left and the current
-    // buttons (filter + new task) inline on the right edge. The task
-    // list and the optional filter row wrap onto their own rows.
+    // Header row: fixed «Tareas y notas» title on the left and the current
+    // buttons (filter + new task + new note) inline on the right edge.
     const panelHeader = main.createEl("div", {
       cls: "devhelper-tasks-panel-header",
     });
     const projectHeader = panelHeader.createEl("div", {
       cls: "devhelper-project-header",
     });
-    projectHeader.createEl("h3", { text: "Tareas" });
+    projectHeader.createEl("h3", { text: "Tareas y notas" });
 
     const fabs = panelHeader.createEl("div", {
       cls: "devhelper-panel-fabs",
@@ -380,40 +382,70 @@ export class DashboardView extends ItemView {
 
     const createTaskButton = fabs.createEl("button", {
       cls: "devhelper-fab",
-      attr: { "aria-label": "Nueva tarea", type: "button" },
+      attr: { "aria-label": "Nueva tarea", title: "Nueva tarea", type: "button" },
     });
     setIcon(createTaskButton, "plus");
     createTaskButton.addEventListener("click", () =>
       void this.openCreateTask(),
     );
 
-    // Optional second row: status filter + search. Shown only when
-    // the funnel is toggled. State lives on the view (in-memory).
+    const createNoteButton = fabs.createEl("button", {
+      cls: "devhelper-fab",
+      attr: { "aria-label": "Nueva nota", title: "Nueva nota", type: "button" },
+    });
+    setIcon(createNoteButton, "file-plus");
+    createNoteButton.addEventListener("click", () =>
+      void this.openCreateNote(),
+    );
+
+    // Optional second row: status filter + kind filter + search. Shown
+    // only when the funnel is toggled. State lives on the view (in-memory).
     if (this.showTaskFilters) {
       this.renderTaskFilters(main);
     }
 
-    // Apply the in-memory status filter before rendering.
-    const tasks =
-      this.taskStatusFilter === "all"
+    // Apply the in-memory filters before rendering. El filtro de estado
+    // sólo aplica a tareas; el filtro de tipo decide si se muestran
+    // tareas, notas o ambas.
+    const showTasks = this.taskKindFilter !== "note";
+    const showNotes = this.taskKindFilter !== "task";
+    const tasks = showTasks
+      ? this.taskStatusFilter === "all"
         ? presentation.tasks
-        : presentation.tasks.filter((t) => t.status === this.taskStatusFilter);
+        : presentation.tasks.filter((t) => t.status === this.taskStatusFilter)
+      : [];
+    const notes = showNotes ? presentation.notes : [];
 
     const list = main.createEl("ul", { cls: "devhelper-task-list" });
-    if (tasks.length === 0) {
-      let emptyText = "Aún no hay tareas.";
+    if (tasks.length === 0 && notes.length === 0) {
+      let emptyText = "Aún no hay tareas ni notas.";
       let emptyIcon = "inbox";
-      if (this.taskStatusFilter === "open") {
-        emptyText = "No hay tareas abiertas.";
-        emptyIcon = "circle-dot";
-      } else if (this.taskStatusFilter === "done") {
-        emptyText = "No hay tareas terminadas.";
-        emptyIcon = "circle-check";
+      if (this.taskKindFilter === "task") {
+        if (this.taskStatusFilter === "open") {
+          emptyText = "No hay tareas abiertas.";
+          emptyIcon = "circle-dot";
+        } else if (this.taskStatusFilter === "done") {
+          emptyText = "No hay tareas terminadas.";
+          emptyIcon = "circle-check";
+        } else if (presentation.showAll || presentation.selectedProject === null) {
+          emptyText = "Aún no hay tareas en ningún proyecto.";
+          emptyIcon = "inbox";
+        } else {
+          emptyText = "Este proyecto aún no tiene tareas.";
+          emptyIcon = "inbox";
+        }
+      } else if (this.taskKindFilter === "note") {
+        if (presentation.showAll || presentation.selectedProject === null) {
+          emptyText = "Aún no hay notas en ningún proyecto.";
+        } else {
+          emptyText = "Este proyecto aún no tiene notas.";
+        }
+        emptyIcon = "sticky-note";
       } else if (presentation.showAll || presentation.selectedProject === null) {
-        emptyText = "Aún no hay tareas en ningún proyecto.";
+        emptyText = "Aún no hay tareas ni notas en ningún proyecto.";
         emptyIcon = "inbox";
       } else {
-        emptyText = "Este proyecto aún no tiene tareas.";
+        emptyText = "Este proyecto aún no tiene tareas ni notas.";
         emptyIcon = "inbox";
       }
       const emptyItem = list.createEl("li", {
@@ -440,14 +472,20 @@ export class DashboardView extends ItemView {
           : titleByPath.get(task.projectPath) ?? task.projectPath;
       list.appendChild(this.renderTaskCard(task, projectTitle));
     }
+    for (const note of notes) {
+      const projectTitle =
+        titleByPath === null
+          ? undefined
+          : titleByPath.get(note.projectPath) ?? note.projectPath;
+      list.appendChild(this.renderNoteCard(note, projectTitle));
+    }
     this.applyTaskQueryFilter(list);
   }
 
   /**
-   * Second header row inside the tasks panel: status select on the
-   * left and a task search on the right. Re-rendered on every
-   * `refresh()` so the select and the input always reflect the
-   * in-memory filter state.
+   * Second header row inside the tasks panel: status select, kind
+   * select and search. Re-rendered on every `refresh()` so the selects
+   * and the input always reflect the in-memory filter state.
    */
   private renderTaskFilters(main: HTMLElement): void {
     const filters = main.createEl("div", {
@@ -476,11 +514,36 @@ export class DashboardView extends ItemView {
       void this.refresh();
     });
 
+    const kindSelect = filters.createEl("select", {
+      cls: "devhelper-task-kind-select",
+      attr: { "aria-label": "Filtrar por tipo" },
+    });
+    const kindOptions: Array<{
+      value: "all" | "task" | "note";
+      label: string;
+    }> = [
+      { value: "all", label: "Tareas y notas" },
+      { value: "task", label: "Solo tareas" },
+      { value: "note", label: "Solo notas" },
+    ];
+    for (const option of kindOptions) {
+      const el = kindSelect.createEl("option", {
+        text: option.label,
+        value: option.value,
+      });
+      if (this.taskKindFilter === option.value) el.selected = true;
+    }
+    kindSelect.addEventListener("change", (evt) => {
+      this.taskKindFilter = (evt.target as HTMLSelectElement)
+        .value as typeof this.taskKindFilter;
+      void this.refresh();
+    });
+
     const search = filters.createEl("input", {
       cls: "devhelper-task-search",
       type: "search",
-      placeholder: "Buscar tareas…",
-      attr: { "aria-label": "Buscar tareas" },
+      placeholder: "Buscar tareas y notas…",
+      attr: { "aria-label": "Buscar tareas y notas" },
     });
     search.value = this.taskQuery;
     // Filter in place so the input keeps focus while typing; a full
@@ -620,6 +683,64 @@ export class DashboardView extends ItemView {
     statusCircle.addEventListener("click", () =>
       void this.toggleTaskStatus(task),
     );
+
+    return card;
+  }
+
+  private renderNoteCard(
+    note: NoteRecord,
+    projectTitle?: string,
+  ): HTMLElement {
+    const card = createEl("li", { cls: "devhelper-task-card devhelper-note-card" });
+    card.dataset["title"] = note.title;
+    card.dataset["kind"] = "note";
+
+    const main = card.createEl("div", { cls: "devhelper-task-main" });
+
+    const titleRow = main.createEl("div", {
+      cls: "devhelper-task-title-row",
+    });
+    const titleEl = titleRow.createEl("h4", {
+      cls: "devhelper-task-title",
+      text: note.title,
+    });
+    titleEl.addEventListener("click", () => this.openNote(note.path));
+
+    titleRow.createEl("span", {
+      cls: "devhelper-task-project-badge devhelper-note-badge",
+      text: "Nota",
+    });
+    if (projectTitle !== undefined) {
+      titleRow.createEl("span", {
+        cls: "devhelper-task-project-badge",
+        text: projectTitle,
+      });
+    }
+
+    main.createEl("p", {
+      cls: "devhelper-task-subtitle",
+      text: "Nota simple",
+    });
+
+    const actions = card.createEl("div", { cls: "devhelper-task-actions" });
+
+    const deleteBtn = actions.createEl("button", {
+      cls: "devhelper-icon-button devhelper-task-icon",
+      attr: {
+        "aria-label": "Eliminar nota",
+        type: "button",
+        title: "Mover a la papelera",
+      },
+    });
+    setIcon(deleteBtn, "trash-2");
+    deleteBtn.addEventListener("click", () => this.openDeleteNote(note));
+
+    const editBtn = actions.createEl("button", {
+      cls: "devhelper-icon-button devhelper-task-icon",
+      attr: { "aria-label": "Editar nota", type: "button" },
+    });
+    setIcon(editBtn, "pencil");
+    editBtn.addEventListener("click", () => this.openNote(note.path));
 
     return card;
   }
@@ -907,6 +1028,46 @@ export class DashboardView extends ItemView {
           await this.refresh();
         } catch (err) {
           console.error("DevHelper: failed to create task", err);
+        }
+      },
+    });
+    modal.open();
+  }
+
+  private async openCreateNote(): Promise<void> {
+    const projects = (await this.repository.load()).projects;
+    if (projects.length === 0) {
+      console.warn(
+        "DevHelper: cannot create a note without at least one project.",
+      );
+      return;
+    }
+    const modal = new NoteFormModal(this.app, {
+      mode: "create",
+      projects,
+      defaultProjectPath:
+        this.selection.kind === "project" ? this.selection.path : null,
+      onSubmit: async (payload) => {
+        try {
+          await this.repository.createNote(payload.title, payload.projectPath);
+          await this.refresh();
+        } catch (err) {
+          console.error("DevHelper: failed to create note", err);
+        }
+      },
+    });
+    modal.open();
+  }
+
+  private openDeleteNote(note: NoteRecord): void {
+    const modal = new ConfirmDeleteModal(this.app, {
+      taskTitle: note.title,
+      onConfirm: async () => {
+        try {
+          await this.repository.deleteNote(note.path);
+          await this.refresh();
+        } catch (err) {
+          console.error("DevHelper: failed to delete note", err);
         }
       },
     });

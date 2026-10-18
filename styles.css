@@ -471,7 +471,8 @@
 }
 
 /* Status filter as a native select: dark surface on the light panel. */
-.devhelper-task-filters .devhelper-task-status-select {
+.devhelper-task-filters .devhelper-task-status-select,
+.devhelper-task-filters .devhelper-task-kind-select {
   flex: 0 0 auto;
   height: 30px;
   padding: 4px 28px 4px 10px;

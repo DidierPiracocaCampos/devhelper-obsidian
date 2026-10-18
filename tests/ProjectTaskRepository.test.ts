@@ -384,6 +384,23 @@ function taskNote(
   return lines.join("\n");
 }
 
+function noteContent(projectLink: string, props: Record<string, unknown> = {}): string {
+  const merged: Record<string, unknown> = {
+    created: "2026-01-15",
+    ...props,
+  };
+  const lines = [
+    "---",
+    "type: note",
+    `project: "[[${projectLink}]]"`,
+  ];
+  for (const [key, value] of Object.entries(merged)) {
+    lines.push(`${key}: ${formatValue(value)}`);
+  }
+  lines.push("---", "# Nota", "", "Cuerpo.");
+  return lines.join("\n");
+}
+
 function credentialsNote(
   entries: Array<Record<string, unknown>> = [],
 ): string {
@@ -1613,6 +1630,59 @@ describe("ProjectTaskRepository", () => {
       const task = data.tasks.find((t) => t.path === createdKey!)!;
       expect(task).toBeDefined();
       expect(task.properties.color).toBe("blue");
+    });
+  });
+
+  describe("notes", () => {
+    it("loadsNotesFromNotasFolder", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/Website/Website.md", projectNote());
+      seedFile(
+        fake,
+        "Projects/Website/Notas/Idea.md",
+        noteContent("Projects/Website/Website"),
+      );
+      seedFile(
+        fake,
+        "Projects/Website/Tareas/Write copy.md",
+        taskNote("Projects/Website/Website"),
+      );
+
+      const repo = makeRepo(fake);
+      const data = await repo.load();
+
+      expect(data.notes).toHaveLength(1);
+      expect(data.notes[0]!.path).toBe("Projects/Website/Notas/Idea.md");
+      expect(data.notes[0]!.projectPath).toBe("Projects/Website/Website.md");
+      expect(data.tasks).toHaveLength(1);
+    });
+
+    it("createNoteWritesIntoNotasFolder", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/Website/Website.md", projectNote());
+      seedTemplates(fake);
+      const repo = makeRepo(fake);
+
+      await repo.createNote("Idea suelta", "Projects/Website/Website.md");
+
+      const notePath = "Projects/Website/Notas/Idea suelta.md";
+      expect(fake.files.has(notePath)).toBe(true);
+      const content = fake.files.get(notePath)!;
+      expect(content).toMatch(/type: note/);
+      expect(content).toMatch(/project: ['"]\[\[Projects\/Website\/Website\]\]['"]?/);
+    });
+
+    it("deleteNoteTrashesTheNote", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      seedFile(fake, "Projects/A/Notas/Idea.md", noteContent("Projects/A/A"));
+      const repo = makeRepo(fake);
+
+      await repo.deleteNote("Projects/A/Notas/Idea.md");
+
+      expect(fake.files.has("Projects/A/Notas/Idea.md")).toBe(false);
+      const data = await repo.load();
+      expect(data.notes).toHaveLength(0);
     });
   });
 });

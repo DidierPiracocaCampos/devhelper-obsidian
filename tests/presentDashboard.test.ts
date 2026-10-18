@@ -3,6 +3,7 @@ import { presentDashboard } from "../src/domain/presentDashboard";
 import type {
   DashboardData,
   DashboardIssue,
+  NoteRecord,
   ProjectRecord,
   TaskRecord,
 } from "../src/domain/types";
@@ -43,13 +44,21 @@ function task(
   return { path, title, projectPath, status, properties: {} };
 }
 
+function note(
+  path: string,
+  title: string,
+  projectPath: string,
+): NoteRecord {
+  return { path, title, projectPath, properties: {} };
+}
+
 function issue(path: string, message: string): DashboardIssue {
   return { path, message };
 }
 
 describe("presentDashboard", () => {
   it("returnsEmptyPresentationForEmptyData", () => {
-    const data: DashboardData = { projects: [], tasks: [], credentials: [], issues: [] };
+    const data: DashboardData = { projects: [], tasks: [], notes: [], credentials: [], issues: [] };
     const result = presentDashboard(data, { kind: "all" });
 
     expect(result.selection).toEqual({ kind: "all" });
@@ -69,6 +78,7 @@ describe("presentDashboard", () => {
         task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
         task("Tasks/Alfa-2.md", "Alfa task 2", alfa.path, "done"),
       ],
+      notes: [],
       credentials: [],
       issues: [],
     };
@@ -103,6 +113,7 @@ describe("presentDashboard", () => {
         task("Tasks/alfa-open.md", "Zeta", alfa.path, "open"),
         task("Tasks/alfa-done.md", "Middle", alfa.path, "done"),
       ],
+      notes: [],
       credentials: [],
       issues: [],
     };
@@ -127,6 +138,7 @@ describe("presentDashboard", () => {
         task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
         task("Tasks/Alfa-2.md", "Alfa task 2", alfa.path, "done"),
       ],
+      notes: [],
       credentials: [],
       issues: [],
     };
@@ -154,6 +166,7 @@ describe("presentDashboard", () => {
         task("Tasks/done.md", "Done task", p.path, "done"),
         task("Tasks/open.md", "Open task", p.path, "open"),
       ],
+      notes: [],
       credentials: [],
       issues: [],
     };
@@ -178,6 +191,7 @@ describe("presentDashboard", () => {
         task("Tasks/Alfa-1.md", "Alfa task 1", alfa.path, "open"),
         task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
       ],
+      notes: [],
       credentials: [],
       issues: [],
     };
@@ -204,6 +218,7 @@ describe("presentDashboard", () => {
     const data: DashboardData = {
       projects: [p],
       tasks: [],
+      notes: [],
       credentials: [],
       issues,
     };
@@ -214,5 +229,48 @@ describe("presentDashboard", () => {
     });
 
     expect(result.issues).toEqual(issues);
+  });
+
+  it("filtersNotesBySelectedProject", () => {
+    const alfa = project("Projects/Alfa.md", "Alfa");
+    const beta = project("Projects/Beta.md", "Beta");
+    const data: DashboardData = {
+      projects: [alfa, beta],
+      tasks: [task("Tasks/Alfa-1.md", "Alfa task 1", alfa.path, "open")],
+      notes: [
+        note("Projects/Alfa/Notas/Idea.md", "Idea alfa", alfa.path),
+        note("Projects/Beta/Notas/Idea.md", "Idea beta", beta.path),
+      ],
+      credentials: [],
+      issues: [],
+    };
+
+    const result = presentDashboard(data, {
+      kind: "project",
+      path: alfa.path,
+    });
+
+    expect(result.notes.map((n) => n.path)).toEqual([
+      "Projects/Alfa/Notas/Idea.md",
+    ]);
+  });
+
+  it("returnsAllNotesWhenSelectionIsAll", () => {
+    const alfa = project("Projects/Alfa.md", "Alfa");
+    const beta = project("Projects/Beta.md", "Beta");
+    const data: DashboardData = {
+      projects: [alfa, beta],
+      tasks: [],
+      notes: [
+        note("Projects/Beta/Notas/B.md", "B", beta.path),
+        note("Projects/Alfa/Notas/A.md", "A", alfa.path),
+      ],
+      credentials: [],
+      issues: [],
+    };
+
+    const result = presentDashboard(data, { kind: "all" });
+
+    expect(result.notes.map((n) => n.title)).toEqual(["A", "B"]);
   });
 });

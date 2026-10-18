@@ -38,6 +38,17 @@ export interface TaskRecord {
 }
 
 /**
+ * A validated simple note record. Lighter than a task: only `project`
+ * + `created` are required, no `status`/`priority`/`due`.
+ */
+export interface NoteRecord {
+  path: string;
+  title: string;
+  projectPath: string;
+  properties: Record<string, unknown>;
+}
+
+/**
  * A validation problem scoped to a single note. The dashboard surfaces
  * these as actionable issues with an "open note" affordance.
  */
@@ -95,6 +106,7 @@ export interface CredentialsRecord extends ParsedCredentialsNote {
 export interface DashboardData {
   projects: ProjectRecord[];
   tasks: TaskRecord[];
+  notes: NoteRecord[];
   credentials: CredentialsRecord[];
   issues: DashboardIssue[];
 }
@@ -114,6 +126,7 @@ export interface NoteSnapshot {
  *
  *  - `"project"`     => the note is a valid project.
  *  - `"task"`        => the note is a valid task.
+ *  - `"note"`        => the note is a valid simple note.
  *  - `"credentials"` => the note is a valid credentials file.
  *  - `"issue"`       => the note is malformed or fails validation;
  *    exactly one issue is returned so the folder scan can continue.
@@ -121,6 +134,7 @@ export interface NoteSnapshot {
 export type ParsedNote =
   | { kind: "project"; project: ProjectRecord }
   | { kind: "task"; task: TaskRecord }
+  | { kind: "note"; note: NoteRecord }
   | { kind: "credentials"; credentials: ParsedCredentialsNote }
   | { kind: "issue"; issue: DashboardIssue };
 

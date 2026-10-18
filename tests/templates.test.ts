@@ -21,7 +21,7 @@ import { sliceFrontmatter } from "../src/domain/frontmatter";
  * - todayStamp must produce a `YYYY-MM-DD` string in local time.
  */
 
-const ALL_KINDS: TemplateKind[] = ["project", "task", "credentials"];
+const ALL_KINDS: TemplateKind[] = ["project", "task", "note", "credentials"];
 
 describe("DEFAULT_TEMPLATE_CONTENT", () => {
   it("seededTemplatesAreValid", () => {
@@ -141,6 +141,31 @@ describe("applyTemplate", () => {
     const parsed = yaml.load(sliced.yaml) as Record<string, unknown>;
     expect(parsed.extra).toBe("hello");
     expect(parsed.created).toBe("2026-03-01");
+  });
+});
+
+describe("noteTemplate", () => {
+  it("seededNoteTemplateIsValid", () => {
+    const content = DEFAULT_TEMPLATE_CONTENT.note;
+    const result = validateTemplate(content, "note");
+    expect(result).toBeNull();
+  });
+
+  it("applyNoteTemplateSetsProjectLink", () => {
+    const result = applyTemplate(DEFAULT_TEMPLATE_CONTENT.note, "note", {
+      title: "Idea",
+      today: "2026-02-20",
+      projectLink: "[[Projects/Web]]",
+    });
+
+    const sliced = sliceFrontmatter(result);
+    expect(sliced.kind).toBe("ok");
+    if (sliced.kind !== "ok") return;
+
+    const parsed = yaml.load(sliced.yaml) as Record<string, unknown>;
+    expect(parsed.project).toBe("[[Projects/Web]]");
+    expect(parsed.type).toBe("note");
+    expect(parsed.created).toBe("2026-02-20");
   });
 });
 

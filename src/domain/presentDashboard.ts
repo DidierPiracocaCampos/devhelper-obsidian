@@ -36,6 +36,7 @@
 import type {
   DashboardData,
   DashboardIssue,
+  NoteRecord,
   ProjectRecord,
   TaskRecord,
 } from "./types";
@@ -61,6 +62,7 @@ export interface DashboardPresentation {
   /** `true` when no project is in scope (every task is shown). */
   showAll: boolean;
   tasks: TaskRecord[];
+  notes: NoteRecord[];
   issues: DashboardIssue[];
 }
 
@@ -108,6 +110,14 @@ function compareIgnoreCase(a: string, b: string): number {
   return 0;
 }
 
+function compareNotes(a: NoteRecord, b: NoteRecord): number {
+  const titleCmp = compareIgnoreCase(a.title, b.title);
+  if (titleCmp !== 0) return titleCmp;
+  if (a.path < b.path) return -1;
+  if (a.path > b.path) return 1;
+  return 0;
+}
+
 /**
  * Compute the dashboard's current view from the latest repository data
  * and the view's previously selected scope.
@@ -127,6 +137,7 @@ export function presentDashboard(
 
   const allModeSelection: DashboardSelection = { kind: "all" };
   const allTasks = [...data.tasks].sort(compareTasks);
+  const allNotes = [...(data.notes ?? [])].sort(compareNotes);
 
   // No projects at all: nothing for any project to match. We honour the
   // requested mode for the document shape but `selectedProject` is null
@@ -137,6 +148,7 @@ export function presentDashboard(
       selectedProject: null,
       showAll: true,
       tasks: allTasks,
+      notes: allNotes,
       issues: data.issues,
     };
   }
@@ -147,6 +159,7 @@ export function presentDashboard(
       selectedProject: null,
       showAll: true,
       tasks: allTasks,
+      notes: allNotes,
       issues: data.issues,
     };
   }
@@ -162,6 +175,7 @@ export function presentDashboard(
       selectedProject: null,
       showAll: true,
       tasks: allTasks,
+      notes: allNotes,
       issues: data.issues,
     };
   }
@@ -173,6 +187,9 @@ export function presentDashboard(
     tasks: data.tasks
       .filter((t) => t.projectPath === match.path)
       .sort(compareTasks),
+    notes: (data.notes ?? [])
+      .filter((n) => n.projectPath === match.path)
+      .sort(compareNotes),
     issues: data.issues,
   };
 }

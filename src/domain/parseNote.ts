@@ -35,6 +35,7 @@ import type {
   ProjectRecord,
   ResolveProjectFn,
   TaskRecord,
+  NoteRecord,
 } from "./types";
 
 const ALLOWED_PROJECT_STATUSES = new Set(["active", "on-hold", "done"]);
@@ -95,7 +96,7 @@ export function parseProjectTaskNote(
   if (type === undefined || type === null) {
     return issue(
       note.path,
-      "Falta la propiedad requerida 'type' (esperado 'project', 'task' o 'credentials').",
+      "Falta la propiedad requerida 'type' (esperado 'project', 'task', 'note' o 'credentials').",
     );
   }
   if (typeof type !== "string") {
@@ -111,10 +112,13 @@ export function parseProjectTaskNote(
   if (type === "task") {
     return buildTask(note, title, properties, resolveProject);
   }
+  if (type === "note") {
+    return buildNote(note, title, properties, resolveProject);
+  }
 
   return issue(
     note.path,
-    `Tipo desconocido '${type}' (esperado 'project', 'task' o 'credentials').`,
+    `Tipo desconocido '${type}' (esperado 'project', 'task', 'note' o 'credentials').`,
   );
 }
 
@@ -289,6 +293,72 @@ function buildTask(
     properties,
   };
   return { kind: "task", task };
+}
+
+function buildNote(
+  note: NoteSnapshot,
+  title: string,
+  properties: Record<string, unknown>,
+  resolveProject: ResolveProjectFn,
+): ParsedNote {
+  const projectLink = properties.project;
+  if (typeof projectLink !== "string" || projectLink.length === 0) {
+    return issue(
+      note.path,
+      "Falta la propiedad requerida 'project' (espera un wikilink '[[…]]').",
+    );
+  }
+  if (!projectLink.startsWith("[[") || !projectLink.endsWith("]]")) {
+    return issue(
+      note.path,
+      `La propiedad 'project' debe ser un wikilink '[[…]]', se recibió: ${projectLink}.`,
+    );
+  }
+
+  const stripped = projectLink.slice(2, -2).trim();
+  if (stripped.length === 0) {
+    return issue(
+      note.path,
+      "La propiedad 'project' está vacía dentro del wikilink.",
+    );
+  }
+
+  const resolved = resolveProject(stripped, note.path);
+  if (resolved === null) {
+    return issue(
+      note.path,
+      `No se pudo resolver el enlace de proyecto '[[${stripped}]]'.`,
+    );
+  }
+
+  const projectPath = resolved.toLowerCase().endsWith(".md")
+    ? resolved
+    : `${resolved}.md`;
+
+  if (properties.created === undefined || properties.created === null) {
+    return issue(
+      note.path,
+      "Falta la propiedad requerida 'created' (esperado 'YYYY-MM-DD').",
+    );
+  }
+  const normalizedCreated = normalizeDateProp(properties.created);
+  if (normalizedCreated === null) {
+    return issue(
+      note.path,
+      `La propiedad 'created' debe ser una cadena de texto no vacía, se recibió: ${String(
+        properties.created,
+      )}.`,
+    );
+  }
+  properties.created = normalizedCreated;
+
+  const noteRecord: NoteRecord = {
+    path: note.path,
+    title,
+    projectPath,
+    properties,
+  };
+  return { kind: "note", note: noteRecord };
 }
 
 // ---------------------------------------------------------------------------

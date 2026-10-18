@@ -28,11 +28,12 @@ import { sliceFrontmatter } from "./frontmatter";
 // Public type and constants
 // ---------------------------------------------------------------------------
 
-export type TemplateKind = "project" | "task" | "credentials";
+export type TemplateKind = "project" | "task" | "note" | "credentials";
 
 export const TEMPLATE_FILE_NAMES: Record<TemplateKind, string> = {
   project: "proyecto.md",
   task: "tarea.md",
+  note: "nota.md",
   credentials: "credenciales.md",
 };
 
@@ -44,6 +45,7 @@ export const TEMPLATE_FILE_NAMES: Record<TemplateKind, string> = {
 export const FIXED_TEMPLATE_PROPERTIES: Record<TemplateKind, string[]> = {
   project: ["type", "status", "created", "tags", "description", "client"],
   task: ["type", "project", "status", "created", "due", "priority"],
+  note: ["type", "project", "created"],
   credentials: ["type", "credentials"],
 };
 
@@ -73,6 +75,14 @@ export const DEFAULT_TEMPLATE_CONTENT: Record<TemplateKind, string> = {
     "created: 1970-01-01",
     "due:",
     "priority: medium",
+    "---",
+    "",
+  ].join("\n"),
+  note: [
+    "---",
+    "type: note",
+    'project: "[[Proyecto]]"',
+    "created: 1970-01-01",
     "---",
     "",
   ].join("\n"),
@@ -189,7 +199,7 @@ export function applyTemplate(
 
   const properties = parsed as Record<string, unknown>;
   properties.created = values.today;
-  if (kind === "task" && values.projectLink !== undefined) {
+  if ((kind === "task" || kind === "note") && values.projectLink !== undefined) {
     properties.project = values.projectLink;
   }
 
