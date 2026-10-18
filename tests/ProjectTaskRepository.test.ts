@@ -3,6 +3,13 @@ import type { VaultNoteRef, VaultAdapter } from "../src/data/VaultAdapter";
 import { ProjectTaskRepository } from "../src/data/ProjectTaskRepository";
 import { DEFAULT_SETTINGS, type PluginSettings } from "../src/settings";
 import {
+  createSaltB64,
+  decryptField,
+  deriveKey,
+  encryptField,
+  isEncryptedValue,
+} from "../src/domain/credentialsCrypto";
+import {
   DEFAULT_TEMPLATE_CONTENT,
   TEMPLATE_FILE_NAMES,
 } from "../src/domain/templates";
@@ -2104,6 +2111,222 @@ describe("ProjectTaskRepository", () => {
         stem: "SINEXT",
         ext: "",
       });
+    });
+  });
+
+  describe("credentialsMutations", () => {
+    const hubPath = "Projects/Website/Website.md";
+    const credPath = "Projects/Website/Credenciales.md";
+
+    async function unlockedKey(): Promise<CryptoKey> {
+      return deriveKey("maestra-correcta-123", await createSaltB64());
+    }
+
+    function seedProjectWithCredentials(
+      fake: FakeVaultState & VaultAdapter,
+      entries: Array<Record<string, unknown>> = [],
+    ): void {
+      seedFile(fake, hubPath, projectNote());
+      seedFile(fake, credPath, credentialsNote(entries));
+    }
+
+    it("createCredentialStoresEncryptedFields", async () => {
+      const fake = createFakeVault();
+      seedProjectWithCredentials(fake);
+      const repo = makeRepo(fake);
+      const key = await unlockedKey();
+
+      await repo.createCredential(
+        hubPath,
+        { service: "Hosting", user: "ops", password: "s3cret" },
+        key,
+      );
+
+      const content = fake.files.get(credPath)!;
+      // The fake serialises arrays as JSON while real Obsidian writes YAML;
+      // pin the adapter-agnostic guarantees: the service is readable, no
+      // secret leaks, and the blobs carry the enc:v1: tag.
+      expect(content).toContain("Hosting");
+      expect(content).not.toContain("s3cret");
+      expect(content).toContain("enc:v1:");
+
+      const data = await repo.load();
+      // General también siembra su Credenciales.md vacío: buscar por proyecto.
+      const website = data.credentials.find(
+        (c) => c.projectPath === hubPath,
+      )!;
+      expect(website.entries).toHaveLength(1);
+      const entry = website.entries[0];
+      expect(entry.service).toBe("Hosting");
+      expect(isEncryptedValue(entry.password)).toBe(true);
+      await expect(decryptField(key, entry.password as string)).resolves.toBe(
+        "s3cret",
+      );
+    });
+
+    it("createCredentialRequiresUnlockedKey", async () => {
+      const fake = createFakeVault();
+      seedProjectWithCredentials(fake);
+      const repo = makeRepo(fake);
+
+      await expect(
+        repo.createCredential(
+          hubPath,
+          { service: "Hosting", user: "ops", password: "s3cret" },
+          null,
+        ),
+      ).rejects.toThrow("Desbloquea las credenciales primero.");
+    });
+
+    it("updateCredentialReplacesEntry", async () => {
+      const fake = createFakeVault();
+      seedProjectWithCredentials(fake, [
+        { service: "Hosting", user: "ops", password: "old" },
+      ]);
+      const repo = makeRepo(fake);
+      const key = await unlockedKey();
+
+      await repo.updateCredential(
+        hubPath,
+        0,
+        "Hosting",
+        { service: "Hosting", user: "root", password: "new" },
+        key,
+      );
+
+      const data = await repo.load();
+      const website = data.credentials.find(
+        (c) => c.projectPath === hubPath,
+      )!;
+      expect(website.entries).toHaveLength(1);
+      const entry = website.entries[0];
+      expect(entry.service).toBe("Hosting");
+      await expect(decryptField(key, entry.password as string)).resolves.toBe(
+        "new",
+      );
+      await expect(decryptField(key, entry.user as string)).resolves.toBe(
+        "root",
+      );
+    });
+
+    it("updateCredentialPreservesExtraFields", async () => {
+      const fake = createFakeVault();
+      const key = await unlockedKey();
+      seedProjectWithCredentials(fake, [
+        {
+          service: "Hosting",
+          user: await encryptField(key, "ops"),
+          password: await encryptField(key, "old"),
+          rotation: "90d",
+        },
+      ]);
+      const repo = makeRepo(fake);
+
+      await repo.updateCredential(
+        hubPath,
+        0,
+        "Hosting",
+        { service: "Hosting", user: "root", password: "new" },
+        key,
+      );
+
+      const data = await repo.load();
+      const website = data.credentials.find(
+        (c) => c.projectPath === hubPath,
+      )!;
+      const entry = website.entries[0] as Record<string, unknown>;
+      expect(entry.rotation).toBe("90d");
+      expect(entry.url).toBeUndefined();
+      await expect(
+        decryptField(key, entry.password as string),
+      ).resolves.toBe("new");
+    });
+
+    it("updateCredentialDetectsServiceMismatch", async () => {
+      const fake = createFakeVault();
+      seedProjectWithCredentials(fake, [
+        { service: "Hosting", user: "ops", password: "old" },
+      ]);
+      const repo = makeRepo(fake);
+      const key = await unlockedKey();
+
+      await expect(
+        repo.updateCredential(
+          hubPath,
+          0,
+          "Stale name",
+          { service: "Hosting", user: "root", password: "new" },
+          key,
+        ),
+      ).rejects.toThrow("La credencial cambió mientras la editabas.");
+    });
+
+    it("deleteCredentialRemovesEntry", async () => {
+      const fake = createFakeVault();
+      seedProjectWithCredentials(fake, [
+        { service: "Hosting", user: "ops", password: "a" },
+        { service: "DNS", user: "ops", password: "b" },
+      ]);
+      const repo = makeRepo(fake);
+      const key = await unlockedKey();
+
+      await expect(repo.deleteCredential(hubPath, 0, null)).rejects.toThrow(
+        "Desbloquea las credenciales primero.",
+      );
+      await repo.deleteCredential(hubPath, 0, key);
+
+      const data = await repo.load();
+      const website = data.credentials.find(
+        (c) => c.projectPath === hubPath,
+      )!;
+      expect(website.entries).toHaveLength(1);
+      expect(website.entries[0].service).toBe("DNS");
+    });
+
+    it("migratePlaintextCredentialsEncryptsLegacy", async () => {
+      const fake = createFakeVault();
+      seedProjectWithCredentials(fake, [
+        {
+          service: "Hosting",
+          user: "ops",
+          password: "plano",
+          rotation: "90d",
+        },
+      ]);
+      const repo = makeRepo(fake);
+      const key = await unlockedKey();
+
+      const migrated = await repo.migratePlaintextCredentials(hubPath, key);
+
+      expect(migrated).toBe(1);
+      const data = await repo.load();
+      const website = data.credentials.find(
+        (c) => c.projectPath === hubPath,
+      )!;
+      const entry = website.entries[0] as Record<string, unknown>;
+      expect(isEncryptedValue(entry.password)).toBe(true);
+      expect(isEncryptedValue(entry.user)).toBe(true);
+      await expect(
+        decryptField(key, entry.password as string),
+      ).resolves.toBe("plano");
+      // Extra user fields survive the migration untouched.
+      expect(entry.rotation).toBe("90d");
+      expect(website.needsMigration).toBe(false);
+    });
+
+    it("loadFlagsNeedsMigrationForPlaintext", async () => {
+      const fake = createFakeVault();
+      seedProjectWithCredentials(fake, [
+        { service: "Hosting", user: "ops", password: "plano" },
+      ]);
+      const repo = makeRepo(fake);
+
+      const data = await repo.load();
+
+      const website = data.credentials.find(
+        (c) => c.projectPath === hubPath,
+      )!;
+      expect(website.needsMigration).toBe(true);
     });
   });
 });

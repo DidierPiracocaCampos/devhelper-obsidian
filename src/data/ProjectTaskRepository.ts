@@ -29,6 +29,10 @@
 
 import yaml from "js-yaml";
 import { sliceFrontmatter } from "../domain/frontmatter";
+import {
+  encryptField,
+  isEncryptedValue,
+} from "../domain/credentialsCrypto";
 import { parseCredentialsNote, parseProjectTaskNote } from "../domain/parseNote";
 import {
   DEFAULT_TEMPLATE_CONTENT,
@@ -268,9 +272,16 @@ export class ProjectTaskRepository {
         switch (credParsed.kind) {
           case "credentials": {
             const { path, entries, entryIssues } = credParsed.credentials;
-            // Task 3 (cifrado) calculará el valor real; hasta entonces no
-            // se señala migración: nada en main cifra ni lee este campo.
-            credentials.push({ path, entries, projectPath: hubPath, needsMigration: false });
+            credentials.push({
+              path,
+              entries,
+              projectPath: hubPath,
+              needsMigration: entries.some(
+                (e) =>
+                  typeof e.password === "string" &&
+                  !isEncryptedValue(e.password),
+              ),
+            });
             // `entryIssues` is parser-internal: lift each one into the
             // global issues list so the dashboard surfaces them. The
             // `CredentialsRecord` does not carry the field.
@@ -742,6 +753,134 @@ export class ProjectTaskRepository {
   }
 
   // -------------------------------------------------------------------------
+  // Mutations: encrypted credentials
+  //
+  // Every mutation requires the unlocked vault key (the view only calls
+  // these while `CredentialSession.isUnlocked()`). `service` stays in
+  // plaintext; every sensitive field is encrypted before it reaches
+  // `processFrontMatter`, so the YAML on disk never sees a secret.
+  // -------------------------------------------------------------------------
+
+  async createCredential(
+    projectPath: string,
+    input: CredentialInput,
+    key: CryptoKey | null,
+  ): Promise<void> {
+    const unlocked = requireCredentialKey(key);
+    const service = validateCredentialService(input.service);
+    const credPath = credentialsPathFor(projectPath);
+    await this.ensureCredentialsNote(credPath);
+    const entry = await buildEncryptedEntry(unlocked, {
+      ...input,
+      service,
+    });
+    // The new list is computed from a real YAML read first: the value is
+    // then swapped wholesale inside `processFrontMatter`, so only the
+    // `credentials` prop is ever written.
+    const next = [...(await this.readCredentialEntries(credPath)), entry];
+    const ref = { path: credPath, basename: "Credenciales.md" };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["credentials"] = next;
+    });
+  }
+
+  async updateCredential(
+    projectPath: string,
+    index: number,
+    expectedService: string,
+    input: CredentialInput,
+    key: CryptoKey | null,
+  ): Promise<void> {
+    const unlocked = requireCredentialKey(key);
+    const service = validateCredentialService(input.service);
+    const credPath = credentialsPathFor(projectPath);
+    const current = await this.readCredentialEntries(credPath);
+    if (current[index]?.service !== expectedService) {
+      throw new Error("La credencial cambió mientras la editabas.");
+    }
+    const entry = await buildEncryptedEntry(unlocked, {
+      ...input,
+      service,
+    });
+    // Preserve user-defined extra fields (rotation cadences, tags, …)
+    // that the form does not manage: they survive untouched, encrypted
+    // blobs included (same vault key still decrypts them).
+    const preserved: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(current[index]!)) {
+      if (!["service", "user", "password", "url", "notes"].includes(k)) {
+        preserved[k] = v;
+      }
+    }
+    const next = current.map((row, i) =>
+      i === index ? { ...preserved, ...entry } : row,
+    );
+    const ref = { path: credPath, basename: "Credenciales.md" };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["credentials"] = next;
+    });
+  }
+
+  async deleteCredential(
+    projectPath: string,
+    index: number,
+    key: CryptoKey | null,
+  ): Promise<void> {
+    requireCredentialKey(key);
+    const credPath = credentialsPathFor(projectPath);
+    const next = (await this.readCredentialEntries(credPath)).filter(
+      (_, i) => i !== index,
+    );
+    const ref = { path: credPath, basename: "Credenciales.md" };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["credentials"] = next;
+    });
+  }
+
+  /**
+   * Encrypt every plaintext sensitive field in the project's
+   * `Credenciales.md`. Returns the number of migrated entries. Extra
+   * user-defined fields are preserved untouched.
+   */
+  async migratePlaintextCredentials(
+    projectPath: string,
+    key: CryptoKey | null,
+  ): Promise<number> {
+    const unlocked = requireCredentialKey(key);
+    const credPath = credentialsPathFor(projectPath);
+    // Encrypt everything BEFORE touching the file: `processFrontMatter`
+    // writes synchronously when its callback returns, so no async work
+    // may be staged inside the callback.
+    const current = await this.readCredentialEntries(credPath);
+    let migrated = 0;
+    const next: Array<Record<string, unknown>> = [];
+    for (const raw of current) {
+      const copy: Record<string, unknown> = { ...raw };
+      if (
+        typeof copy.password === "string" &&
+        !isEncryptedValue(copy.password)
+      ) {
+        migrated++;
+      }
+      for (const field of ["user", "password", "url", "notes"] as const) {
+        const value = copy[field];
+        if (
+          typeof value === "string" &&
+          value.length > 0 &&
+          !isEncryptedValue(value)
+        ) {
+          copy[field] = await encryptField(unlocked, value);
+        }
+      }
+      next.push(copy);
+    }
+    const ref = { path: credPath, basename: "Credenciales.md" };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["credentials"] = next;
+    });
+    return migrated;
+  }
+
+  // -------------------------------------------------------------------------
   // Mutations: files (Archivos/)
   //
   // Los ficheros de `<Proyecto>/Archivos/` son opacos para el plugin:
@@ -794,6 +933,60 @@ export class ProjectTaskRepository {
   private async readSnapshot(ref: VaultNoteRef): Promise<NoteSnapshot> {
     const content = await this.adapter.read(ref);
     return { path: ref.path, basename: ref.basename, content };
+  }
+
+  /**
+   * Read the raw `credentials` list of a `Credenciales.md` without
+   * validating: mutations need the current rows (to check the service
+   * guard or migrate) even when some row would not parse cleanly.
+   * Returns `[]` when the note is missing or its frontmatter is broken.
+   */
+  private async readCredentialEntries(
+    credPath: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    const ref = { path: credPath, basename: "Credenciales.md" };
+    let content: string;
+    try {
+      content = await this.adapter.read(ref);
+    } catch {
+      return [];
+    }
+    const sliced = sliceFrontmatter(content);
+    if (sliced.kind !== "ok") {
+      return [];
+    }
+    let parsed: unknown;
+    try {
+      parsed = yaml.load(sliced.yaml);
+    } catch {
+      return [];
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return [];
+    }
+    const list = (parsed as Record<string, unknown>)["credentials"];
+    if (!Array.isArray(list)) {
+      return [];
+    }
+    return list.filter(
+      (row): row is Record<string, unknown> =>
+        row !== null && typeof row === "object" && !Array.isArray(row),
+    );
+  }
+
+  /**
+   * Create an empty `Credenciales.md` when the project has none yet, so
+   * the first `createCredential` never fails on a missing note.
+   */
+  private async ensureCredentialsNote(credPath: string): Promise<void> {
+    if (this.adapter.exists(credPath)) {
+      return;
+    }
+    await this.adapter.createFolder(folderOf(credPath));
+    await this.adapter.createMarkdown(
+      credPath,
+      "---\ntype: credentials\ncredentials: []\n---\n",
+    );
   }
 
   private collect(
@@ -965,6 +1158,73 @@ export class ProjectTaskRepository {
   private templatePath(kind: TemplateKind): string {
     return joinPath(this.settings.templatesFolder, TEMPLATE_FILE_NAMES[kind]);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Encrypted-credential helpers (exported input type + module privates).
+// ---------------------------------------------------------------------------
+
+/**
+ * User-supplied values for one credential. `service` is stored in
+ * plaintext; every other non-empty field is encrypted before it is
+ * written to `Credenciales.md`.
+ */
+export interface CredentialInput {
+  service: string;
+  user: string;
+  password: string;
+  url?: string;
+  notes?: string;
+}
+
+/**
+ * Guard shared by every credential mutation: without the unlocked vault
+ * key there is nothing to encrypt with (and nothing destructive may run).
+ */
+function requireCredentialKey(key: CryptoKey | null): CryptoKey {
+  if (key === null) {
+    throw new Error("Desbloquea las credenciales primero.");
+  }
+  return key;
+}
+
+function validateCredentialService(service: string): string {
+  const trimmed = typeof service === "string" ? service.trim() : "";
+  if (trimmed.length === 0) {
+    throw new Error("El servicio no puede estar vacío.");
+  }
+  return trimmed;
+}
+
+/**
+ * Vault-relative path of a project's `Credenciales.md`, derived from its
+ * hub note path (`<F>/<F>.md` → `<F>/Credenciales.md`).
+ */
+function credentialsPathFor(projectPath: string): string {
+  return `${folderOf(projectPath)}/Credenciales.md`;
+}
+
+/**
+ * Build the stored row for one credential: `service` in plaintext, every
+ * other non-empty sensitive field encrypted. Empty `url`/`notes` are
+ * omitted rather than stored as empty blobs.
+ */
+async function buildEncryptedEntry(
+  key: CryptoKey,
+  input: CredentialInput,
+): Promise<Record<string, unknown>> {
+  const entry: Record<string, unknown> = {
+    service: input.service,
+    user: await encryptField(key, input.user),
+    password: await encryptField(key, input.password),
+  };
+  if (typeof input.url === "string" && input.url.length > 0) {
+    entry.url = await encryptField(key, input.url);
+  }
+  if (typeof input.notes === "string" && input.notes.length > 0) {
+    entry.notes = await encryptField(key, input.notes);
+  }
+  return entry;
 }
 
 // ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@
 
 import yaml from "js-yaml";
 import { sliceFrontmatter } from "./frontmatter";
+import { ENCRYPTED_PREFIX, isEncryptedValue } from "./credentialsCrypto";
 import type {
   CredentialEntry,
   DashboardIssue,
@@ -498,6 +499,16 @@ function formatDateUTC(d: Date): string {
 }
 
 /**
+ * True when `v` is an `enc:v1:` blob with two non-empty segments after the
+ * prefix. Full base64 validity is checked at decrypt time; the parser only
+ * rejects the structurally broken values (truncated paste, wrong version).
+ */
+function isWellFormedBlob(v: string): boolean {
+  const rest = v.slice(ENCRYPTED_PREFIX.length).split(":");
+  return rest.length === 2 && rest[0].length > 0 && rest[1].length > 0;
+}
+
+/**
  * Validate a single credentials entry. Returns `null` when the entry
  * is well-formed; otherwise a Spanish error message mentioning the
  * entry index and the offending key.
@@ -510,7 +521,16 @@ function validateCredentialEntry(
     return `Entrada ${index} de 'credentials': debe ser un objeto con 'service', 'user' y 'password'.`;
   }
   const record = entry as Record<string, unknown>;
-  for (const key of ["service", "user", "password"] as const) {
+  const service = record.service;
+  if (typeof service !== "string" || service.length === 0) {
+    return `Entrada ${index} de 'credentials': la propiedad 'service' debe ser una cadena de texto no vacía, se recibió: ${String(
+      service,
+    )}.`;
+  }
+  if (isEncryptedValue(service)) {
+    return `Entrada ${index} de 'credentials': la propiedad 'service' debe estar en claro, sin cifrar (los nombres de servicio no se cifran).`;
+  }
+  for (const key of ["user", "password"] as const) {
     if (!(key in record) || record[key] === undefined || record[key] === null) {
       return `Entrada ${index} de 'credentials': falta la propiedad requerida '${key}'.`;
     }
@@ -519,6 +539,11 @@ function validateCredentialEntry(
       return `Entrada ${index} de 'credentials': la propiedad '${key}' debe ser una cadena de texto no vacía, se recibió: ${String(
         value,
       )}.`;
+    }
+    // Encrypted values are opaque to the parser (decryption happens in the
+    // view), but the shape must be well-formed or the entry is rejected.
+    if (isEncryptedValue(value) && !isWellFormedBlob(value)) {
+      return `Entrada ${index} de 'credentials': la propiedad '${key}' tiene un valor cifrado con formato inválido (esperado 'enc:v1:<iv>:<cipher>').`;
     }
   }
   if ("url" in record && record.url !== undefined && record.url !== null) {

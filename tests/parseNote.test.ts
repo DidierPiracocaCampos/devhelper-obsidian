@@ -788,6 +788,120 @@ describe("parseCredentialsNote", () => {
     });
   });
 
+  describe("parsesEncryptedCredentials", () => {
+    it("accepts well-formed enc:v1 blobs without decrypting", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          "  - service: Hosting",
+          '    user: "enc:v1:aGk:amts"',
+          '    password: "enc:v1:aGk:amts"',
+          '    url: "enc:v1:aGk:amts"',
+          "---",
+          "# Credentials",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+      expect(result.credentials.entries).toHaveLength(1);
+      expect(result.credentials.entries[0]).toMatchObject({
+        service: "Hosting",
+        user: "enc:v1:aGk:amts",
+        password: "enc:v1:aGk:amts",
+      });
+      expect(result.credentials.entryIssues ?? []).toHaveLength(0);
+    });
+  });
+
+  describe("reportsMalformedEncryptedBlob", () => {
+    it("flags a truncated enc: value as a per-entry issue", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          "  - service: Hosting",
+          "    user: admin",
+          '    password: "enc:v1:truncado"',
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+      expect(result.credentials.entries).toHaveLength(0);
+      expect(result.credentials.entryIssues).toHaveLength(1);
+      expect(result.credentials.entryIssues![0].message).toContain("password");
+    });
+  });
+
+  describe("reportsEncryptedServiceAsIssue", () => {
+    it("rejects an encrypted service name", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          '  - service: "enc:v1:aGk:amts"',
+          "    user: admin",
+          "    password: s3cret",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+      expect(result.credentials.entries).toHaveLength(0);
+      expect(result.credentials.entryIssues).toHaveLength(1);
+      expect(result.credentials.entryIssues![0].message).toContain("service");
+    });
+  });
+
+  describe("legacyPlaintextStillParses", () => {
+    it("keeps a fully plaintext entry valid for migration", () => {
+      const note = snapshot(
+        "Projects/Website/Credentials.md",
+        "Credentials.md",
+        [
+          "---",
+          "type: credentials",
+          "credentials:",
+          "  - service: GitHub",
+          "    user: alice",
+          "    password: hunter2",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseCredentialsNote(note);
+
+      expect(result.kind).toBe("credentials");
+      if (result.kind !== "credentials") return;
+      expect(result.credentials.entries).toHaveLength(1);
+      expect(result.credentials.entries[0]).toMatchObject({
+        service: "GitHub",
+        user: "alice",
+        password: "hunter2",
+      });
+      expect(result.credentials.entryIssues ?? []).toHaveLength(0);
+    });
+  });
+
   describe("preservesValidCredentialEntriesAlongsideInvalidOne", () => {
     it("keeps the valid entry and surfaces the invalid one as a per-entry issue", () => {
       const note = snapshot(
