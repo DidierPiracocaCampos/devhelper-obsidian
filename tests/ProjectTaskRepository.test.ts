@@ -20,11 +20,13 @@ import {
 interface FakeVaultState {
   files: Map<string, string>;
   folders: Set<string>;
+  binaries: Map<string, ArrayBuffer>;
 }
 
 function createFakeVault(): FakeVaultState & VaultAdapter {
   const files = new Map<string, string>();
   const folders = new Set<string>();
+  const binaries = new Map<string, ArrayBuffer>();
 
   const adapter: VaultAdapter = {
     listMarkdownFiles(folderPath: string): VaultNoteRef[] {
@@ -60,6 +62,40 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
       const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
       if (dir.length > 0) folders.add(dir);
       files.set(path, content);
+      const basename = path.slice(path.lastIndexOf("/") + 1);
+      return { path, basename };
+    },
+
+    listFiles(folderPath: string): VaultNoteRef[] {
+      const prefix = `${folderPath}/`;
+      const seen = new Set<string>();
+      const refs: VaultNoteRef[] = [];
+      const tryAdd = (path: string): void => {
+        if (!path.startsWith(prefix)) return;
+        const rest = path.slice(prefix.length);
+        if (rest.includes("/")) return;
+        if (rest.startsWith(".")) return;
+        if (seen.has(path)) return;
+        seen.add(path);
+        const basename = path.slice(path.lastIndexOf("/") + 1);
+        refs.push({ path, basename });
+      };
+      for (const path of files.keys()) tryAdd(path);
+      for (const path of binaries.keys()) tryAdd(path);
+      return refs.sort((a, b) => a.path.localeCompare(b.path));
+    },
+
+    async createBinary(path: string, data: ArrayBuffer): Promise<VaultNoteRef> {
+      const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+      if (dir.length > 0) {
+        const segments = dir.split("/");
+        let current = "";
+        for (const seg of segments) {
+          current = current.length === 0 ? seg : `${current}/${seg}`;
+          folders.add(current);
+        }
+      }
+      binaries.set(path, data);
       const basename = path.slice(path.lastIndexOf("/") + 1);
       return { path, basename };
     },
@@ -149,7 +185,7 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
     },
 
     exists(path: string): boolean {
-      return files.has(path) || folders.has(path);
+      return files.has(path) || binaries.has(path) || folders.has(path);
     },
 
     async renameFolder(folderPath: string, newPath: string): Promise<void> {
@@ -204,7 +240,7 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
     },
   };
 
-  return { files, folders, ...adapter };
+  return { files, folders, binaries, ...adapter };
 }
 
 interface Sliced {

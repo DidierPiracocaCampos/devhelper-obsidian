@@ -238,7 +238,9 @@ export class ProjectTaskRepository {
         switch (credParsed.kind) {
           case "credentials": {
             const { path, entries, entryIssues } = credParsed.credentials;
-            credentials.push({ path, entries, projectPath: hubPath });
+            // Task 3 (cifrado) calculará el valor real; hasta entonces no
+            // se señala migración: nada en main cifra ni lee este campo.
+            credentials.push({ path, entries, projectPath: hubPath, needsMigration: false });
             // `entryIssues` is parser-internal: lift each one into the
             // global issues list so the dashboard surfaces them. The
             // `CredentialsRecord` does not carry the field.
@@ -260,7 +262,8 @@ export class ProjectTaskRepository {
       }
     }
 
-    return { projects, tasks, notes, credentials, issues };
+    // Task 2 (Archivos) poblará `files`; hasta entonces la lista va vacía.
+    return { projects, tasks, notes, credentials, files: [], issues };
   }
 
   // -------------------------------------------------------------------------

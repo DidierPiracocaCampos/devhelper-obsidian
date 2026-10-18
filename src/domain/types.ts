@@ -22,6 +22,9 @@ export interface ProjectRecord {
   folderPath: string;
   // prop opcional en frontmatter; `true` = chip visible en la fila de favoritos
   favorite: boolean;
+  // `true` solo en el hub `Projects/General/General.md` (proyecto sombra:
+  // nunca aparece en chips/favoritos/picker ni como selección directa).
+  isGeneral?: boolean;
   properties: Record<string, unknown>;
 }
 
@@ -94,20 +97,40 @@ export interface ParsedCredentialsNote {
 /**
  * A credentials note bound to a specific project folder. `projectPath`
  * is the vault-relative path of the owning project note (always ending
- * in `.md`).
+ * in `.md`). `needsMigration` is true when any entry still stores its
+ * password in plaintext (the repository flags it so the view can offer
+ * one-click encryption).
  */
 export interface CredentialsRecord extends ParsedCredentialsNote {
+  projectPath: string;
+  needsMigration: boolean;
+}
+
+/**
+ * Un fichero binario o de texto dentro de `<Proyecto>/Archivos/`.
+ * `projectPath` es la ruta del hub del proyecto propietario (siempre `.md`).
+ * `name` incluye la extensión; `extension` va sin punto y en minúsculas
+ * ("" cuando el fichero no tiene extensión).
+ */
+export interface FileRecord {
+  path: string;
+  name: string;
+  extension: string;
   projectPath: string;
 }
 
 /**
  * The aggregate payload produced by the repository on every `load()`.
+ *
+ * `files` lista los ficheros de `<Proyecto>/Archivos/` de cada proyecto
+ * (el presenter los acota por selección; en «Todos» solo los de General).
  */
 export interface DashboardData {
   projects: ProjectRecord[];
   tasks: TaskRecord[];
   notes: NoteRecord[];
   credentials: CredentialsRecord[];
+  files: FileRecord[];
   issues: DashboardIssue[];
 }
 

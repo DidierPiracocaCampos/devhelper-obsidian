@@ -36,6 +36,15 @@ export interface VaultAdapter {
   listMarkdownFiles(folderPath: string): VaultNoteRef[];
 
   /**
+   * Devuelve los ficheros de primer nivel en `folderPath` (no recursivo,
+   * toda extensión, ordenados por path). La carpeta se identifica por su
+   * ruta relativa al vault SIN barra final (p. ej. `"Projects/Foo/Archivos"`).
+   * Los ficheros cuyo nombre empieza por `.` se excluyen, igual que en
+   * `listSubfolders`.
+   */
+  listFiles(folderPath: string): VaultNoteRef[];
+
+  /**
    * Return the raw Markdown content of a note. Implementations may read
    * from cache as long as the returned content is up-to-date with the
    * last write.
@@ -56,6 +65,14 @@ export interface VaultAdapter {
    * collision should be impossible.
    */
   createMarkdown(path: string, content: string): Promise<VaultNoteRef>;
+
+  /**
+   * Crea un fichero binario tal cual en `path` con los bytes de `data`.
+   * Devuelve la ref del fichero creado. La ruta NO debe existir; el
+   * repositorio desambigua antes de llamar. Nunca pasa por
+   * `processFrontMatter`: los binarios se copian opacos.
+   */
+  createBinary(path: string, data: ArrayBuffer): Promise<VaultNoteRef>;
 
   /**
    * Move an existing note to `newPath`. Returns the ref of the renamed

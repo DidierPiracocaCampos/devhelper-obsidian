@@ -3,6 +3,7 @@ import { presentDashboard } from "../src/domain/presentDashboard";
 import type {
   DashboardData,
   DashboardIssue,
+  FileRecord,
   NoteRecord,
   ProjectRecord,
   TaskRecord,
@@ -56,9 +57,20 @@ function issue(path: string, message: string): DashboardIssue {
   return { path, message };
 }
 
+function file(
+  path: string,
+  name: string,
+  extension: string,
+  projectPath: string,
+): FileRecord {
+  return { path, name, extension, projectPath };
+}
+
+const GENERAL_HUB = "Projects/General/General.md";
+
 describe("presentDashboard", () => {
   it("returnsEmptyPresentationForEmptyData", () => {
-    const data: DashboardData = { projects: [], tasks: [], notes: [], credentials: [], issues: [] };
+    const data: DashboardData = { projects: [], tasks: [], notes: [], credentials: [], files: [], issues: [] };
     const result = presentDashboard(data, { kind: "all" });
 
     expect(result.selection).toEqual({ kind: "all" });
@@ -80,6 +92,7 @@ describe("presentDashboard", () => {
       ],
       notes: [],
       credentials: [],
+      files: [],
       issues: [],
     };
 
@@ -115,6 +128,7 @@ describe("presentDashboard", () => {
       ],
       notes: [],
       credentials: [],
+      files: [],
       issues: [],
     };
 
@@ -140,6 +154,7 @@ describe("presentDashboard", () => {
       ],
       notes: [],
       credentials: [],
+      files: [],
       issues: [],
     };
 
@@ -168,6 +183,7 @@ describe("presentDashboard", () => {
       ],
       notes: [],
       credentials: [],
+      files: [],
       issues: [],
     };
 
@@ -193,6 +209,7 @@ describe("presentDashboard", () => {
       ],
       notes: [],
       credentials: [],
+      files: [],
       issues: [],
     };
 
@@ -220,6 +237,7 @@ describe("presentDashboard", () => {
       tasks: [],
       notes: [],
       credentials: [],
+      files: [],
       issues,
     };
 
@@ -242,6 +260,7 @@ describe("presentDashboard", () => {
         note("Projects/Beta/Notas/Idea.md", "Idea beta", beta.path),
       ],
       credentials: [],
+      files: [],
       issues: [],
     };
 
@@ -266,11 +285,53 @@ describe("presentDashboard", () => {
         note("Projects/Alfa/Notas/A.md", "A", alfa.path),
       ],
       credentials: [],
+      files: [],
       issues: [],
     };
 
     const result = presentDashboard(data, { kind: "all" });
 
     expect(result.notes.map((n) => n.title)).toEqual(["A", "B"]);
+  });
+
+  it("acota files de General en modo all", () => {
+    const general: ProjectRecord = {
+      path: GENERAL_HUB,
+      title: "General",
+      folderPath: "Projects/General",
+      favorite: false,
+      properties: {},
+      isGeneral: true,
+    };
+    const alfa = project("Projects/Alfa.md", "Alfa");
+    const dataConGeneralYFiles: DashboardData = {
+      projects: [general, alfa],
+      tasks: [],
+      notes: [],
+      credentials: [],
+      files: [
+        file(
+          "Projects/General/Archivos/nota.pdf",
+          "nota.pdf",
+          "pdf",
+          GENERAL_HUB,
+        ),
+        file(
+          "Projects/Alfa/Archivos/diseño.png",
+          "diseño.png",
+          "png",
+          alfa.path,
+        ),
+      ],
+      issues: [],
+    };
+
+    const pres = presentDashboard(dataConGeneralYFiles, { kind: "all" });
+
+    // Task 1 fija el contrato de entrada (`DashboardData.files`); la salida
+    // `DashboardPresentation.files` la añade la tarea de presenter. El cast
+    // compila hoy y falla en runtime hasta entonces (esperado por el plan).
+    const presFiles = (pres as unknown as { files: FileRecord[] }).files;
+    expect(presFiles.every((f) => f.projectPath === GENERAL_HUB)).toBe(true);
   });
 });

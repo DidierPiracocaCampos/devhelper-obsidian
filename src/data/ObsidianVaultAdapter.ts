@@ -7,9 +7,11 @@
  * reason about:
  *
  *   listMarkdownFiles   -> vault.getMarkdownFiles() + filter
+  *   listFiles           -> vault.getAbstractFileByPath() + TFolder.children filtrando TFile
  *   read                -> vault.cachedRead(file)
  *   createFolder        -> vault.createFolder(...) per missing ancestor
  *   createMarkdown      -> vault.create(path, content)
+  *   createBinary        -> vault.createBinary(path, data)
  *   rename              -> fileManager.renameFile(file, newPath)
  *   processFrontMatter  -> fileManager.processFrontMatter(file, update)
  *   resolveLink         -> metadataCache.getFirstLinkpathDest(...)
@@ -50,6 +52,18 @@ export class ObsidianVaultAdapter implements VaultAdapter {
     return refs;
   }
 
+  listFiles(folderPath: string): VaultNoteRef[] {
+    const folder = this.app.vault.getAbstractFileByPath(folderPath);
+    if (!folder || !(folder instanceof TFolder)) return [];
+    const refs: VaultNoteRef[] = [];
+    for (const child of folder.children) {
+      if (!(child instanceof TFile)) continue;
+      if (child.name.startsWith(".")) continue;
+      refs.push({ path: child.path, basename: child.name });
+    }
+    return refs.sort((a, b) => a.path.localeCompare(b.path));
+  }
+
   async read(note: VaultNoteRef): Promise<string> {
     const file = this.requireFile(note);
     return await this.app.vault.cachedRead(file);
@@ -85,6 +99,19 @@ export class ObsidianVaultAdapter implements VaultAdapter {
       );
     }
     return { path: created.path, basename: created.basename + ".md" };
+  }
+
+  async createBinary(
+    path: string,
+    data: ArrayBuffer,
+  ): Promise<VaultNoteRef> {
+    const created = await this.app.vault.createBinary(path, data);
+    if (!(created instanceof TFile)) {
+      throw new Error(
+        `ObsidianVaultAdapter.createBinary: ${path} did not produce a TFile`,
+      );
+    }
+    return { path: created.path, basename: created.name };
   }
 
   async rename(
