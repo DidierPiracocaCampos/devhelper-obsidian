@@ -1,8 +1,8 @@
 /**
  * Deterministic presentation layer for the dashboard.
  *
- * The view (Task 5) consumes a `DashboardPresentation` so all ordering
- * and selection logic is concentrated here. Keeping the layer pure and
+ * The view consumes a `DashboardPresentation` so all ordering and
+ * selection logic is concentrated here. Keeping the layer pure and
  * framework-free means the sort/filter rules can be unit-tested in
  * isolation, and the view can stay focused on DOM rendering.
  *
@@ -13,13 +13,21 @@
  *               `title` ascending case-insensitive; ties broken by
  *               `path`.
  *
- * Selection contract:
+ * Selection contract (discriminated `DashboardSelection`):
  *
- *  - If `selectedProjectPath` matches a project (case-sensitive on the
- *    path), that project wins.
- *  - Otherwise the first project in the sorted list is chosen.
- *  - When there are no projects the selected project is `null` and the
- *    task list is empty regardless of the input.
+ *  - `{ kind: "all" }` is the default mode: `selectedProject` is `null`,
+ *    `showAll` is `true` and `tasks` contains every task in the vault
+ *    sorted with `compareTasks`.
+ *  - `{ kind: "project", path }` is honoured verbatim when `path`
+ *    matches an existing project; `showAll` is `false`, `selectedProject`
+ *    is that project and `tasks` is filtered to it.
+ *  - When the requested project is missing OR the vault has no projects
+ *    at all, the presenter falls back to `{ kind: "all" }`: `selection`
+ *    becomes `all`, `selectedProject` becomes `null` and `tasks` is the
+ *    full list (or empty if there are no projects).
+ *
+ * `ProjectRecord.favorite` is intentionally ignored here — the view
+ * uses it to render the favorites row in Task 4.
  *
  * Issues are returned verbatim. The view is responsible for surfacing
  * them with an "open note" affordance.
@@ -32,8 +40,26 @@ import type {
   TaskRecord,
 } from "./types";
 
+/**
+ * The view's effective selection. This is a discriminated union so the
+ * view can branch on `kind` without carrying a `null` sentinel:
+ *
+ *  - `{ kind: "all" }`        — no project is selected; every task is
+ *                                in scope.
+ *  - `{ kind: "project"; path }` — a specific project is selected; only
+ *                                its tasks are shown.
+ */
+export type DashboardSelection =
+  | { kind: "all" }
+  | { kind: "project"; path: string };
+
 export interface DashboardPresentation {
+  /** The effective selection after fallback (always populated). */
+  selection: DashboardSelection;
+  /** The project picked for the view, or `null` in `kind: "all"` mode. */
   selectedProject: ProjectRecord | null;
+  /** `true` when no project is in scope (every task is shown). */
+  showAll: boolean;
   tasks: TaskRecord[];
   issues: DashboardIssue[];
 }
@@ -84,37 +110,69 @@ function compareIgnoreCase(a: string, b: string): number {
 
 /**
  * Compute the dashboard's current view from the latest repository data
- * and the view's previously selected project path.
+ * and the view's previously selected scope.
  *
  * The function is pure: it does not mutate `data` and never throws.
+ *
+ * See the file header for the selection contract. The short version:
+ * `kind: "all"` shows everything (and is also the fallback when the
+ * requested project disappears); `kind: "project"` filters down to a
+ * single project and only succeeds when the path actually exists.
  */
 export function presentDashboard(
   data: DashboardData,
-  selectedProjectPath: string | null,
+  selection: DashboardSelection,
 ): DashboardPresentation {
   const sortedProjects = [...data.projects].sort(compareProjects);
 
-  let selectedProject: ProjectRecord | null = null;
-  if (sortedProjects.length > 0) {
-    if (selectedProjectPath !== null) {
-      const match = sortedProjects.find(
-        (p) => p.path === selectedProjectPath,
-      );
-      selectedProject = match ?? sortedProjects[0]!;
-    } else {
-      selectedProject = sortedProjects[0]!;
-    }
+  const allModeSelection: DashboardSelection = { kind: "all" };
+  const allTasks = [...data.tasks].sort(compareTasks);
+
+  // No projects at all: nothing for any project to match. We honour the
+  // requested mode for the document shape but `selectedProject` is null
+  // and there are no project-scoped tasks to render.
+  if (sortedProjects.length === 0) {
+    return {
+      selection: allModeSelection,
+      selectedProject: null,
+      showAll: true,
+      tasks: allTasks,
+      issues: data.issues,
+    };
   }
 
-  const tasks = selectedProject
-    ? data.tasks
-        .filter((t) => t.projectPath === selectedProject!.path)
-        .sort(compareTasks)
-    : [];
+  if (selection.kind === "all") {
+    return {
+      selection: allModeSelection,
+      selectedProject: null,
+      showAll: true,
+      tasks: allTasks,
+      issues: data.issues,
+    };
+  }
+
+  // selection.kind === "project"
+  const match = sortedProjects.find((p) => p.path === selection.path);
+  if (match === undefined) {
+    // The requested project disappeared (was renamed/deleted, or the
+    // path was a phantom). Fall back to "all" so the user always sees
+    // something rather than an empty panel.
+    return {
+      selection: allModeSelection,
+      selectedProject: null,
+      showAll: true,
+      tasks: allTasks,
+      issues: data.issues,
+    };
+  }
 
   return {
-    selectedProject,
-    tasks,
+    selection,
+    selectedProject: match,
+    showAll: false,
+    tasks: data.tasks
+      .filter((t) => t.projectPath === match.path)
+      .sort(compareTasks),
     issues: data.issues,
   };
 }

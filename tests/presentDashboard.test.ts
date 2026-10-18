@@ -10,16 +10,17 @@ import type {
 /**
  * Tests for the deterministic dashboard presentation layer.
  *
- * `presentDashboard` is the seam between the repository (Task 4) and the
- * `DashboardView` (Task 5). The layer must:
+ * `presentDashboard` is the seam between the repository and the view.
+ * The layer must:
  *
- *  - Pick a sensible default project when the caller hasn't chosen one.
- *  - Filter tasks down to the selected project only.
- *  - Sort projects and tasks deterministically so the rendered order is
- *    stable across refreshes.
+ *  - Treat `{ kind: "all" }` as the default: every project is in scope,
+ *    and every task is returned sorted by the global contract.
+ *  - Honour `{ kind: "project", path }` exactly when the path matches an
+ *    existing project; filter tasks down to that project only.
+ *  - Fall back to `{ kind: "all" }` when the requested project is gone
+ *    (or there are no projects at all).
  *  - Keep `open` tasks above `done` ones, even when titles would sort the
  *    other way around.
- *  - Fall back to the first project if the requested selection is gone.
  *  - Surface validation issues verbatim so the view can offer an "open
  *    note" action on each one.
  */
@@ -47,166 +48,171 @@ function issue(path: string, message: string): DashboardIssue {
 }
 
 describe("presentDashboard", () => {
-  describe("showsEmptyDashboard", () => {
-    it("returns null selected project and empty arrays for empty data", () => {
-      const data: DashboardData = { projects: [], tasks: [], credentials: [], issues: [] };
-      const result = presentDashboard(data, null);
+  it("returnsEmptyPresentationForEmptyData", () => {
+    const data: DashboardData = { projects: [], tasks: [], credentials: [], issues: [] };
+    const result = presentDashboard(data, { kind: "all" });
 
-      expect(result.selectedProject).toBeNull();
-      expect(result.tasks).toEqual([]);
-      expect(result.issues).toEqual([]);
-    });
+    expect(result.selection).toEqual({ kind: "all" });
+    expect(result.showAll).toBe(true);
+    expect(result.selectedProject).toBeNull();
+    expect(result.tasks).toEqual([]);
+    expect(result.issues).toEqual([]);
   });
 
-  describe("selectsFirstProjectByDefault", () => {
-    it("selects the first sorted project when selectedProjectPath is null", () => {
-      // The projects arrive at the presenter in an arbitrary order; the
-      // presenter must reorder them deterministically and then take the
-      // first one as the default selection.
-      const a = project("Projects/Beta.md", "Beta");
-      const c = project("Projects/Charlie.md", "Charlie");
-      const b = project("Projects/Alfa.md", "Alfa");
-      const data: DashboardData = {
-        projects: [a, c, b],
-        tasks: [],
-        credentials: [],
-        issues: [],
-      };
+  it("selectsAllTasksWhenSelectionIsAll", () => {
+    const alfa = project("Projects/Alfa.md", "Alfa");
+    const beta = project("Projects/Beta.md", "Beta");
+    const data: DashboardData = {
+      projects: [alfa, beta],
+      tasks: [
+        task("Tasks/Alfa-1.md", "Alfa task 1", alfa.path, "open"),
+        task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
+        task("Tasks/Alfa-2.md", "Alfa task 2", alfa.path, "done"),
+      ],
+      credentials: [],
+      issues: [],
+    };
 
-      const result = presentDashboard(data, null);
+    const result = presentDashboard(data, { kind: "all" });
 
-      expect(result.selectedProject).not.toBeNull();
-      expect(result.selectedProject!.title).toBe("Alfa");
-      expect(result.selectedProject!.path).toBe("Projects/Alfa.md");
-    });
+    expect(result.selection).toEqual({ kind: "all" });
+    expect(result.showAll).toBe(true);
+    expect(result.selectedProject).toBeNull();
+    // Todos los proyectos son "in-scope"; el panel devuelve TODAS las tareas.
+    expect(result.tasks).toHaveLength(3);
+    expect(result.tasks.map((t) => t.path).sort()).toEqual([
+      "Tasks/Alfa-1.md",
+      "Tasks/Alfa-2.md",
+      "Tasks/Beta-1.md",
+    ]);
   });
 
-  describe("filtersTasksToSelectedProject", () => {
-    it("returns only tasks for the selected project", () => {
-      const alfa = project("Projects/Alfa.md", "Alfa");
-      const beta = project("Projects/Beta.md", "Beta");
-      const data: DashboardData = {
-        projects: [alfa, beta],
-        tasks: [
-          task("Tasks/Alfa-1.md", "Alfa task 1", alfa.path, "open"),
-          task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
-          task("Tasks/Alfa-2.md", "Alfa task 2", alfa.path, "done"),
-        ],
-        credentials: [],
-        issues: [],
-      };
+  it("sortsAllTasksOpenFirstAcrossProjects", () => {
+    // Con `kind: "all"` el presentador ordena por status primero; las
+    // tareas `open` de cualquier proyecto deben aparecer antes que las
+    // `done`, aunque por título la de Beta vaya antes. Dentro de cada
+    // status el orden secundario es por título.
+    const alfa = project("Projects/Alfa.md", "Alfa");
+    const beta = project("Projects/Beta.md", "Beta");
+    const data: DashboardData = {
+      projects: [alfa, beta],
+      tasks: [
+        // "Done task" tiene título que lexicográficamente iría primero,
+        // pero el status manda.
+        task("Tasks/beta-done.md", "Done task", beta.path, "done"),
+        task("Tasks/alfa-open.md", "Zeta", alfa.path, "open"),
+        task("Tasks/alfa-done.md", "Middle", alfa.path, "done"),
+      ],
+      credentials: [],
+      issues: [],
+    };
 
-      const result = presentDashboard(data, alfa.path);
+    const result = presentDashboard(data, { kind: "all" });
 
-      expect(result.selectedProject?.path).toBe(alfa.path);
-      expect(result.tasks).toHaveLength(2);
-      for (const t of result.tasks) {
-        expect(t.projectPath).toBe(alfa.path);
-      }
-    });
+    expect(result.tasks.map((t) => t.path)).toEqual([
+      "Tasks/alfa-open.md",
+      // Dentro de `done`: "Done task" (Beta) < "Middle" (Alfa).
+      "Tasks/beta-done.md",
+      "Tasks/alfa-done.md",
+    ]);
   });
 
-  describe("ordersOpenTasksBeforeDone", () => {
-    it("places open tasks before done tasks even when title sort would disagree", () => {
-      const p = project("Projects/Alfa.md", "Alfa");
-      const data: DashboardData = {
-        projects: [p],
-        tasks: [
-          // "Done task" sorts BEFORE "Open task" by title; status must win.
-          task("Tasks/done.md", "Done task", p.path, "done"),
-          task("Tasks/open.md", "Open task", p.path, "open"),
-        ],
-        credentials: [],
-        issues: [],
-      };
+  it("selectsRequestedProject", () => {
+    const alfa = project("Projects/Alfa.md", "Alfa");
+    const beta = project("Projects/Beta.md", "Beta");
+    const data: DashboardData = {
+      projects: [alfa, beta],
+      tasks: [
+        task("Tasks/Alfa-1.md", "Alfa task 1", alfa.path, "open"),
+        task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
+        task("Tasks/Alfa-2.md", "Alfa task 2", alfa.path, "done"),
+      ],
+      credentials: [],
+      issues: [],
+    };
 
-      const result = presentDashboard(data, p.path);
-
-      expect(result.tasks.map((t) => t.path)).toEqual([
-        "Tasks/open.md",
-        "Tasks/done.md",
-      ]);
+    const result = presentDashboard(data, {
+      kind: "project",
+      path: alfa.path,
     });
+
+    expect(result.selection).toEqual({ kind: "project", path: alfa.path });
+    expect(result.showAll).toBe(false);
+    expect(result.selectedProject?.path).toBe(alfa.path);
+    expect(result.tasks).toHaveLength(2);
+    for (const t of result.tasks) {
+      expect(t.projectPath).toBe(alfa.path);
+    }
   });
 
-  describe("showsValidationIssues", () => {
-    it("returns issues from data without filtering them", () => {
-      const p = project("Projects/Alfa.md", "Alfa");
-      const issues = [
-        issue("Tasks/broken.md", "Falta la propiedad 'project'."),
-        issue("Tasks/another.md", "Estado no admitido: 'closed'."),
-      ];
-      const data: DashboardData = {
-        projects: [p],
-        tasks: [],
-        credentials: [],
-        issues,
-      };
+  it("sortsProjectTasksOpenBeforeDone", () => {
+    const p = project("Projects/Alfa.md", "Alfa");
+    const data: DashboardData = {
+      projects: [p],
+      tasks: [
+        // "Done task" sorts BEFORE "Open task" by title; status must win.
+        task("Tasks/done.md", "Done task", p.path, "done"),
+        task("Tasks/open.md", "Open task", p.path, "open"),
+      ],
+      credentials: [],
+      issues: [],
+    };
 
-      const result = presentDashboard(data, p.path);
-
-      expect(result.issues).toEqual(issues);
+    const result = presentDashboard(data, {
+      kind: "project",
+      path: p.path,
     });
+
+    expect(result.tasks.map((t) => t.path)).toEqual([
+      "Tasks/open.md",
+      "Tasks/done.md",
+    ]);
   });
 
-  describe("ordersProjectsByTitle", () => {
-    it("sorts projects by title ascending, case-insensitive, with path tiebreaker", () => {
-      const zeta = project("Projects/Zeta.md", "zeta");
-      const ALFA = project("Projects/ALFA.md", "ALFA");
-      const middle = project("Projects/Middle.md", "Middle");
-      const data: DashboardData = {
-        projects: [zeta, ALFA, middle],
-        tasks: [],
-        credentials: [],
-        issues: [],
-      };
+  it("fallsBackToAllWhenSelectedProjectIsMissing", () => {
+    const alfa = project("Projects/Alfa.md", "Alfa");
+    const beta = project("Projects/Beta.md", "Beta");
+    const data: DashboardData = {
+      projects: [beta, alfa],
+      tasks: [
+        task("Tasks/Alfa-1.md", "Alfa task 1", alfa.path, "open"),
+        task("Tasks/Beta-1.md", "Beta task 1", beta.path, "open"),
+      ],
+      credentials: [],
+      issues: [],
+    };
 
-      const result = presentDashboard(data, null);
-
-      // Order: "ALFA", "Middle", "zeta" (case-insensitive asc).
-      expect(result.selectedProject?.path).toBe("Projects/ALFA.md");
+    const result = presentDashboard(data, {
+      kind: "project",
+      path: "Projects/Ghost.md",
     });
+
+    // El proyecto fantasma no existe; el presentador cae a `kind: "all"`.
+    expect(result.selection).toEqual({ kind: "all" });
+    expect(result.showAll).toBe(true);
+    expect(result.selectedProject).toBeNull();
+    // Y `tasks` ahora contiene todas las tareas (no filtradas por proyecto).
+    expect(result.tasks).toHaveLength(2);
   });
 
-  describe("ordersTasksByTitleWithinStatus", () => {
-    it("sorts tasks of the same status by title, case-insensitive, with path tiebreaker", () => {
-      const p = project("Projects/Alfa.md", "Alfa");
-      const data: DashboardData = {
-        projects: [p],
-        tasks: [
-          task("Tasks/z.md", "zeta", p.path, "open"),
-          task("Tasks/a.md", "ALFA", p.path, "open"),
-          task("Tasks/m.md", "Middle", p.path, "open"),
-        ],
-        credentials: [],
-        issues: [],
-      };
+  it("returnsIssuesVerbatim", () => {
+    const p = project("Projects/Alfa.md", "Alfa");
+    const issues = [
+      issue("Tasks/broken.md", "Falta la propiedad 'project'."),
+      issue("Tasks/another.md", "Estado no admitido: 'closed'."),
+    ];
+    const data: DashboardData = {
+      projects: [p],
+      tasks: [],
+      credentials: [],
+      issues,
+    };
 
-      const result = presentDashboard(data, p.path);
-
-      expect(result.tasks.map((t) => t.path)).toEqual([
-        "Tasks/a.md",
-        "Tasks/m.md",
-        "Tasks/z.md",
-      ]);
+    const result = presentDashboard(data, {
+      kind: "project",
+      path: p.path,
     });
-  });
 
-  describe("fallsBackWhenSelectedProjectMissing", () => {
-    it("selects the first sorted project when the requested path does not exist", () => {
-      const alfa = project("Projects/Alfa.md", "Alfa");
-      const beta = project("Projects/Beta.md", "Beta");
-      const data: DashboardData = {
-        projects: [beta, alfa],
-        tasks: [],
-        credentials: [],
-        issues: [],
-      };
-
-      const result = presentDashboard(data, "Projects/Ghost.md");
-
-      // Alfa < Beta case-insensitive, so Alfa wins.
-      expect(result.selectedProject?.path).toBe("Projects/Alfa.md");
-    });
+    expect(result.issues).toEqual(issues);
   });
 });

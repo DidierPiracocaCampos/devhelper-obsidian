@@ -6,7 +6,11 @@ import type {
   ProjectRecord,
   TaskRecord,
 } from "../domain/types";
-import { presentDashboard } from "../domain/presentDashboard";
+import {
+  presentDashboard,
+  type DashboardPresentation,
+  type DashboardSelection,
+} from "../domain/presentDashboard";
 import { getWeekStrip } from "../domain/weekStrip";
 import type { ProjectTaskRepository } from "../data/ProjectTaskRepository";
 import { ProjectFormModal } from "./ProjectFormModal";
@@ -37,7 +41,7 @@ export class DashboardView extends ItemView {
   // it ever needs to; today the repository owns that mapping.
   private readonly settings: PluginSettings;
 
-  private selectedProjectPath: string | null = null;
+  private selection: DashboardSelection = { kind: "all" };
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -85,15 +89,15 @@ export class DashboardView extends ItemView {
   }
 
   /**
-   * Update the selected project. Called from the project chips in the
-   * top bar.
+   * Update the current scope. Called from the project chips in the top
+   * bar (Task 4 will also wire a dedicated "Todas" chip).
    * The selection lives on the view instance so it survives every
    * refresh but does NOT leak into plugin storage. We trigger a full
    * `refresh()` so the re-render uses live vault data instead of a
    * cached snapshot.
    */
-  setSelectedProjectPath(path: string | null): void {
-    this.selectedProjectPath = path;
+  setSelection(selection: DashboardSelection): void {
+    this.selection = selection;
     void this.refresh();
   }
 
@@ -113,23 +117,26 @@ export class DashboardView extends ItemView {
   }
 
   private render(data: DashboardData): void {
-    const presentation = presentDashboard(data, this.selectedProjectPath);
+    const presentation = presentDashboard(data, this.selection);
     // Keep selection in sync with what the presenter chose. This is
     // how the "project disappeared" fall-back (plan rule) is wired
     // into the view's state.
-    this.selectedProjectPath = presentation.selectedProject
-      ? presentation.selectedProject.path
-      : null;
+    this.selection = presentation.selection;
 
     this.contentEl.removeClass("devhelper-dashboard-root");
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-dashboard-root");
 
     this.renderTopBar(data);
-    if (presentation.selectedProject === null) {
+    // `showAll === true` ⇒ no hay un proyecto en concreto; renderizamos
+    // el panel con la cabecera genérica «Todas las tareas» para que el
+    // usuario siempre vea algo. El empty state sólo aparece cuando NO
+    // hay proyectos en absoluto.
+    const noProjects = data.projects.length === 0;
+    if (presentation.showAll && presentation.selectedProject === null && noProjects) {
       this.renderEmptyState();
     } else {
-      this.renderTasksPanel(presentation.selectedProject, presentation.tasks);
+      this.renderTasksPanel(presentation, presentation.tasks);
     }
     this.renderSideColumn();
     this.renderBottomSections();
@@ -215,7 +222,10 @@ export class DashboardView extends ItemView {
         text: project.title,
         attr: { "aria-label": project.title, type: "button" },
       });
-      if (project.path === this.selectedProjectPath) {
+      if (
+        this.selection.kind === "project" &&
+        this.selection.path === project.path
+      ) {
         chip.addClass("is-selected");
       }
 
@@ -242,7 +252,7 @@ export class DashboardView extends ItemView {
       setIcon(status, "circle");
 
       chip.addEventListener("click", () =>
-        this.setSelectedProjectPath(project.path),
+        this.setSelection({ kind: "project", path: project.path }),
       );
 
       const menuButton = chip.createEl("button", {
@@ -281,14 +291,15 @@ export class DashboardView extends ItemView {
   }
 
   private renderTasksPanel(
-    project: ProjectRecord,
+    presentation: DashboardPresentation,
     tasks: TaskRecord[],
   ): void {
     const main = this.contentEl.createEl("section", {
       cls: "devhelper-tasks-panel",
     });
 
-    // Header row: the project title/path on the left and the panel FABs
+    // Header row: project title/path on the left (or a generic
+    // «Todas las tareas» title in `showAll` mode) and the panel FABs
     // stacked on the right edge. The task list below wraps onto its
     // own row (`.devhelper-task-list` gets `flex-basis: 100%`).
     const panelHeader = main.createEl("div", {
@@ -297,11 +308,17 @@ export class DashboardView extends ItemView {
     const projectHeader = panelHeader.createEl("div", {
       cls: "devhelper-project-header",
     });
-    projectHeader.createEl("h3", { text: project.title });
-    projectHeader.createEl("span", {
-      cls: "devhelper-project-path",
-      text: project.path,
-    });
+    if (presentation.selectedProject !== null) {
+      projectHeader.createEl("h3", {
+        text: presentation.selectedProject.title,
+      });
+      projectHeader.createEl("span", {
+        cls: "devhelper-project-path",
+        text: presentation.selectedProject.path,
+      });
+    } else {
+      projectHeader.createEl("h3", { text: "Todas las tareas" });
+    }
 
     const fabs = panelHeader.createEl("div", {
       cls: "devhelper-panel-fabs",
@@ -325,9 +342,13 @@ export class DashboardView extends ItemView {
 
     const list = main.createEl("ul", { cls: "devhelper-task-list" });
     if (tasks.length === 0) {
+      const emptyText =
+        presentation.showAll || presentation.selectedProject === null
+          ? "Aún no hay tareas en ningún proyecto."
+          : "Este proyecto aún no tiene tareas.";
       list.createEl("li", {
         cls: "devhelper-task-empty",
-        text: "Este proyecto aún no tiene tareas.",
+        text: emptyText,
       });
       return;
     }
@@ -607,7 +628,8 @@ export class DashboardView extends ItemView {
     const modal = new TaskFormModal(this.app, {
       mode: "create",
       projects,
-      defaultProjectPath: this.selectedProjectPath,
+      defaultProjectPath:
+        this.selection.kind === "project" ? this.selection.path : null,
       onSubmit: async (payload) => {
         try {
           await this.repository.createTask(payload.title, payload.projectPath);
