@@ -990,28 +990,26 @@
   cursor: default;
 }
 
-/* Mini pill buttons living inside the muted subtitle lines
-   (Mostrar/Ocultar, Copiar). Same tone as the task badges so they sit
-   quietly on the dark card. */
-.devhelper-credential-mini {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.75em;
-  color: #d4d4d8;
-  background: transparent;
-  border: 1px solid #3f3f46;
-  border-radius: 999px;
-  padding: 1px 8px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.devhelper-credential-mini:hover {
-  background: #2b2b30;
-}
-
 .devhelper-credential-corrupt {
   color: var(--text-error);
+}
+
+/* Read-only rows of the credential detail modal: label + readonly
+   value + copy button. Theme-aware (no hardcoded colors). */
+.devhelper-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.devhelper-detail-label {
+  min-width: 90px;
+  color: var(--text-muted);
+}
+
+.devhelper-detail-value {
+  flex: 1;
+  min-width: 0;
 }
 
 .devhelper-credential-status {

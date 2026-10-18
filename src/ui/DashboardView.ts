@@ -37,6 +37,7 @@ import { TaskFormModal } from "./TaskFormModal";
 import { NoteFormModal } from "./NoteFormModal";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import {
+  CredentialDetailModal,
   CredentialFormModal,
   ConfirmModal,
   MasterPasswordModal,
@@ -80,8 +81,6 @@ export class DashboardView extends ItemView {
   // it ever needs to; today the repository owns that mapping.
   private readonly settings: PluginSettings;
   private readonly credentialsDeps: CredentialDeps;
-  /** Keys `${projectPath}:${index}` whose password is currently revealed. */
-  private revealedCredentials = new Set<string>();
 
   private selection: DashboardSelection = { kind: "all" };
   private showTaskFilters = false;
@@ -1191,7 +1190,6 @@ export class DashboardView extends ItemView {
     }
 
     if (!this.credentialsDeps.session.isUnlocked()) {
-      this.revealedCredentials.clear();
       this.renderLockedCredentials(section, visible);
       return;
     }
@@ -1330,6 +1328,13 @@ export class DashboardView extends ItemView {
    * muted subtitle line per field, icon actions on the right. Reuses the
    * task-card classes so both panels read as the same component.
    */
+  /**
+   * One credential as a task-like dark card: service as the title, the
+   * user as a small subtitle, and a copy button that opens the detail
+   * modal (full fields + per-field copy). Edit/delete stay on the card.
+   * Reuses the task-card classes so both panels read as the same
+   * component.
+   */
   private renderCredentialRow(
     projectPath: string,
     index: number,
@@ -1352,49 +1357,25 @@ export class DashboardView extends ItemView {
         text: "No se pudo descifrar esta entrada (datos corruptos).",
         cls: "devhelper-task-subtitle devhelper-credential-corrupt",
       });
-    } else {
-      if (display.user !== null) {
-        this.renderCredentialField(main, "Usuario", display.user, () =>
-          this.copySecret(display.user ?? ""),
-        );
-      }
-      const revealKey = `${projectPath}:${index}`;
-      const revealed = this.revealedCredentials.has(revealKey);
-      this.renderCredentialField(
-        main,
-        "Contraseña",
-        revealed ? (display.password ?? "") : "••••••••",
-        () => this.copySecret(display.password ?? ""),
-        {
-          toggleLabel: revealed ? "Ocultar" : "Mostrar",
-          onToggle: () => {
-            if (revealed) {
-              this.revealedCredentials.delete(revealKey);
-            } else {
-              this.revealedCredentials.add(revealKey);
-            }
-            this.credentialsDeps.session.touch();
-            void this.refresh();
-          },
-        },
-      );
-      if (display.url !== null && display.url.length > 0) {
-        this.renderCredentialField(main, "URL", display.url, () =>
-          this.copySecret(display.url ?? ""),
-        );
-      }
-      if (display.notes !== null && display.notes.length > 0) {
-        main.createEl("p", {
-          text: display.notes,
-          cls: "devhelper-task-subtitle",
-        });
-      }
+    } else if (display.user !== null) {
+      main.createEl("p", {
+        text: display.user,
+        cls: "devhelper-task-subtitle",
+      });
     }
 
     const actions = item.createEl("div", {
       cls: "devhelper-task-actions",
     });
     if (!display.corrupt) {
+      const detailBtn = actions.createEl("button", {
+        cls: "devhelper-icon-button devhelper-task-icon",
+        attr: { "aria-label": "Ver y copiar credencial", type: "button" },
+      });
+      setIcon(detailBtn, "copy");
+      detailBtn.addEventListener("click", () =>
+        this.openCredentialDetail(entry.service, display),
+      );
       const editBtn = actions.createEl("button", {
         cls: "devhelper-icon-button devhelper-task-icon",
         attr: { "aria-label": "Editar credencial", type: "button" },
@@ -1415,37 +1396,16 @@ export class DashboardView extends ItemView {
     return item;
   }
 
-  /**
-   * One muted subtitle line (`Etiqueta: valor`) with mini pill buttons
-   * for copying and, for the password, showing/hiding.
-   */
-  private renderCredentialField(
-    parent: HTMLElement,
-    label: string,
-    value: string,
-    onCopy: () => void,
-    toggle?: { toggleLabel: string; onToggle: () => void },
+  private openCredentialDetail(
+    service: string,
+    display: CredentialDisplay,
   ): void {
-    const row = parent.createEl("p", { cls: "devhelper-task-subtitle" });
-    row.createEl("span", { text: `${label}: ${value} ` });
-    if (toggle) {
-      const toggleBtn = row.createEl("button", {
-        cls: "devhelper-credential-mini",
-        text: toggle.toggleLabel,
-        attr: { type: "button" },
-      });
-      toggleBtn.addEventListener("click", toggle.onToggle);
-      row.createEl("span", { text: " " });
-    }
-    const copyBtn = row.createEl("button", {
-      cls: "devhelper-credential-mini",
-      text: "Copiar",
-      attr: {
-        "aria-label": `Copiar ${label.toLocaleLowerCase()}`,
-        type: "button",
-      },
+    const modal = new CredentialDetailModal(this.app, {
+      service,
+      display,
+      onCopy: (value) => void this.copySecret(value),
     });
-    copyBtn.addEventListener("click", () => onCopy());
+    modal.open();
   }
 
   /**
@@ -1468,7 +1428,6 @@ export class DashboardView extends ItemView {
   private async resetKeyMaterial(): Promise<void> {
     try {
       await this.credentialsDeps.clearKeyMaterial();
-      this.revealedCredentials.clear();
       await this.refresh();
     } catch (err) {
       console.error("DevHelper: failed to reset key material", err);
@@ -1478,7 +1437,6 @@ export class DashboardView extends ItemView {
 
   private lockCredentials(): void {
     this.credentialsDeps.session.lock();
-    this.revealedCredentials.clear();
     void this.refresh();
   }
 

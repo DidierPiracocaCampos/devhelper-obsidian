@@ -1,4 +1,5 @@
 import { App, Modal, Notice, Setting } from "obsidian";
+import type { CredentialDisplay } from "../domain/credentialsCrypto";
 import type { CredentialInput } from "../data/ProjectTaskRepository";
 
 /**
@@ -299,6 +300,114 @@ export class MasterPasswordModal extends Modal {
     }
     this.errorEl.hide();
     this.onSubmit(password);
+  }
+}
+
+/**
+ * Read-only detail of one credential with per-field copy buttons.
+ *
+ * Receives the already-decrypted display: the modal never decrypts.
+ * Copying goes through the caller's `onCopy` (it owns the session
+ * touch and the confirmation notice). No edit/delete here — those stay
+ * on the card.
+ */
+export class CredentialDetailModal extends Modal {
+  private readonly service: string;
+  private readonly display: CredentialDisplay;
+  private readonly onCopy: (value: string) => void;
+
+  private passwordInput!: HTMLInputElement;
+  private passwordVisible = false;
+
+  constructor(
+    app: App,
+    options: {
+      service: string;
+      display: CredentialDisplay;
+      onCopy: (value: string) => void;
+    },
+  ) {
+    super(app);
+    this.service = options.service;
+    this.display = options.display;
+    this.onCopy = options.onCopy;
+  }
+
+  onOpen(): void {
+    const { contentEl, titleEl } = this;
+    contentEl.empty();
+    titleEl.setText(`Credencial: ${this.service}`);
+
+    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const display = this.display;
+
+    this.addCopyRow(form, "Servicio", this.service);
+    if (display.user !== null) {
+      this.addCopyRow(form, "Usuario", display.user);
+    }
+    if (display.password !== null) {
+      this.addPasswordRow(form, display.password);
+    }
+    if (display.url !== null && display.url.length > 0) {
+      this.addCopyRow(form, "URL", display.url);
+    }
+    if (display.notes !== null && display.notes.length > 0) {
+      this.addCopyRow(form, "Notas", display.notes);
+    }
+
+    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    new Setting(buttonRow)
+      .addButton((btn) => btn.setButtonText("Cerrar").onClick(() => this.close()));
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+
+  private addCopyRow(form: HTMLElement, label: string, value: string): void {
+    const row = form.createEl("div", { cls: "devhelper-detail-row" });
+    row.createEl("span", {
+      text: label,
+      cls: "devhelper-detail-label",
+    });
+    const input = row.createEl("input", {
+      cls: "devhelper-detail-value",
+      attr: { readonly: "true" },
+    });
+    input.value = value;
+    const copyBtn = row.createEl("button", {
+      cls: "devhelper-button",
+      text: "Copiar",
+    });
+    copyBtn.addEventListener("click", () => this.onCopy(value));
+  }
+
+  private addPasswordRow(form: HTMLElement, password: string): void {
+    const row = form.createEl("div", { cls: "devhelper-detail-row" });
+    row.createEl("span", {
+      text: "Contraseña",
+      cls: "devhelper-detail-label",
+    });
+    const input = row.createEl("input", {
+      cls: "devhelper-detail-value",
+      attr: { readonly: "true", type: "password" },
+    });
+    input.value = password;
+    this.passwordInput = input;
+    const toggleBtn = row.createEl("button", {
+      cls: "devhelper-button",
+      text: "Mostrar",
+    });
+    toggleBtn.addEventListener("click", () => {
+      this.passwordVisible = !this.passwordVisible;
+      this.passwordInput.type = this.passwordVisible ? "text" : "password";
+      toggleBtn.setText(this.passwordVisible ? "Ocultar" : "Mostrar");
+    });
+    const copyBtn = row.createEl("button", {
+      cls: "devhelper-button",
+      text: "Copiar",
+    });
+    copyBtn.addEventListener("click", () => this.onCopy(password));
   }
 }
 
