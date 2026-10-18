@@ -149,9 +149,11 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   botón «Añadir archivo» que copia a `<Proyecto>/Archivos/`, botón ver-en-explorador
   por archivo y papelera con confirmación). La sección Contraseña pide la maestra al
   desbloquear (fijarla la primera vez crea sal + verificador en `data.json`); bloqueada
-  muestra sólo `service`; desbloqueada permite ver/copiar credenciales y CRUD completo,
-  con aviso de migración en un clic si hay entradas en claro. Las credenciales se
-  renderizan como tarjetas oscuras al estilo de las tareas. El lápiz de
+  muestra sólo `service`; desbloqueada muestra tarjetas mínimas (servicio +
+  usuario) con modal de detalle para ver/copiar cada campo, más CRUD completo
+  (editar/borrar desde la tarjeta), con aviso de migración en un clic si hay
+  entradas en claro. Las credenciales se renderizan como tarjetas oscuras al
+  estilo de las tareas. El lápiz de
   la tarjeta abre la nota; la papelera pide confirmación y manda la tarea a la
   papelera de Obsidian (`deleteTask`).
 - `src/ui/ProjectFormModal.ts`, `src/ui/TaskFormModal.ts` — `obsidian.Modal` con
