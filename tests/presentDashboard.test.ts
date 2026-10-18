@@ -332,6 +332,8 @@ describe("presentDashboard", () => {
     // `DashboardPresentation.files` la añade la tarea de presenter. El cast
     // compila hoy y falla en runtime hasta entonces (esperado por el plan).
     const presFiles = (pres as unknown as { files: FileRecord[] }).files;
+    expect(presFiles).toHaveLength(1);
     expect(presFiles.every((f) => f.projectPath === GENERAL_HUB)).toBe(true);
+    expect(presFiles.some((f) => f.projectPath === alfa.path)).toBe(false);
   });
 });
