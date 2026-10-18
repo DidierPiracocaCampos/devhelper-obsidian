@@ -616,6 +616,76 @@ describe("parseProjectTaskNote", () => {
       expect(result.task.properties.due).toBe("");
     });
   });
+
+  describe("acceptsYamlDateObjects", () => {
+    it("parses a project with bare created date (js-yaml Date) and normalizes to YYYY-MM-DD", () => {
+      const note = snapshot(
+        "Projects/spot.md",
+        "spot.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: 2026-01-15",
+          "tags: []",
+          "description: x",
+          "client: y",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("project");
+      if (result.kind !== "project") return;
+      expect(result.project.properties.created).toBe("2026-01-15");
+    });
+
+    it("parses a task with bare created date and normalizes to YYYY-MM-DD", () => {
+      const note = snapshot(
+        "Tasks/BareCreated.md",
+        "BareCreated.md",
+        [
+          "---",
+          "type: task",
+          'project: "[[Projects/Foo]]"',
+          "status: open",
+          "created: 2026-01-15",
+          "priority: high",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Foo.md");
+
+      expect(result.kind).toBe("task");
+      if (result.kind !== "task") return;
+      expect(result.task.properties.created).toBe("2026-01-15");
+    });
+
+    it("parses a task with bare due date and normalizes to YYYY-MM-DD", () => {
+      const note = snapshot(
+        "Tasks/BareDue.md",
+        "BareDue.md",
+        [
+          "---",
+          "type: task",
+          'project: "[[Projects/Foo]]"',
+          "status: open",
+          'created: "2026-01-15"',
+          "priority: high",
+          "due: 2026-02-20",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, () => "Projects/Foo.md");
+
+      expect(result.kind).toBe("task");
+      if (result.kind !== "task") return;
+      expect(result.task.properties.due).toBe("2026-02-20");
+    });
+  });
 });
 
 describe("parseCredentialsNote", () => {

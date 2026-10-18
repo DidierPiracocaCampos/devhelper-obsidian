@@ -318,17 +318,17 @@ function validateProjectFixedProperties(
   if (properties.created === undefined || properties.created === null) {
     return "Falta la propiedad requerida 'created' (esperado 'YYYY-MM-DD').";
   }
-  // Comprobación defensiva: 'created' debe ser cadena no vacía. El brief sólo
-  // enumera el mensaje de ausente, pero conservamos este segundo mensaje
-  // para que un valor no-cadena o vacío quede reportado y no pase silencioso.
-  if (
-    typeof properties.created !== "string" ||
-    properties.created.length === 0
-  ) {
+  // 'created' acepta cadena no vacía o Date (js-yaml convierte
+  // `created: 2026-01-15` sin comillas en un objeto Date; Obsidian
+  // Properties escribe las fechas así). Normalizamos Date → 'YYYY-MM-DD'
+  // para que el resto del dashboard siempre vea una cadena.
+  const normalizedCreated = normalizeDateProp(properties.created);
+  if (normalizedCreated === null) {
     return `La propiedad 'created' debe ser una cadena de texto no vacía, se recibió: ${String(
       properties.created,
     )}.`;
   }
+  properties.created = normalizedCreated;
 
   if (!("tags" in properties)) {
     return "Falta la propiedad requerida 'tags'.";
@@ -355,14 +355,13 @@ function validateTaskFixedProperties(
   if (properties.created === undefined || properties.created === null) {
     return "Falta la propiedad requerida 'created' (esperado 'YYYY-MM-DD').";
   }
-  if (
-    typeof properties.created !== "string" ||
-    properties.created.length === 0
-  ) {
+  const normalizedCreated = normalizeDateProp(properties.created);
+  if (normalizedCreated === null) {
     return `La propiedad 'created' debe ser una cadena de texto no vacía, se recibió: ${String(
       properties.created,
     )}.`;
   }
+  properties.created = normalizedCreated;
 
   const priorityRaw = properties.priority;
   if (priorityRaw === undefined || priorityRaw === null) {
@@ -379,15 +378,53 @@ function validateTaskFixedProperties(
 
   if ("due" in properties && properties.due !== undefined && properties.due !== null) {
     const due = properties.due;
-    if (typeof due !== "string") {
+    if (due instanceof Date) {
+      const normalizedDue = normalizeDateProp(due);
+      if (normalizedDue === null) {
+        return `La propiedad 'due' debe ser una fecha 'YYYY-MM-DD' válida o estar vacía, se recibió: ${String(due)}.`;
+      }
+      properties.due = normalizedDue;
+    } else if (typeof due !== "string") {
       return `La propiedad 'due' debe ser una fecha 'YYYY-MM-DD' válida o estar vacía, se recibió: ${String(due)}.`;
-    }
-    if (due.length > 0 && !DATE_REGEX.test(due)) {
+    } else if (due.length > 0 && !DATE_REGEX.test(due)) {
       return `La propiedad 'due' debe ser una fecha 'YYYY-MM-DD' válida o estar vacía, se recibió: ${due}.`;
     }
   }
 
   return null;
+}
+
+/**
+ * Normaliza un valor de fecha del frontmatter a 'YYYY-MM-DD'.
+ *
+ * Acepta cadenas no vacías tal cual y objetos `Date` válidos (js-yaml
+ * convierte `created: 2026-01-15` sin comillas en `Date`; Obsidian
+ * Properties escribe las fechas así). Devuelve `null` cuando el valor
+ * no es una fecha utilizable (cadena vacía, `Date` inválido u otro tipo).
+ */
+function normalizeDateProp(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value.length === 0 ? null : value;
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+    return formatDateUTC(value);
+  }
+  return null;
+}
+
+/**
+ * Formatea un `Date` como 'YYYY-MM-DD' en UTC. Se usa UTC (y no la zona
+ * local) porque js-yaml parsea `2026-01-15` como medianoche UTC; usar
+ * getters locales desplazaría el día en zonas al oeste de Greenwich.
+ */
+function formatDateUTC(d: Date): string {
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**

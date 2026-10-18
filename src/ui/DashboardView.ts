@@ -169,10 +169,12 @@ export class DashboardView extends ItemView {
       cls: "devhelper-topbar-controls",
     });
 
-    // Task 5: input + hint now share a single wrapper so the hint can
-    // sit *inside* the field (positioned absolute on the right). The
-    // placeholder copy has been refreshed and the "+" between
-    // "Ctrl" and "K" was dropped — the hint now reads plain "Ctrl K".
+    // The search field and its `Ctrl+K` hint now sit side-by-side inside
+    // the controls (not stacked on top of each other): the input takes
+    // its natural width and the hint renders right next to it as a
+    // monospace pill. Per the design ref, the hint must NEVER overlap
+    // the placeholder, which is why we no longer use absolute
+    // positioning here.
     const searchWrap = controls.createEl("div", {
       cls: "devhelper-search-wrap",
     });
@@ -185,7 +187,7 @@ export class DashboardView extends ItemView {
     search.disabled = true;
     searchWrap.createEl("span", {
       cls: "devhelper-search-hint",
-      text: "Ctrl K",
+      text: "Ctrl+K",
     });
   }
 
@@ -248,40 +250,50 @@ export class DashboardView extends ItemView {
 
       // Right-click context menu: Abrir nota / Abrir carpeta /
       // Quitar de mis favoritos. We always `preventDefault()` so the
-      // native browser menu does not also appear.
+      // native browser menu does not also appear. Each item gets a
+      // lucide icon so the options read at a glance (file, folder,
+      // bookmark-x for "remove favorite").
       chip.addEventListener("contextmenu", (evt) => {
         evt.preventDefault();
         const menu = new Menu();
         menu.addItem((item) =>
-          item.setTitle("Abrir nota").onClick(() => this.openNote(project.path)),
+          item
+            .setTitle("Abrir nota")
+            .setIcon("file")
+            .onClick(() => this.openNote(project.path)),
         );
         menu.addItem((item) =>
           item
             .setTitle("Abrir carpeta")
+            .setIcon("folder")
             .onClick(() => this.openProjectFolder(project.folderPath)),
         );
         menu.addItem((item) =>
-          item.setTitle("Quitar de mis favoritos").onClick(async () => {
-            await this.repository.setProjectFavorite(project.path, false);
-            if (
-              this.selection.kind === "project" &&
-              this.selection.path === project.path
-            ) {
-              this.setSelection({ kind: "all" });
-            } else {
-              await this.refresh();
-            }
-          }),
+          item
+            .setTitle("Quitar de mis favoritos")
+            .setIcon("bookmark-x")
+            .onClick(async () => {
+              await this.repository.setProjectFavorite(project.path, false);
+              if (
+                this.selection.kind === "project" &&
+                this.selection.path === project.path
+              ) {
+                this.setSelection({ kind: "all" });
+              } else {
+                await this.refresh();
+              }
+            }),
         );
         menu.showAtMouseEvent(evt);
       });
     }
 
-    // 3. "+" chip to add a favorite. `devhelper-chip-add` is the class
-    //    reserved by Task 5's `styles.css`; for now the markup just
-    //    needs to exist so the picker hook is wired.
+    // 3. "+" icon to add a favorite. Pure icon button - it does NOT
+    //    inherit the `.devhelper-chip` pill (no border-radius, no
+    //    padding, no background) so the `+` reads as a bare glyph
+    //    floating in the favorites row, not as another chip.
     const addChip = chipList.createEl("button", {
-      cls: "devhelper-chip devhelper-chip-add",
+      cls: "devhelper-chip-add",
       attr: { "aria-label": "Añadir proyecto a favoritos", type: "button" },
     });
     setIcon(addChip, "plus");

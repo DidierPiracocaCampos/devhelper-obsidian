@@ -40,8 +40,19 @@
 .devhelper-dashboard-root {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
-  padding: 12px;
+  /* Obsidian fuerza `height: 100%` sobre `.view-content` (que es este mismo
+     nodo). Con el valor por defecto `align-content: normal` (= stretch) el
+     espacio sobrante se repartía entre las filas y la primera fila medía
+     ~128px en vez de sus ~30px naturales. `start` deja que cada fila sólo
+     ocupe lo que necesita y el hueco sobrante quede al final. */
+  align-content: start;
+  gap: 8px;
+  /* Symmetric, modest padding around the whole dashboard so the chips
+     and search field line up flush with the editor's text padding,
+     regardless of the panel/window width. Sides get more than top
+     because Obsidian's chrome (tab bar / view header) already supplies
+     top spacing of its own. */
+  padding: 4px 16px 12px;
   color: var(--text-normal);
   background: var(--background-primary);
 }
@@ -56,23 +67,30 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 4px 2px;
+  gap: 6px;
+  padding: 0;
+  margin: 0 0 4px;
 }
 
 .devhelper-topbar-controls {
-  margin-left: auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
+  /* Pushed to the right edge of the topbar cell. The cell itself is
+     sized by `auto` (intrinsic), so the search column sits flush with
+     the right padding of the dashboard instead of stretching across
+     the whole row. */
+  justify-self: end;
+  margin-left: auto;
 }
 
 /* --- Project chips -------------------------------------------------------- */
 .devhelper-chip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
 }
 
 .devhelper-chip {
@@ -80,7 +98,8 @@
   align-items: center;
   gap: 4px;
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 4px 14px;
+  height: 28px;
   background: var(--background-primary-alt);
   border: 1px solid var(--background-modifier-border);
   color: var(--text-normal);
@@ -88,10 +107,17 @@
 }
 
 .devhelper-chip.is-selected {
-  /* Selected = light pill with dark text; matches the panel surface. */
-  background: var(--background-secondary);
-  color: var(--background-primary);
-  border-color: transparent;
+  /* Selected = the surface that contrasts with the surrounding chips.
+     Whatever colour `--background-primary` resolves to in the user's
+     Obsidian theme (white in light mode, near-black in dark mode),
+     the selected chip inverts against the canvas. We pair it with
+     `var(--text-on-accent)` for the foreground so the chip's title
+     is always legible against its own fill - this is the standard
+     Obsidian token for "text drawn on top of the accent/primary
+     surface". */
+  background: var(--background-primary);
+  color: var(--text-on-accent);
+  border-color: var(--background-modifier-border);
 }
 
 .devhelper-chip.is-placeholder {
@@ -99,22 +125,33 @@
   color: var(--text-muted);
 }
 
-/* The trailing "+" chip that opens the favorite picker. Sits on the dark
-   canvas, no border, slightly muted so it doesn't compete with the real
-   project pills. Hover lifts the colour to `text-normal` for affordance. */
+/* The "+" glyph that opens the favorite picker. It is a bare icon
+   with no chrome at all: no background, no border, no padding, no
+   border-radius. The mark sits flush in the favorites row and the
+   button only becomes visible on hover (a faint circle appears as
+   the affordance). */
 .devhelper-chip-add {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: none;
-  border-radius: 50%;
   background: transparent;
+  border: none;
   color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  border-radius: 50%;
 }
 
 .devhelper-chip-add:hover {
   color: var(--text-normal);
+  background: var(--background-primary-alt);
+}
+
+.devhelper-chip-add svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* --- Round icon buttons --------------------------------------------------- */
@@ -147,21 +184,20 @@
 }
 
 /* --- Search (decorative) -------------------------------------------------- */
-/* Task 5: input + hint are siblings inside `.devhelper-search-wrap`. The
-   wrapper is the positioning context for the absolutely-placed hint,
-   and the field gets a generous right padding so the hint never overlaps
-   the placeholder text. */
+/* Task 5/UX: input + hint are siblings inside `.devhelper-search-wrap`.
+   The wrap is a plain flex row; the hint is just another inline pill
+   that sits to the right of the field instead of being absolutely
+   placed on top of it. This keeps the placeholder text fully visible. */
 .devhelper-search-wrap {
-  position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .devhelper-search {
-  flex: 1;
-  min-width: 180px;
-  padding: 4px 56px 4px 8px;
-  opacity: 0.6;
+  width: 200px;
+  padding: 4px 8px;
   background: var(--background-primary-alt);
   color: var(--text-muted);
   border: 1px solid var(--background-modifier-border);
@@ -169,16 +205,13 @@
 }
 
 .devhelper-search-hint {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
   font-family: var(--font-monospace);
   font-size: 0.75em;
   padding: 2px 6px;
   border-radius: 4px;
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
   color: var(--text-muted);
-  pointer-events: none;
 }
 
 /* --- Main panels ---------------------------------------------------------- */
@@ -202,6 +235,10 @@
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  /* Igual que en el root: sin esto, cuando el grid estira el panel, el
+     espacio extra se repartía entre sus dos líneas y la cabecera pasaba de
+     ~80px a ~236px. */
+  align-content: flex-start;
   gap: 12px;
 }
 

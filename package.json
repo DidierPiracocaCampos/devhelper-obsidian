@@ -10,7 +10,8 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs --production",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "update:test-vault": "node scripts/update-test-vault.mjs"
   },
   "keywords": [
     "obsidian",
