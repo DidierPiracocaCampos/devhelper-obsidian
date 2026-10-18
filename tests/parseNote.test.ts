@@ -301,6 +301,112 @@ describe("parseProjectTaskNote", () => {
     });
   });
 
+  describe("parsesFavoriteTrue", () => {
+    it("parsesFavoriteTrue()", () => {
+      const note = snapshot(
+        "Projects/Website.md",
+        "Website.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags:",
+          "  - web",
+          "description: Web presence",
+          "client: ACME",
+          "favorite: true",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("project");
+      if (result.kind !== "project") return;
+      expect(result.project.favorite).toBe(true);
+    });
+  });
+
+  describe("parsesFavoriteFalse", () => {
+    it("parsesFavoriteFalse()", () => {
+      const note = snapshot(
+        "Projects/Website.md",
+        "Website.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags: []",
+          "description: x",
+          "client: y",
+          "favorite: false",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("project");
+      if (result.kind !== "project") return;
+      expect(result.project.favorite).toBe(false);
+    });
+  });
+
+  describe("parsesMissingFavoriteAsFalse", () => {
+    it("parsesMissingFavoriteAsFalse()", () => {
+      const note = snapshot(
+        "Projects/Website.md",
+        "Website.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags: []",
+          "description: x",
+          "client: y",
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      expect(result.kind).toBe("project");
+      if (result.kind !== "project") return;
+      expect(result.project.favorite).toBe(false);
+    });
+  });
+
+  describe("parsesInvalidFavoriteAsFalse", () => {
+    it("parsesInvalidFavoriteAsFalse()", () => {
+      const note = snapshot(
+        "Projects/Website.md",
+        "Website.md",
+        [
+          "---",
+          "type: project",
+          "status: active",
+          "created: \"2026-01-15\"",
+          "tags: []",
+          "description: x",
+          "client: y",
+          'favorite: "yes"',
+          "---",
+        ].join("\n"),
+      );
+
+      const result = parseProjectTaskNote(note, noopResolve);
+
+      // An invalid favorite value is silently coerced to false; it must
+      // NOT produce an issue.
+      expect(result.kind).toBe("project");
+      if (result.kind !== "project") return;
+      expect(result.project.favorite).toBe(false);
+    });
+  });
+
   describe("parsesValidProjectV2", () => {
     it("parses a project with all six fixed properties and exposes folderPath", () => {
       const note = snapshot(

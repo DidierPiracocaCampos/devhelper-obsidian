@@ -214,6 +214,7 @@ function buildProject(
     path: note.path,
     title,
     folderPath: folderOf(note.path),
+    favorite: properties.favorite === true,
     properties,
   };
   return { kind: "project", project };

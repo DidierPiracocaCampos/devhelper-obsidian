@@ -25,7 +25,7 @@ import type {
  */
 
 function project(path: string, title: string): ProjectRecord {
-  return { path, title, folderPath: folderOf(path), properties: {} };
+  return { path, title, folderPath: folderOf(path), favorite: false, properties: {} };
 }
 
 function folderOf(path: string): string {

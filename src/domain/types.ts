@@ -20,6 +20,8 @@ export interface ProjectRecord {
   path: string;
   title: string;
   folderPath: string;
+  // prop opcional en frontmatter; `true` = chip visible en la fila de favoritos
+  favorite: boolean;
   properties: Record<string, unknown>;
 }
 
