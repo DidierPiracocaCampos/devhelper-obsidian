@@ -9,8 +9,10 @@ Plugin de Obsidian escrito en TypeScript: **DevHelper Dashboard**. Presenta proy
 tareas respaldados por notas Markdown (`type: project`, `type: task`, `project: "[[…]]"`,
 `status: open|done`) en una vista propia del plugin.
 
-Estado: **V2 entregada** (8 commits V1 + 8 commits V2, `0df6689` → `13a4109` en `master`). 86 tests pasan,
-`main.js` se construye, `manifest.json` y `styles.css` están listos para instalarse.
+Estado: **V3 entregada** (favoritos + vista «Todos»). V1 (`0df6689` → 8 commits), V2
+(`→ 13a4109`, 8 commits) y V3 (`→ c713c09`, 5 commits sobre `master`) están en `master`.
+92 tests pasan, `main.js` se construye, `manifest.json` y `styles.css` están listos para
+instalarse.
 
 ## Comandos
 
@@ -37,14 +39,19 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   normalización RECHAZA rutas absolutas, letras de unidad y `..` ANTES de trim barras.
 - `src/ui/SettingsTab.ts` — `PluginSettingTab` con dos `TextComponent`, persiste vía
   `plugin.saveData()`.
-- `src/domain/types.ts` — interfaces puras: `ProjectRecord`, `TaskRecord`,
+- `src/domain/types.ts` — interfaces puras: `ProjectRecord` (incluye `favorite: boolean`
+  que el frontmatter expone como chip visible en la fila de favoritos), `TaskRecord`,
   `DashboardIssue`, `DashboardData`, `NoteSnapshot`, `ParsedNote`, `ResolveProjectFn`.
 - `src/domain/parseNote.ts` — `parseProjectTaskNote(note, resolveProject): ParsedNote`.
   Devuelve siempre un `ParsedNote` discriminado; **nunca lanza**. Errores → `kind: "issue"`.
   Usa `js-yaml.load` y la portada `---` debe ser la PRIMERA línea.
-- `src/domain/presentDashboard.ts` — `presentDashboard(data, selectedProjectPath)`.
+- `src/domain/presentDashboard.ts` — `presentDashboard(data, selection)` con
+  `DashboardSelection` discriminado (`{ kind: "all" }` o `{ kind: "project"; path }`).
   Orden determinista: proyectos por `title` asc case-insensitive con desempate `path`;
-  tareas del proyecto seleccionado por `status` (`open` antes que `done`) y luego título.
+  tareas por `status` (`open` antes que `done`) y luego título. Modo «all»: `selectedProject`
+  es `null`, `showAll` es `true` y se listan todas las tareas. Fallback: si la selección
+  pide un proyecto inexistente o no hay proyectos, se cae a `{ kind: "all" }` para
+  garantizar que el panel nunca quede vacío.
 - `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
   sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
   del mes en español.
@@ -55,44 +62,69 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   cada nivel por separado (Obsidian sólo crea uno). `processFrontMatter` usa
   `app.fileManager.processFrontMatter`. `rename` devuelve ref del nuevo path.
 - `src/data/ProjectTaskRepository.ts` — escanea carpetas configuradas, llama al parser,
-  expone seis mutaciones (`createProject`, `createTask`, `renameProject`, `renameTask`,
-  `reassignTask`, `setTaskStatus`) que devuelven **`Promise<void>`**. `renameProject`
-  actualiza la prop `project` de las tareas afectadas aunque Obsidian tenga
-  auto-link-update desactivado (lee la nota raw, parsea con `js-yaml`, compara, y
-  reescribe sólo esa prop con `processFrontMatter`).
+  expone siete mutaciones (`createProject`, `createTask`, `renameProject`, `renameTask`,
+  `reassignTask`, `setTaskStatus`, `setProjectFavorite`). `createProject(title)` devuelve
+  **`Promise<string>`** con el *hub path* del proyecto recién creado (la carpeta
+  `Projects/<slug>/` que la vista usa para promoverlo a favorito y seleccionarlo).
+  El resto de mutaciones devuelven **`Promise<void>`**. `renameProject` actualiza la
+  prop `project` de las tareas afectadas aunque Obsidian tenga auto-link-update
+  desactivado (lee la nota raw, parsea con `js-yaml`, compara, y reescribe sólo esa
+  prop con `processFrontMatter`). `setProjectFavorite(path, favorite)` opera sólo sobre
+  la prop `favorite` y nunca toca el cuerpo ni otras props.
 - `src/ui/DashboardView.ts` — `ItemView`
   (`VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard"`).
-  `selectedProjectPath` vive aquí (en memoria, nunca persistido).
-  Cada `refresh()` re-llama `repository.load()` + `presentDashboard` —
-  **no hay snapshot en memoria**. El render se organiza en métodos
-  `renderTopBar`, `renderProjectChips`, `renderTasksPanel`,
+  `selection: DashboardSelection` vive aquí (en memoria, nunca persistido), inicial
+  `{ kind: "all" }` para que el dashboard siempre abra mostrando «Todos».
+  Cada `refresh()` re-llama `repository.load()` + `presentDashboard` y reescribe
+  `this.selection` con el resultado del presenter (cubriendo el fallback a «all»);
+  **no hay snapshot en memoria**. La fila de chips se compone como «Todos» +
+  favoritos (filtrados por `data.projects.filter(p => p.favorite)` y ordenados con
+  el mismo comparador del presenter) + un chip final «+» que abre el picker. El
+  menú contextual del botón derecho sobre cada chip de favorito expone tres
+  opciones: «Abrir nota», «Abrir carpeta» y «Quitar de mis favoritos». En modo
+  «Todos» cada tarjeta de tarea muestra un *badge* con el nombre del proyecto al
+  que pertenece. `openProjectFolder(folderPath)` intenta la API interna de Obsidian
+  y, si falla, lanza un `Notice` descriptivo como degradación elegante. El render
+  se organiza en métodos `renderTopBar`, `renderProjectChips`, `renderTasksPanel`,
   `renderTaskCard`, `renderEmptyState`, `renderSideColumn` (rail + calendario),
   `renderBottomSections` (Archivos + Contraseña) y `renderIssues`. Sin acciones
   de borrado: la papelera está deshabilitada y es decorativa.
 - `src/ui/ProjectFormModal.ts`, `src/ui/TaskFormModal.ts` — `obsidian.Modal` con
   validación inline. `TaskFormModal` recibe `defaultProjectPath` y por defecto usa el
   proyecto seleccionado.
+- `src/ui/ProjectPickerModal.ts` — `obsidian.FuzzySuggestModal` que la vista usa para
+  añadir favoritos. Lista los proyectos **no favoritos** (la vista los pre-filtra) con
+  una entrada sintética inicial «Crear proyecto nuevo…» y devuelve
+  `ProjectPickerResult` (`{ kind: "create" }` o `{ kind: "project"; project }`) al
+  callback que se le pasa en el constructor; el placeholder del input es «Buscar
+  proyecto…».
 - `styles.css` — usa variables Obsidian (`--background-primary`, `--background-secondary`,
   `--text-normal`, `--interactive-accent`, etc.). Lienzo oscuro, paneles claros
   redondeados, tarjetas de tarea oscuras. Layout en grid de dos columnas (`1fr auto`)
   con la barra superior (`grid-column: 1 / -1`) y la fila inferior (Archivos +
-  Contraseña) ocupando ambas columnas. Chips de proyecto con `is-selected` claro;
-  tarjeta de tarea con círculo de estado (`#22c55e` para `--done`); FABs circulares;
-  placeholder sections inertes. Breakpoints: `@media (max-width: 640px)` → una
-  columna, oculta el rail; `@media (max-width: 320px)` → controles y acciones
-  apilados sin recorte.
+  Contraseña) ocupando ambas columnas. La *topbar* ya no es un panel con borde ni
+  título: es simplemente la fila transparente que aloja los chips de favoritos y los
+  controles a la derecha; el selector `<select>` antiguo, el menú `···` del chip y el
+  círculo de estado junto al título de la tarea han sido retirados. Los chips de
+  favoritos conservan `is-selected` claro; las tarjetas de tarea muestran un *badge*
+  con el nombre del proyecto (visible en modo «Todos»); FABs circulares; placeholder
+  sections inertes. Breakpoints: `@media (max-width: 640px)` → una columna, oculta
+  el rail; `@media (max-width: 320px)` → controles y acciones apilados sin recorte.
 
 ## Tests (`tests/`)
 
 - `tests/settings.test.ts` — 10 tests.
-- `tests/parseNote.test.ts` — 25 tests con casos específicos por modo de error.
-- `tests/presentDashboard.test.ts` — 8 tests sobre orden determinista y fallback.
+- `tests/parseNote.test.ts` — 29 tests con casos específicos por modo de error y la
+  nueva prop `favorite` que el parser preserva en `ProjectRecord.properties`.
+- `tests/presentDashboard.test.ts` — 7 tests sobre orden determinista, modo «all»,
+  filtro por proyecto y fallback automático a «all» cuando el proyecto desaparece.
 - `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
 - `tests/templates.test.ts` — 8 tests; cubre validación y aplicación de plantillas.
-- `tests/ProjectTaskRepository.test.ts` — 31 tests con un `VaultAdapter` falso en
+- `tests/ProjectTaskRepository.test.ts` — 34 tests con un `VaultAdapter` falso en
   memoria. Cubre sanitize, disambiguate, propiedades y cuerpo preservados, renombrado
-  que actualiza tareas, edición manual round-tripped.
+  que actualiza tareas, edición manual round-tripped, `setProjectFavorite` aislado,
+  `createProject` devolviendo el hub path y promoción automática del recién creado.
 
 Los tests **no usan mocks** — usan un `VaultAdapter` en memoria que simula
 determinísticamente los métodos del API.
@@ -121,7 +153,7 @@ determinísticamente los métodos del API.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 86/86 verde
+npm test            # 92/92 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
@@ -167,6 +199,10 @@ falta; no se commitea al repo.
   `docs/superpowers/specs/2026-10-17-projects-structure-design.md`
 - Plan V2 (pendiente de ejecutar):
   `docs/superpowers/plans/2026-10-17-projects-structure-v2.md`
+- Spec V3 (favoritos + vista «Todos»):
+  `docs/superpowers/specs/2026-10-17-project-favorites-selector-design.md`
+- Plan V3 ejecutado:
+  `docs/superpowers/plans/2026-10-17-project-favorites-selector.md`
 
 Si recibes un plan nuevo en el mismo formato, emplea `superpowers:subagent-driven-development`
 (o `superpowers:executing-plans` si no hay subagentes disponibles) para entregarlo
