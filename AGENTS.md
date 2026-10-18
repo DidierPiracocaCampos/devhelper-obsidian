@@ -11,8 +11,11 @@ tareas respaldados por notas Markdown (`type: project`, `type: task`, `project: 
 
 Estado: **V3 entregada** (favoritos + vista «Todos»). V1 (`0df6689` → 8 commits), V2
 (`→ 13a4109`, 8 commits) y V3 (`→ c713c09`, 5 commits sobre `master`) están en `master`.
-92 tests pasan, `main.js` se construye, `manifest.json` y `styles.css` están listos para
-instalarse.
+Sobre `master`: unificación **main + Archivos/General + credenciales cifradas** (proyecto
+sombra `General`, `FileRecord` + binarios en vault, `type: credentials` con AES-GCM,
+presenter acotado por selección, secciones Archivos/Contraseña/Notas vivas).
+La suite completa pasa en verde, `main.js` se construye, `manifest.json` y `styles.css`
+están listos para instalarse (conteo exacto en «Tests» y «Verificación local»).
 
 ## Comandos
 
@@ -36,23 +39,63 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   y listeners `vault.on('create|modify|delete|rename')` + `metadataCache.on('changed')`
   con debounce de 250 ms. `onunload` cancela el timer pendiente.
 - `src/settings.ts` — `PluginSettings`, `DEFAULT_SETTINGS = { projectsFolder: "Projects",
-  templatesFolder: "Projects/_templates" }`, y `normalizeVaultFolderPath(path, fallback): string`. La
+  templatesFolder: "Projects/_templates", credentialLockTimeoutMinutes: 15 }`, y
+  `normalizeVaultFolderPath(path, fallback): string`. La
   normalización RECHAZA rutas absolutas, letras de unidad y `..` ANTES de trim barras.
-- `src/ui/SettingsTab.ts` — `PluginSettingTab` con dos `TextComponent`, persiste vía
-  `plugin.saveData()`.
+  `mergePluginSettings(defaults, stored)` conserva el material clave de credenciales
+  (`credSaltB64` / `credVerifier`) al persistir: la pestaña de ajustes sólo edita las dos
+  carpetas + el timeout, y un merge ingenuo borraría la sal y el verificador del
+  `data.json` (bloqueando todas las credenciales). `data.json` guarda por tanto cinco
+  claves: `projectsFolder`, `templatesFolder`, `credentialLockTimeoutMinutes`,
+  `credSaltB64` (sal PBKDF2 en base64, una por vault) y `credVerifier` (testigo cifrado
+  de la maestra, `devhelper-ok`). Nunca edites `credSaltB64`/`credVerifier` a mano.
+- `src/ui/SettingsTab.ts` — `PluginSettingTab` con dos `TextComponent` de carpetas más un
+  campo numérico de timeout de bloqueo (`credentialLockTimeoutMinutes`, minutos),
+  persiste vía `plugin.saveData()` con `mergePluginSettings` para no perder
+  `credSaltB64`/`credVerifier`. No expone la sal ni el verificador.
 - `src/domain/types.ts` — interfaces puras: `ProjectRecord` (incluye `favorite: boolean`
-  que el frontmatter expone como chip visible en la fila de favoritos), `TaskRecord`,
-  `DashboardIssue`, `DashboardData`, `NoteSnapshot`, `ParsedNote`, `ResolveProjectFn`.
+  que el frontmatter expone como chip visible en la fila de favoritos, más `isGeneral?: boolean`
+  sólo `true` en el hub sombra `Projects/General/General.md`, excluido de chips/favoritos/picker
+  y de selección directa), `TaskRecord`,
+  `DashboardIssue`, `DashboardData`, `NoteSnapshot`, `ParsedNote`, `ResolveProjectFn`,
+  más `NoteRecord` (nota simple: sólo `project` + `created`, sin `status`), `CredentialEntry`
+  (`service` en claro; `user`/`password`/`url`/`notes` cifrados; claves extra libres),
+  `ParsedCredentialsNote` / `CredentialsRecord` (`projectPath` + `needsMigration` cuando
+  alguna entrada sigue en claro) y `FileRecord` (`path`, `name` con extensión, `extension`
+  sin punto en minúsculas, `projectPath` del hub propietario).
 - `src/domain/parseNote.ts` — `parseProjectTaskNote(note, resolveProject): ParsedNote`.
   Devuelve siempre un `ParsedNote` discriminado; **nunca lanza**. Errores → `kind: "issue"`.
-  Usa `js-yaml.load` y la portada `---` debe ser la PRIMERA línea.
+  Usa `js-yaml.load` y la portada `---` debe ser la PRIMERA línea. Acepta también
+  `type: note` (sólo `project` + `created`) y `type: credentials` (lista de entradas con
+  `service` obligatorio; `password` en claro o `enc:v1:…`, nunca mezcla corrupta que tumbe
+  el resto: las entradas malformadas van a `entryIssues` y las válidas se conservan).
+- `src/domain/credentialsCrypto.ts` — cifrado puro sin imports de Obsidian (WebCrypto,
+  funciona en Vitest/Node y en Electron). AES-GCM 256 + PBKDF2-SHA256 con 210 000
+  iteraciones. Formato de campo cifrado `enc:v1:<iv-b64>:<cipher-b64>` (IV fresco de 12 B
+  por cifrado; sal de 16 B, una por vault). `service` nunca se cifra (se usa para buscar);
+  `user`/`password`/`url`/`notes` sí. `VERIFIER_PLAINTEXT = "devhelper-ok"`: al fijar la
+  maestra se cifra y se guarda en `credVerifier`; desbloquear deriva la clave y la
+  comprueba contra el testigo (`"Contraseña incorrecta."` si no coincide, sin dejar clave).
+- `src/data/CredentialSession.ts` — clave maestra derivada **sólo en memoria** (`CryptoKey`,
+  nunca en disco). `unlock(password, saltB64, verifier)`, `lock()`, `touch()` (rearma el
+  temporizador), `setTimeoutMinutes(m)` y `msUntilLock()`. Auto-bloqueo por temporizador con
+  callback `onExpire` (la vista vuelve al estado bloqueado). Sin imports de Obsidian:
+  testeable con fake timers.
 - `src/domain/presentDashboard.ts` — `presentDashboard(data, selection)` con
   `DashboardSelection` discriminado (`{ kind: "all" }` o `{ kind: "project"; path }`).
   Orden determinista: proyectos por `title` asc case-insensitive con desempate `path`;
-  tareas por `status` (`open` antes que `done`) y luego título. Modo «all»: `selectedProject`
-  es `null`, `showAll` es `true` y se listan todas las tareas. Fallback: si la selección
+  tareas por `status` (`open` antes que `done`) y luego título; notas por título;
+  archivos por `name` case-insensitive con desempate `path`. Modo «all»: `selectedProject`
+  es `null`, `showAll` es `true` y se listan todas las tareas **y notas**. **Regla Archivos/
+  General:** en `showAll` sólo se muestran los `files` del proyecto sombra `General`
+  (`isGeneral: true`; sin General → lista vacía, nunca lanza); en modo proyecto, sólo los
+  del proyecto pedido (pedir General directo → fallback a «all»). Fallback: si la selección
   pide un proyecto inexistente o no hay proyectos, se cae a `{ kind: "all" }` para
-  garantizar que el panel nunca quede vacío.
+  garantizar que el panel nunca quede vacío. `resolveVisibleCredentialsRecord(data, selection)`:
+  en modo proyecto devuelve el `Credenciales.md` de ese proyecto (`null` si aún no existe —
+  crear la primera entrada materializa la nota); en «all» devuelve el de **General**
+  (credenciales compartidas/globales; `null` si no hay General y la vista pide elegir
+  proyecto). General se reconoce por basename de carpeta o título `general` case-insensitive.
 - `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
   sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
   del mes en español.
@@ -64,15 +107,27 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   cada nivel por separado (Obsidian sólo crea uno). `processFrontMatter` usa
   `app.fileManager.processFrontMatter`. `rename` devuelve ref del nuevo path.
 - `src/data/ProjectTaskRepository.ts` — escanea carpetas configuradas, llama al parser,
-  expone ocho mutaciones (`createProject`, `createTask`, `renameProject`, `renameTask`,
-  `reassignTask`, `setTaskStatus`, `setProjectFavorite`, `deleteTask`). `createProject(title)` devuelve
+  expone diecisiete mutaciones (proyectos/tareas/notas/archivos/credenciales/favoritos:
+  `createProject`, `createTask`, `renameProject`, `renameTask`,
+  `reassignTask`, `setTaskStatus`, `setProjectFavorite`, `deleteTask`, `createNote`,
+  `renameNote`, `deleteNote`, `createCredential`, `updateCredential`, `deleteCredential`,
+  `migratePlaintextCredentials`, `addFile`, `deleteFile`). `createProject(title)` devuelve
   **`Promise<string>`** con el *hub path* del proyecto recién creado (la carpeta
   `Projects/<slug>/` que la vista usa para promoverlo a favorito y seleccionarlo).
+  `migratePlaintextCredentials` devuelve **`Promise<number>`** (entradas migradas).
   El resto de mutaciones devuelven **`Promise<void>`**. `renameProject` actualiza la
   prop `project` de las tareas afectadas aunque Obsidian tenga auto-link-update
   desactivado (lee la nota raw, parsea con `js-yaml`, compara, y reescribe sólo esa
   prop con `processFrontMatter`). `setProjectFavorite(path, favorite)` opera sólo sobre
-  la prop `favorite` y nunca toca el cuerpo ni otras props.
+  la prop `favorite` y nunca toca el cuerpo ni otras props. Además: notas simples
+  (`createNote` / `renameNote` / `deleteNote`, esta última a la papelera como las tareas);
+  Archivos (el repositorio siembra el proyecto sombra `Projects/General/General.md` al
+  primer uso vía el método privado `ensureGeneralProject`; `addFile` copia un binario o texto del sistema a `<Proyecto>/Archivos/` con
+  desambiguación ` 2`, ` 3`, …; `deleteFile` a la papelera tras confirmación); y
+  credenciales sobre `Credenciales.md` por carpeta de proyecto (`createCredential` /
+  `updateCredential` / `deleteCredential` sólo con sesión desbloqueada, `service` en claro
+  y resto cifrado; `migratePlaintextCredentials` cifra de una vez las entradas heredadas en
+  claro y devuelve el conteo, ofrecida cuando `needsMigration` es `true`).
 - `src/ui/DashboardView.ts` — `ItemView`
   (`VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard"`).
   `selection: DashboardSelection` vive aquí (en memoria, nunca persistido), inicial
@@ -89,12 +144,22 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   y, si falla, lanza un `Notice` descriptivo como degradación elegante. El render
   se organiza en métodos `renderTopBar`, `renderProjectChips`, `renderTasksPanel`,
   `renderTaskCard`, `renderEmptyState`, `renderSideColumn` (rail + calendario),
-  `renderBottomSections` (Archivos + Contraseña) y `renderIssues`. El lápiz de
+  `renderBottomSections` (Archivos + Contraseña) y `renderIssues`, más panel de Notas
+  (tarjetas con filtro por título) y sección Archivos viva (filtro «Buscar archivos…»,
+  botón «Añadir archivo» que copia a `<Proyecto>/Archivos/`, botón ver-en-explorador
+  por archivo y papelera con confirmación). La sección Contraseña pide la maestra al
+  desbloquear (fijarla la primera vez crea sal + verificador en `data.json`); bloqueada
+  muestra sólo `service`; desbloqueada permite ver/copiar credenciales y CRUD completo,
+  con aviso de migración en un clic si hay entradas en claro. Las credenciales se
+  renderizan como tarjetas oscuras al estilo de las tareas. El lápiz de
   la tarjeta abre la nota; la papelera pide confirmación y manda la tarea a la
   papelera de Obsidian (`deleteTask`).
 - `src/ui/ProjectFormModal.ts`, `src/ui/TaskFormModal.ts` — `obsidian.Modal` con
   validación inline. `TaskFormModal` recibe `defaultProjectPath` y por defecto usa el
   proyecto seleccionado.
+- `src/ui/NoteFormModal.ts`, `src/ui/CredentialFormModal.ts` — modales de creación/edición
+  de notas simples y de entradas de credencial (esta última sólo opera con la sesión
+  desbloqueada y cifra `user`/`password`/`url`/`notes` antes de persistir).
 - `src/ui/ProjectPickerModal.ts` — `obsidian.FuzzySuggestModal` que la vista usa para
   añadir favoritos. Lista los proyectos **no favoritos** (la vista los pre-filtra) con
   una entrada sintética inicial «Crear proyecto nuevo…» y devuelve
@@ -110,25 +175,34 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   controles a la derecha; el selector `<select>` antiguo, el menú `···` del chip y el
   círculo de estado junto al título de la tarea han sido retirados. Los chips de
   favoritos conservan `is-selected` claro; las tarjetas de tarea muestran un *badge*
-  con el nombre del proyecto (visible en modo «Todos»); FABs circulares; placeholder
-  sections inertes. Breakpoints: `@media (max-width: 640px)` → una columna, oculta
+  con el nombre del proyecto (visible en modo «Todos»); FABs circulares; las credenciales
+  reutilizan el estilo de tarjeta oscura de las tareas. Breakpoints: `@media (max-width: 640px)` → una columna, oculta
   el rail; `@media (max-width: 320px)` → controles y acciones apilados sin recorte.
 
-## Tests (`tests/`)
+## Tests (`tests/`) — 163 en total, todos en verde
 
-- `tests/settings.test.ts` — 10 tests.
-- `tests/parseNote.test.ts` — 29 tests con casos específicos por modo de error y la
-  nueva prop `favorite` que el parser preserva en `ProjectRecord.properties`.
-- `tests/presentDashboard.test.ts` — 7 tests sobre orden determinista, modo «all»,
-  filtro por proyecto y fallback automático a «all» cuando el proyecto desaparece.
+- `tests/settings.test.ts` — 14 tests (normalización de carpetas + preservación del
+  material clave `credSaltB64`/`credVerifier` en `mergePluginSettings`).
+- `tests/parseNote.test.ts` — 39 tests con casos específicos por modo de error, la
+  prop `favorite`, notas simples `type: note` y credenciales `type: credentials`
+  (entradas válidas + `entryIssues` sin tumbar el resto).
+- `tests/presentDashboard.test.ts` — 20 tests sobre orden determinista, modo «all»,
+  filtro por proyecto y fallback automático a «all» cuando el proyecto desaparece,
+  más acotación de `tasks`/`notes`/`files` por selección y regla Archivos→General.
 - `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
-- `tests/templates.test.ts` — 8 tests; cubre validación y aplicación de plantillas.
-- `tests/ProjectTaskRepository.test.ts` — 36 tests con un `VaultAdapter` falso en
+- `tests/templates.test.ts` — 10 tests; cubre validación y aplicación de plantillas.
+- `tests/credentialsCrypto.test.ts` — 8 tests (formato `enc:v1`, round-trip AES-GCM,
+  verificador, errores en español ante blob corrupto o clave errónea).
+- `tests/CredentialSession.test.ts` — 8 tests (unlock/lock, timeout con fake timers,
+  `touch`, `onExpire`, contraseña incorrecta sin dejar clave).
+- `tests/ProjectTaskRepository.test.ts` — 60 tests con un `VaultAdapter` falso en
   memoria. Cubre sanitize, disambiguate, propiedades y cuerpo preservados, renombrado
   que actualiza tareas, edición manual round-tripped, `setProjectFavorite` aislado,
   `createProject` devolviendo el hub path y promoción automática del recién creado,
-  más `deleteTask` a la papelera (desaparece del siguiente `load`, error si no existe).
+  `deleteTask` a la papelera (desaparece del siguiente `load`, error si no existe),
+  más notas simples, siembra de General, `addFile`/`deleteFile`, CRUD de credenciales
+  y `migratePlaintextCredentials`.
 
 Los tests **no usan mocks** — usan un `VaultAdapter` en memoria que simula
 determinísticamente los métodos del API.
@@ -142,12 +216,27 @@ determinísticamente los métodos del API.
 - **Sanitización de nombres de archivo** (en `ProjectTaskRepository`):
   `\ / : * ? " < > |` y `#` → `-`; colapsar `-` repetidos; trim `.`/espacios al borde;
   vacío → `"Untitled"`. En caso de colisión, sufija ` 2`, ` 3`, … antes de `.md`.
-- **Borrado sólo de tareas y a la papelera.** `deleteTask(path)` manda la nota a la
-  papelera de Obsidian (recuperable, nunca borrado permanente) tras confirmación
-  explícita (`ConfirmDeleteModal`). No hay borrado de proyectos ni de carpetas.
-  La papelera de una tarjeta pide confirmación; no hay borrado silencioso.
+- **Borrado sólo a la papelera, con confirmación.** `deleteTask` / `deleteNote` /
+  `deleteFile` mandan a la papelera de Obsidian (recuperable, nunca
+  borrado permanente) tras confirmación explícita (`ConfirmDeleteModal`).
+  `deleteCredential` elimina la entrada de la nota `Credenciales.md` (también con
+  confirmación). No hay borrado de proyectos ni de carpetas. No hay borrado silencioso.
 - **Las notas Markdown son la única fuente de verdad.** No crees un store paralelo en
-  la config del plugin; `data.json` sólo guarda las dos carpetas configurables.
+  la config del plugin; `data.json` sólo guarda las dos carpetas configurables, el timeout
+  de bloqueo y el material clave (`credSaltB64`, `credVerifier`). La sal y el verificador
+  los gestiona el propio plugin al fijar/desbloquear la maestra; nunca los edites a mano
+  ni los expongas en la UI.
+- **Regla Archivos/General.** El proyecto sombra `Projects/General/General.md` se siembra
+  automáticamente y nunca aparece en chips, favoritos, picker ni como selección directa.
+  En modo «Todos» la sección Archivos muestra sólo los ficheros de General; en modo
+  proyecto, sólo los de ese proyecto (`<Proyecto>/Archivos/`). Los binarios viven en el
+  vault y se copian con `addFile` (con desambiguación); nunca se leen como notas.
+- **Credenciales cifradas.** `service` en claro (es la clave de búsqueda); `user`,
+  `password`, `url` y `notes` siempre cifrados (`enc:v1:…`) antes de persistir. La clave
+  derivada vive sólo en `CredentialSession` en memoria, con auto-bloqueo por timeout
+  configurable. Sin sesión desbloqueada no hay lectura ni escritura de secretos: la vista
+  muestra sólo `service`. Las entradas heredadas en claro se marcan con `needsMigration`
+  y se migran en un clic (`migratePlaintextCredentials`).
 - **Las propiedades del usuario y el cuerpo se preservan al editar.** Es un requisito
   del spec, no una nice-to-have.
 - **Todo el texto UI es en español** (panel, modales, issues, mensajes de error).
@@ -156,7 +245,7 @@ determinísticamente los métodos del API.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 92/92 verde
+npm test            # 163/163 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
@@ -191,8 +280,8 @@ Para verificar manualmente:
 2. Activar el plugin **DevHelper Dashboard** en Settings → Community plugins.
 3. Ejecutar el comando **Abrir el dashboard de proyectos y tareas** (o pulsar el
    icono de ribbon `layout-dashboard`).
-4. El plugin creará automáticamente las carpetas `Projects/` y `Tasks/` al primer
-   uso, según el spec.
+4. El plugin siembra automáticamente el proyecto sombra `Projects/General/` al primer
+   uso (Archivos globales y credenciales compartidas viven ahí).
 
 Limpieza: borrar la carpeta `D:\proyects\devhelper-test-vault\` cuando ya no haga
 falta; no se commitea al repo.
@@ -209,6 +298,16 @@ falta; no se commitea al repo.
   `docs/superpowers/specs/2026-10-17-project-favorites-selector-design.md`
 - Plan V3 ejecutado:
   `docs/superpowers/plans/2026-10-17-project-favorites-selector.md`
+- Spec Archivos + proyecto sombra General:
+  `docs/superpowers/specs/2026-10-18-archivos-y-proyecto-general-design.md`
+- Plan Archivos + General ejecutado:
+  `docs/superpowers/plans/2026-10-18-archivos-y-proyecto-general.md`
+- Spec credenciales cifradas con maestra global:
+  `docs/superpowers/specs/2026-10-18-encrypted-credentials-design.md`
+- Plan credenciales ejecutado:
+  `docs/superpowers/plans/2026-10-18-encrypted-credentials.md`
+- Plan unificación main + Archivos + credenciales (Task 6, este cierre):
+  `docs/superpowers/plans/2026-10-18-unify-main-archivos-credentials.md`
 
 Si recibes un plan nuevo en el mismo formato, emplea `superpowers:subagent-driven-development`
 (o `superpowers:executing-plans` si no hay subagentes disponibles) para entregarlo
