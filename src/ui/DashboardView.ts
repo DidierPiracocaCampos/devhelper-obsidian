@@ -1189,7 +1189,42 @@ export class DashboardView extends ItemView {
       return;
     }
 
-    if (!this.credentialsDeps.session.isUnlocked()) {
+    // Cabecera unificada con el resto de paneles (Tareas/Archivos):
+    // [+] para añadir + candado para bloquear/desbloquear.
+    const isLocked = !this.credentialsDeps.session.isUnlocked();
+    const fabs = header.createEl("div", { cls: "devhelper-panel-fabs" });
+    const addBtn = fabs.createEl("button", {
+      cls: "devhelper-fab",
+      attr: {
+        "aria-label": "Añadir contraseña",
+        title: isLocked ? "Desbloquea para añadir" : "Añadir contraseña",
+        type: "button",
+      },
+    });
+    setIcon(addBtn, "plus");
+    if (isLocked) {
+      addBtn.disabled = true;
+    } else {
+      addBtn.addEventListener("click", () =>
+        this.openCreateCredential(visible.projectPath),
+      );
+    }
+    const lockBtn = fabs.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: {
+        "aria-label": isLocked ? "Desbloquear" : "Bloquear",
+        title: isLocked ? "Desbloquear" : "Bloquear",
+        type: "button",
+      },
+    });
+    setIcon(lockBtn, "lock");
+    if (isLocked) {
+      lockBtn.addEventListener("click", () => this.openUnlockMasterPassword());
+    } else {
+      lockBtn.addEventListener("click", () => this.lockCredentials());
+    }
+
+    if (isLocked) {
       this.renderLockedCredentials(section, visible);
       return;
     }
@@ -1230,11 +1265,6 @@ export class DashboardView extends ItemView {
     const actions = section.createEl("div", {
       cls: "devhelper-form-actions",
     });
-    const unlockBtn = actions.createEl("button", {
-      cls: "devhelper-button",
-      text: "Desbloquear",
-    });
-    unlockBtn.addEventListener("click", () => this.openUnlockMasterPassword());
     const forgotBtn = actions.createEl("button", {
       cls: "devhelper-link-button",
       text: "Olvidé mi contraseña",
@@ -1257,11 +1287,6 @@ export class DashboardView extends ItemView {
     status.createEl("span", {
       text: `Desbloqueado · se bloquea en ${mins <= 1 ? "menos de un minuto" : `~${mins} min`}`,
     });
-    const lockBtn = status.createEl("button", {
-      cls: "devhelper-button",
-      text: "Bloquear ahora",
-    });
-    lockBtn.addEventListener("click", () => this.lockCredentials());
 
     const record = visible.record;
     if (record?.needsMigration) {
@@ -1308,19 +1333,6 @@ export class DashboardView extends ItemView {
         );
       });
     }
-
-    const addBtn = section.createEl("button", {
-      cls: "devhelper-fab",
-      attr: {
-        "aria-label": "Añadir contraseña",
-        title: "Añadir contraseña",
-        type: "button",
-      },
-    });
-    setIcon(addBtn, "plus");
-    addBtn.addEventListener("click", () =>
-      this.openCreateCredential(visible.projectPath),
-    );
   }
 
   /**
