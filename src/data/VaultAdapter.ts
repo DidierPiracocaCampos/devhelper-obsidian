@@ -106,4 +106,11 @@ export interface VaultAdapter {
    * reflect the new layout.
    */
   renameFolder(folderPath: string, newPath: string): Promise<void>;
+
+  /**
+   * Move a note to the trash (recoverable — never a permanent
+   * delete). The repository exposes this as `deleteTask`; there is
+   * deliberately no project equivalent.
+   */
+  trash(note: VaultNoteRef): Promise<void>;
 }

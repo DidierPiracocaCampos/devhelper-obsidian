@@ -53,8 +53,11 @@
      because Obsidian's chrome (tab bar / view header) already supplies
      top spacing of its own. */
   padding: 4px 16px 12px;
-  color: var(--text-normal);
-  background: var(--background-primary);
+  /* Fixed image palette: near-black canvas with light text, scoped to
+     the dashboard so Obsidian's own theme stays untouched. */
+  color: #fafafa;
+  background: #0e0e10;
+  background-color: #0e0e10;
 }
 
 /* --- Top bar -------------------------------------------------------------- */
@@ -93,63 +96,78 @@
   gap: 4px;
 }
 
-.devhelper-chip {
+/* NOTE: los selectores repiten el padre (0,2,0) a propósito — la regla
+   propia de Obsidian `button:not(.clickable-icon)` (0,1,1) pinta cada
+   botón con `background-color: var(--interactive-normal)` +
+   `var(--input-shadow)` y ganaría a una sola clase. */
+.devhelper-chip-list .devhelper-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   border-radius: 999px;
   padding: 4px 14px;
   height: 28px;
-  background: var(--background-primary-alt);
-  border: 1px solid var(--background-modifier-border);
-  color: var(--text-normal);
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  box-shadow: none;
+  border: 1px solid #2b2b30;
+  color: #fafafa;
   cursor: pointer;
 }
 
-.devhelper-chip.is-selected {
-  /* Selected = the surface that contrasts with the surrounding chips.
-     Whatever colour `--background-primary` resolves to in the user's
-     Obsidian theme (white in light mode, near-black in dark mode),
-     the selected chip inverts against the canvas. We pair it with
-     `var(--text-on-accent)` for the foreground so the chip's title
-     is always legible against its own fill - this is the standard
-     Obsidian token for "text drawn on top of the accent/primary
-     surface". */
-  background: var(--background-primary);
-  color: var(--text-on-accent);
-  border-color: var(--background-modifier-border);
+/* Hover = lighter dark pill. */
+.devhelper-chip-list .devhelper-chip:hover {
+  background: #2b2b30;
+  background-color: #2b2b30;
+  color: #ffffff;
+}
+
+.devhelper-chip-list .devhelper-chip.is-selected,
+.devhelper-chip-list .devhelper-chip.is-selected:hover {
+  /* Seleccionado = pastilla clara con texto oscuro, como en la imagen. */
+  background: #fafafa;
+  background-color: #fafafa;
+  color: #111114;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .devhelper-chip.is-placeholder {
   cursor: default;
-  color: var(--text-muted);
+  color: #a1a1aa;
 }
 
 /* The "+" glyph that opens the favorite picker. It is a bare icon
-   with no chrome at all: no background, no border, no padding, no
-   border-radius. The mark sits flush in the favorites row and the
-   button only becomes visible on hover (a faint circle appears as
-   the affordance). */
-.devhelper-chip-add {
+   with no chrome at all: no background, no border, no shadow, no
+   border-radius. The mark sits flush in the favorites row.
+   NOTE: the selector repeats the parent (0,2,0) on purpose — Obsidian's
+   own `button:not(.clickable-icon)` (0,1,1) paints every button with
+   `background-color: var(--interactive-normal)` + `var(--input-shadow)`,
+   which beats a single class and is what drew the unwanted circle. */
+.devhelper-chip-list .devhelper-chip-add {
   width: 28px;
   height: 28px;
   padding: 0;
   background: transparent;
+  background-color: transparent;
   border: none;
+  box-shadow: none;
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-radius: 50%;
+  border-radius: 0;
 }
 
-.devhelper-chip-add:hover {
+.devhelper-chip-list .devhelper-chip-add:hover {
   color: var(--text-normal);
-  background: var(--background-primary-alt);
+  background: transparent;
+  background-color: transparent;
+  box-shadow: none;
 }
 
-.devhelper-chip-add svg {
+.devhelper-chip-list .devhelper-chip-add svg {
   width: 16px;
   height: 16px;
 }
@@ -170,8 +188,8 @@
 }
 
 .devhelper-fab {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -184,43 +202,86 @@
 }
 
 /* --- Search (decorative) -------------------------------------------------- */
-/* Task 5/UX: input + hint are siblings inside `.devhelper-search-wrap`.
-   The wrap is a plain flex row; the hint is just another inline pill
-   that sits to the right of the field instead of being absolutely
-   placed on top of it. This keeps the placeholder text fully visible. */
+/* El buscador es una caja con aspecto de botón: el wrap dibuja el fondo,
+   el borde y el radio, y el hint `Ctrl+K` vive DENTRO anclado a la derecha
+   con posicionamiento absoluto. El input es transparente y reserva
+   `padding-right` para que el placeholder nunca quede debajo del hint. */
 .devhelper-search-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  width: 260px;
+  height: 30px;
   margin-left: auto;
+  background: #1b1b1e;
+  border: 1px solid #2b2b30;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-.devhelper-search {
-  width: 200px;
-  padding: 4px 8px;
-  background: var(--background-primary-alt);
-  color: var(--text-muted);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
+.devhelper-search-wrap .devhelper-search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: 10px;
+  color: #fafafa;
+  pointer-events: none;
+}
+
+.devhelper-search-wrap .devhelper-search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* NOTE: selector con padre (0,2,0) a propósito — la regla propia de
+   Obsidian `input[type='search']` (0,1,1) pinta fondo y borde en todos los
+   inputs y ganaría a una sola clase. */
+.devhelper-search-wrap .devhelper-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 4px 72px 4px 6px;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  color: #fafafa;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.devhelper-search-wrap .devhelper-search::placeholder {
+  color: #a1a1aa;
+  opacity: 1;
 }
 
 .devhelper-search-hint {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   font-family: var(--font-monospace);
   font-size: 0.75em;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--background-primary-alt);
-  border: 1px solid var(--background-modifier-border);
-  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid #3f3f46;
+  color: #a1a1aa;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 /* --- Main panels ---------------------------------------------------------- */
 .devhelper-main,
 .devhelper-tasks-panel {
   padding: 12px 16px;
-  border-radius: 8px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
+  border-radius: 16px;
+  /* Image palette: light gray panel on the near-black canvas. */
+  background: #efeff1;
+  background-color: #efeff1;
+  border: 1px solid #efeff1;
+  color: #111114;
 }
 
 .devhelper-main {
@@ -261,6 +322,24 @@
   align-items: flex-end;
 }
 
+/* Tasks panel header: fixed «Tareas» title left, filter + add inline
+   right on the SAME row. Scoped so the bottom placeholders keep their
+   vertical stack. */
+.devhelper-tasks-panel-header .devhelper-panel-fabs {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Active filter funnel: inverted (light pill, dark glyph) so the
+   toggle reads clearly against the black idle button. */
+.devhelper-tasks-panel-header .devhelper-icon-button.is-active {
+  background: #fafafa;
+  background-color: #fafafa;
+  border-color: #fafafa;
+  color: #111114;
+}
+
 .devhelper-project-header {
   display: flex;
   flex-wrap: wrap;
@@ -270,12 +349,27 @@
 
 .devhelper-project-header h3 {
   margin: 0;
-  color: var(--text-normal);
+  color: #111114;
 }
 
 .devhelper-project-path {
-  color: var(--text-muted);
+  color: #63636b;
   font-size: 0.85em;
+}
+
+/* Header buttons on the light panel: dark glyphs like the image. */
+.devhelper-tasks-panel-header .devhelper-icon-button {
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border-color: #1b1b1e;
+  color: #fafafa;
+}
+
+.devhelper-tasks-panel-header .devhelper-fab {
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border-color: #1b1b1e;
+  color: #fafafa;
 }
 
 .devhelper-empty {
@@ -290,7 +384,53 @@
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+
+/* Second header row inside the tasks panel: status chips left, search
+   right. Wraps to its own full-width row below the title + buttons. */
+.devhelper-task-filters {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Status filter as a native select: dark surface on the light panel. */
+.devhelper-task-filters .devhelper-task-status-select {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 4px 28px 4px 10px;
+  border-radius: 8px;
+  background-color: #1b1b1e;
+  border: 1px solid #2b2b30;
+  color: #fafafa;
+  font-size: 0.85em;
+  outline: none;
+  box-shadow: none;
+  cursor: pointer;
+  appearance: auto;
+}
+
+/* NOTE: parent repeated (0,2,0) on purpose — beats Obsidian's
+   `input[type='search']` (0,1,1). */
+.devhelper-task-filters .devhelper-task-search {
+  flex: 1 1 160px;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border: 1px solid #2b2b30;
+  color: #fafafa;
+  outline: none;
+  box-shadow: none;
+}
+
+.devhelper-task-filters .devhelper-task-search::placeholder {
+  color: #a1a1aa;
 }
 
 /* Force the list onto its own row inside the row-wrapped tasks panel. */
@@ -299,56 +439,103 @@
 }
 
 .devhelper-task-empty {
-  color: var(--text-muted);
+  color: #63636b;
   font-style: italic;
   padding: 8px 0;
 }
 
 .devhelper-task-card {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  /* Image palette: near-black card on the light panel. */
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border: 1px solid #2b2b30;
+  color: #fafafa;
+}
+
+/* Left stack inside the horizontal card: title row + subtitle. */
+.devhelper-task-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--background-primary-alt);
-  border: 1px solid var(--background-modifier-border);
-  color: var(--text-normal);
+  gap: 2px;
+}
+
+.devhelper-task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .devhelper-task-card.is-done .devhelper-task-title {
   text-decoration: line-through;
-  color: var(--text-muted);
+  color: #a1a1aa;
 }
 
 .devhelper-task-title {
   margin: 0;
   font-size: 1em;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ffffff;
 }
 
 /* Small pill rendered next to a task title in the "Todas las tareas"
    view, showing which project the task belongs to. Matches the muted
    tone of the task subtitle so it doesn't compete with the title. */
 .devhelper-task-project-badge {
-  display: inline-block;
-  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
   font-size: 0.75em;
-  color: var(--text-muted);
-  background: var(--background-primary-alt);
+  color: #d4d4d8;
+  background: transparent;
+  border: 1px solid #3f3f46;
   border-radius: 999px;
   padding: 1px 8px;
+  white-space: nowrap;
 }
 
 .devhelper-task-subtitle {
   margin: 0;
-  color: var(--text-muted);
+  color: #a1a1aa;
   font-size: 0.85em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .devhelper-task-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+/* White glyphs without chrome on the dark card, like the image. */
+.devhelper-task-actions .devhelper-icon-button {
+  background: transparent;
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #fafafa;
+}
+
+.devhelper-task-actions .devhelper-icon-button:hover {
+  color: #ffffff;
+  background: #2b2b30;
+  background-color: #2b2b30;
 }
 
 /* Slightly smaller round buttons than the 32px default, scoped to the
@@ -363,18 +550,30 @@
   height: 18px;
   padding: 0;
   border-radius: 50%;
-  border: 2px solid var(--text-muted);
+  border: 2px solid #71717a;
   background: transparent;
+  background-color: transparent;
   cursor: pointer;
 }
 
 .devhelper-status-circle--open {
   background: transparent;
+  background-color: transparent;
+  border-color: #71717a;
 }
 
 .devhelper-status-circle--done {
   background: #22c55e;
+  background-color: #22c55e;
   border-color: #22c55e;
+}
+
+/* Open task flagged as attention (frontmatter `priority: high` or
+   `attention: true`): red hollow ring like the last card in the ref. */
+.devhelper-status-circle--attention {
+  background: transparent;
+  background-color: transparent;
+  border-color: #ef4444;
 }
 
 .devhelper-task-actions button[disabled] {
@@ -389,14 +588,16 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px 16px;
-  border-radius: 8px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
+  border-radius: 16px;
+  background: #efeff1;
+  background-color: #efeff1;
+  border: 1px solid #efeff1;
+  color: #111114;
 }
 
 .devhelper-issues h3 {
   margin: 0;
-  color: var(--text-normal);
+  color: #111114;
 }
 
 .devhelper-issue-list {
@@ -439,6 +640,13 @@
   padding: 12px;
 }
 
+.devhelper-icon-rail .devhelper-icon-button {
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border-color: #2b2b30;
+  color: #fafafa;
+}
+
 .devhelper-calendar {
   display: flex;
   flex-direction: column;
@@ -446,19 +654,30 @@
   min-width: 0;
   padding: 12px;
   border-radius: 16px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
+  /* Image palette: white card on the dark canvas. */
+  background: #f4f4f5;
+  background-color: #f4f4f5;
+  border: 1px solid #f4f4f5;
+  color: #111114;
 }
 
 .devhelper-calendar-header {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: #111114;
 }
 
 /* Push the trailing `+` control to the right edge of the header. */
 .devhelper-calendar-header .devhelper-icon-button:last-child {
   margin-left: auto;
+}
+
+.devhelper-calendar-header .devhelper-icon-button {
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border-color: #1b1b1e;
+  color: #fafafa;
 }
 
 .devhelper-calendar-weekdays {
@@ -474,8 +693,8 @@
   text-align: center;
   font-size: 0.7em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  background: var(--background-primary-alt);
+  color: #63636b;
+  background: #e4e4e7;
   border-radius: 6px;
 }
 
@@ -494,14 +713,19 @@
   justify-content: center;
   border-radius: 50%;
   font-size: 0.85em;
-  color: var(--text-normal);
+  color: #111114;
 }
 
 .devhelper-calendar-day.is-today {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
+  background: #18181b;
+  background-color: #18181b;
+  color: #fafafa;
   border-radius: 50%;
   font-weight: 600;
+}
+
+.devhelper-calendar .devhelper-placeholder-empty {
+  color: #8e8e96;
 }
 
 /* --- Bottom row (Archivos + Contraseña) ----------------------------------- */
@@ -517,14 +741,28 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px 16px;
-  border-radius: 8px;
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
+  border-radius: 16px;
+  background: #efeff1;
+  background-color: #efeff1;
+  border: 1px solid #efeff1;
+  color: #111114;
 }
 
 .devhelper-section h3 {
   margin: 0;
-  color: var(--text-normal);
+  color: #111114;
+}
+
+.devhelper-section .devhelper-placeholder-empty {
+  color: #63636b;
+}
+
+.devhelper-section .devhelper-icon-button,
+.devhelper-section .devhelper-fab {
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border-color: #1b1b1e;
+  color: #fafafa;
 }
 
 .devhelper-placeholder-empty {
@@ -583,27 +821,39 @@
 }
 
 @media (max-width: 320px) {
-  /* Keep the existing column stretch behaviour, but make sure the new
-     icon-only buttons don't get elongated to full panel width. */
-  .devhelper-task-actions {
+  /* Horizontal card collapses to a vertical stack so the title and
+     the actions never get clipped. */
+  .devhelper-task-card {
     flex-direction: column;
     align-items: stretch;
+  }
+  .devhelper-task-actions {
+    flex-direction: row;
+    align-items: center;
   }
   .devhelper-task-actions button {
     /* Allow the 28x28 icon buttons to keep their size rather than
        stretching to panel width. */
     align-self: flex-start;
   }
+  .devhelper-task-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .devhelper-task-filters .devhelper-task-search {
+    flex-basis: auto;
+    width: 100%;
+  }
   .devhelper-topbar-controls {
     width: 100%;
     margin-left: 0;
   }
-  .devhelper-search {
+  .devhelper-search-wrap {
     width: 100%;
-    min-width: 0;
   }
-  .devhelper-search-hint {
-    width: 100%;
+  .devhelper-search-wrap .devhelper-search {
+    width: auto;
+    min-width: 0;
   }
   .devhelper-task-list {
     width: 100%;

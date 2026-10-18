@@ -148,6 +148,13 @@ export class ObsidianVaultAdapter implements VaultAdapter {
     await this.app.fileManager.renameFile(folder, newPath);
   }
 
+  async trash(note: VaultNoteRef): Promise<void> {
+    const file = this.requireFile(note);
+    // `system: false` moves the note to Obsidian's own trash, so the
+    // delete stays recoverable instead of destroying the file.
+    await this.app.vault.trash(file, false);
+  }
+
   /**
    * Look up the abstract file by path and assert it is a `TFile`. The
    * adapter works exclusively with regular Markdown files; any other

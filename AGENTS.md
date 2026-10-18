@@ -23,6 +23,7 @@ npm run build            # bundle de producción a main.js (minificado)
 npm run typecheck        # tsc --noEmit
 npm test                 # vitest run (suite completa)
 npm test -- tests/<f>    # suite individual
+npm run update:test-vault # build + copia main.js/manifest.json/styles.css al vault de prueba y recarga el plugin
 ```
 
 Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comprometer.
@@ -55,15 +56,16 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 - `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
   sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
   del mes en español.
-- `src/data/VaultAdapter.ts` — interface pura (`VaultNoteRef`, 10 métodos:
+- `src/data/VaultAdapter.ts` — interface pura (`VaultNoteRef`, 11 métodos:
   `listMarkdownFiles`, `read`, `createFolder`, `createMarkdown`, `rename`,
-  `processFrontMatter`, `resolveLink`, `listSubfolders`, `exists`, `renameFolder`).
+  `processFrontMatter`, `resolveLink`, `listSubfolders`, `exists`, `renameFolder`,
+  `trash`).
 - `src/data/ObsidianVaultAdapter.ts` — única con `import "obsidian"`. `createFolder` crea
   cada nivel por separado (Obsidian sólo crea uno). `processFrontMatter` usa
   `app.fileManager.processFrontMatter`. `rename` devuelve ref del nuevo path.
 - `src/data/ProjectTaskRepository.ts` — escanea carpetas configuradas, llama al parser,
-  expone siete mutaciones (`createProject`, `createTask`, `renameProject`, `renameTask`,
-  `reassignTask`, `setTaskStatus`, `setProjectFavorite`). `createProject(title)` devuelve
+  expone ocho mutaciones (`createProject`, `createTask`, `renameProject`, `renameTask`,
+  `reassignTask`, `setTaskStatus`, `setProjectFavorite`, `deleteTask`). `createProject(title)` devuelve
   **`Promise<string>`** con el *hub path* del proyecto recién creado (la carpeta
   `Projects/<slug>/` que la vista usa para promoverlo a favorito y seleccionarlo).
   El resto de mutaciones devuelven **`Promise<void>`**. `renameProject` actualiza la
@@ -87,8 +89,9 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   y, si falla, lanza un `Notice` descriptivo como degradación elegante. El render
   se organiza en métodos `renderTopBar`, `renderProjectChips`, `renderTasksPanel`,
   `renderTaskCard`, `renderEmptyState`, `renderSideColumn` (rail + calendario),
-  `renderBottomSections` (Archivos + Contraseña) y `renderIssues`. Sin acciones
-  de borrado: la papelera está deshabilitada y es decorativa.
+  `renderBottomSections` (Archivos + Contraseña) y `renderIssues`. El lápiz de
+  la tarjeta abre la nota; la papelera pide confirmación y manda la tarea a la
+  papelera de Obsidian (`deleteTask`).
 - `src/ui/ProjectFormModal.ts`, `src/ui/TaskFormModal.ts` — `obsidian.Modal` con
   validación inline. `TaskFormModal` recibe `defaultProjectPath` y por defecto usa el
   proyecto seleccionado.
@@ -121,10 +124,11 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 - `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
 - `tests/templates.test.ts` — 8 tests; cubre validación y aplicación de plantillas.
-- `tests/ProjectTaskRepository.test.ts` — 34 tests con un `VaultAdapter` falso en
+- `tests/ProjectTaskRepository.test.ts` — 36 tests con un `VaultAdapter` falso en
   memoria. Cubre sanitize, disambiguate, propiedades y cuerpo preservados, renombrado
   que actualiza tareas, edición manual round-tripped, `setProjectFavorite` aislado,
-  `createProject` devolviendo el hub path y promoción automática del recién creado.
+  `createProject` devolviendo el hub path y promoción automática del recién creado,
+  más `deleteTask` a la papelera (desaparece del siguiente `load`, error si no existe).
 
 Los tests **no usan mocks** — usan un `VaultAdapter` en memoria que simula
 determinísticamente los métodos del API.
@@ -138,11 +142,10 @@ determinísticamente los métodos del API.
 - **Sanitización de nombres de archivo** (en `ProjectTaskRepository`):
   `\ / : * ? " < > |` y `#` → `-`; colapsar `-` repetidos; trim `.`/espacios al borde;
   vacío → `"Untitled"`. En caso de colisión, sufija ` 2`, ` 3`, … antes de `.md`.
-- **Borrado es placeholder.** No se crean métodos `delete*` ni confirmaciones de
-  borrado. Los iconos de papelera que aparezcan en la UI son puramente decorativos
-  y van deshabilitados; la papelera sigue activa sólo en el roadmap futuro. Hoy la
-  única forma de retirar una nota es a través de las utilidades estándar del vault
-  (file explorer, ribbon de notas, etc.).
+- **Borrado sólo de tareas y a la papelera.** `deleteTask(path)` manda la nota a la
+  papelera de Obsidian (recuperable, nunca borrado permanente) tras confirmación
+  explícita (`ConfirmDeleteModal`). No hay borrado de proyectos ni de carpetas.
+  La papelera de una tarjeta pide confirmación; no hay borrado silencioso.
 - **Las notas Markdown son la única fuente de verdad.** No crees un store paralelo en
   la config del plugin; `data.json` sólo guarda las dos carpetas configurables.
 - **Las propiedades del usuario y el cuerpo se preservan al editar.** Es un requisito
@@ -177,7 +180,10 @@ estos archivos en `files`.
 ## Vault de prueba
 
 `D:\proyects\devhelper-test-vault\` está creado y tiene el plugin ya copiado en
-`.obsidian/plugins/devhelper-dashboard/`. Para verificar manualmente:
+`.obsidian/plugins/devhelper-dashboard/`. Para actualizarlo tras un cambio
+usa `npm run update:test-vault` (hace build + copia `main.js`,
+`manifest.json` y `styles.css` al vault e intenta recargar el plugin).
+Para verificar manualmente:
 
 1. Abrir Obsidian apuntando a ese vault
    (`obsidian://open?path=D:\proyects\devhelper-test-vault` o desde el selector de

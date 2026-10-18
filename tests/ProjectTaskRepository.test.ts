@@ -195,6 +195,13 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
         folders.add(current);
       }
     },
+
+    async trash(note: VaultNoteRef): Promise<void> {
+      if (!files.has(note.path)) {
+        throw new Error(`Fake vault: cannot trash missing file: ${note.path}`);
+      }
+      files.delete(note.path);
+    },
   };
 
   return { files, folders, ...adapter };
@@ -1355,6 +1362,36 @@ describe("ProjectTaskRepository", () => {
       expect(updated).toMatch(/owner: alice/);
       expect(updated).toMatch(/project: "\[\[Projects\/A\/A\]\]"/);
       expect(updated).toMatch(/Body here\./);
+    });
+  });
+
+  describe("deleteTask", () => {
+    it("trashes the note so it disappears from the next load", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      seedFile(
+        fake,
+        "Projects/A/Tareas/Alpha.md",
+        taskNote("Projects/A/A"),
+      );
+      seedFile(fake, "Projects/A/Tareas/Beta.md", taskNote("Projects/A/A"));
+
+      const repo = makeRepo(fake);
+      await repo.deleteTask("Projects/A/Tareas/Alpha.md");
+
+      expect(fake.files.has("Projects/A/Tareas/Alpha.md")).toBe(false);
+      const data = await repo.load();
+      expect(data.tasks.map((t) => t.path)).toEqual([
+        "Projects/A/Tareas/Beta.md",
+      ]);
+    });
+
+    it("throws when the note does not exist", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+
+      const repo = makeRepo(fake);
+      await expect(repo.deleteTask("Projects/A/Tareas/Ghost.md")).rejects.toThrow();
     });
   });
 

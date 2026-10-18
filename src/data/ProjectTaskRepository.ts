@@ -521,6 +521,15 @@ export class ProjectTaskRepository {
     });
   }
 
+  /**
+   * Move a task note to the trash. There is deliberately no project
+   * equivalent: removing a project folder is out of scope.
+   */
+  async deleteTask(path: string): Promise<void> {
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.trash(ref);
+  }
+
   async setProjectFavorite(path: string, favorite: boolean): Promise<void> {
     const ref = { path, basename: basenameOf(path) };
     await this.adapter.processFrontMatter(ref, (frontmatter) => {

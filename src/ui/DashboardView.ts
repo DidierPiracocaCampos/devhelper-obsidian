@@ -15,7 +15,9 @@ import { getWeekStrip } from "../domain/weekStrip";
 import type { ProjectTaskRepository } from "../data/ProjectTaskRepository";
 import { ProjectFormModal } from "./ProjectFormModal";
 import { ProjectPickerModal } from "./ProjectPickerModal";
+import { VaultSearchModal } from "./VaultSearchModal";
 import { TaskFormModal } from "./TaskFormModal";
+import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 
 export const VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard";
 
@@ -43,6 +45,9 @@ export class DashboardView extends ItemView {
   private readonly settings: PluginSettings;
 
   private selection: DashboardSelection = { kind: "all" };
+  private showTaskFilters = false;
+  private taskStatusFilter: "all" | "open" | "done" = "all";
+  private taskQuery = "";
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -169,22 +174,32 @@ export class DashboardView extends ItemView {
       cls: "devhelper-topbar-controls",
     });
 
-    // The search field and its `Ctrl+K` hint now sit side-by-side inside
-    // the controls (not stacked on top of each other): the input takes
-    // its natural width and the hint renders right next to it as a
-    // monospace pill. Per the design ref, the hint must NEVER overlap
-    // the placeholder, which is why we no longer use absolute
-    // positioning here.
+    // The search is a decorative button-like box: a loupe icon, the
+    // input with its placeholder, and the `Ctrl+K` hint pinned INSIDE
+    // on the right (see `styles.css`). Per the design ref, the hint
+    // must NEVER overlap the placeholder, which is why the input keeps
+    // a roomy `padding-right`.
+    //
+    // Clicking it opens Obsidian's OWN global search
+    // (`global-search:open`, which reveals the native Search view and
+    // focuses its input). The field is `readOnly` (not `disabled`) so
+    // it stays clickable without popping the on-screen keyboard.
     const searchWrap = controls.createEl("div", {
       cls: "devhelper-search-wrap",
     });
+    const searchIcon = searchWrap.createEl("span", {
+      cls: "devhelper-search-icon",
+      attr: { "aria-hidden": "true" },
+    });
+    setIcon(searchIcon, "search");
     const search = searchWrap.createEl("input", {
       cls: "devhelper-search",
       type: "search",
       placeholder: "Busca en el vault…",
-      attr: { "aria-label": "Búsqueda del workspace" },
+      attr: { "aria-label": "Búsqueda del workspace", readonly: "true" },
     });
-    search.disabled = true;
+    search.readOnly = true;
+    searchWrap.addEventListener("click", () => this.openVaultSearch());
     searchWrap.createEl("span", {
       cls: "devhelper-search-hint",
       text: "Ctrl+K",
@@ -314,43 +329,35 @@ export class DashboardView extends ItemView {
     presentation: DashboardPresentation,
     data: DashboardData,
   ): void {
-    const tasks = presentation.tasks;
     const main = this.contentEl.createEl("section", {
       cls: "devhelper-tasks-panel",
     });
 
-    // Header row: project title/path on the left (or a generic
-    // «Todas las tareas» title in `showAll` mode) and the panel FABs
-    // stacked on the right edge. The task list below wraps onto its
-    // own row (`.devhelper-task-list` gets `flex-basis: 100%`).
+    // Header row: fixed «Tareas» title on the left and the current
+    // buttons (filter + new task) inline on the right edge. The task
+    // list and the optional filter row wrap onto their own rows.
     const panelHeader = main.createEl("div", {
       cls: "devhelper-tasks-panel-header",
     });
     const projectHeader = panelHeader.createEl("div", {
       cls: "devhelper-project-header",
     });
-    if (presentation.selectedProject !== null) {
-      projectHeader.createEl("h3", {
-        text: presentation.selectedProject.title,
-      });
-      projectHeader.createEl("span", {
-        cls: "devhelper-project-path",
-        text: presentation.selectedProject.path,
-      });
-    } else {
-      projectHeader.createEl("h3", { text: "Todas las tareas" });
-    }
+    projectHeader.createEl("h3", { text: "Tareas" });
 
     const fabs = panelHeader.createEl("div", {
       cls: "devhelper-panel-fabs",
     });
 
-    // Placeholder filter: no click listener on purpose (spec rule).
     const filterButton = fabs.createEl("button", {
       cls: "devhelper-icon-button",
       attr: { "aria-label": "Filtrar", type: "button" },
     });
     setIcon(filterButton, "funnel");
+    if (this.showTaskFilters) filterButton.addClass("is-active");
+    filterButton.addEventListener("click", () => {
+      this.showTaskFilters = !this.showTaskFilters;
+      void this.refresh();
+    });
 
     const createTaskButton = fabs.createEl("button", {
       cls: "devhelper-fab",
@@ -361,16 +368,37 @@ export class DashboardView extends ItemView {
       void this.openCreateTask(),
     );
 
+    // Optional second row: status filter + search. Shown only when
+    // the funnel is toggled. State lives on the view (in-memory).
+    if (this.showTaskFilters) {
+      this.renderTaskFilters(main);
+    }
+
+    // Apply the in-memory status filter before rendering.
+    const tasks =
+      this.taskStatusFilter === "all"
+        ? presentation.tasks
+        : presentation.tasks.filter((t) => t.status === this.taskStatusFilter);
+
     const list = main.createEl("ul", { cls: "devhelper-task-list" });
     if (tasks.length === 0) {
-      const emptyText =
-        presentation.showAll || presentation.selectedProject === null
-          ? "Aún no hay tareas en ningún proyecto."
-          : "Este proyecto aún no tiene tareas.";
+      let emptyText = "Aún no hay tareas.";
+      if (this.taskStatusFilter === "open") {
+        emptyText = "No hay tareas abiertas.";
+      } else if (this.taskStatusFilter === "done") {
+        emptyText = "No hay tareas terminadas.";
+      } else if (presentation.showAll || presentation.selectedProject === null) {
+        emptyText = "Aún no hay tareas en ningún proyecto.";
+      } else {
+        emptyText = "Este proyecto aún no tiene tareas.";
+      }
       list.createEl("li", {
         cls: "devhelper-task-empty",
         text: emptyText,
       });
+      // Still apply the query hiding so a stale query never shows
+      // rows that should stay hidden.
+      this.applyTaskQueryFilter(list);
       return;
     }
 
@@ -388,6 +416,104 @@ export class DashboardView extends ItemView {
           : titleByPath.get(task.projectPath) ?? task.projectPath;
       list.appendChild(this.renderTaskCard(task, projectTitle));
     }
+    this.applyTaskQueryFilter(list);
+  }
+
+  /**
+   * Second header row inside the tasks panel: status select on the
+   * left and a task search on the right. Re-rendered on every
+   * `refresh()` so the select and the input always reflect the
+   * in-memory filter state.
+   */
+  private renderTaskFilters(main: HTMLElement): void {
+    const filters = main.createEl("div", {
+      cls: "devhelper-task-filters",
+    });
+
+    const statusSelect = filters.createEl("select", {
+      cls: "devhelper-task-status-select",
+      attr: { "aria-label": "Filtrar por estado" },
+    });
+    const options: Array<{ value: "all" | "open" | "done"; label: string }> = [
+      { value: "all", label: "Todas" },
+      { value: "open", label: "Abiertas" },
+      { value: "done", label: "Hechas" },
+    ];
+    for (const option of options) {
+      const el = statusSelect.createEl("option", {
+        text: option.label,
+        value: option.value,
+      });
+      if (this.taskStatusFilter === option.value) el.selected = true;
+    }
+    statusSelect.addEventListener("change", (evt) => {
+      this.taskStatusFilter = (evt.target as HTMLSelectElement)
+        .value as typeof this.taskStatusFilter;
+      void this.refresh();
+    });
+
+    const search = filters.createEl("input", {
+      cls: "devhelper-task-search",
+      type: "search",
+      placeholder: "Buscar tareas…",
+      attr: { "aria-label": "Buscar tareas" },
+    });
+    search.value = this.taskQuery;
+    // Filter in place so the input keeps focus while typing; a full
+    // `refresh()` here would recreate the input on every keystroke.
+    search.addEventListener("input", (evt) => {
+      this.taskQuery = (evt.target as HTMLInputElement).value;
+      const list = main.querySelector<HTMLElement>(".devhelper-task-list");
+      if (list !== null) this.applyTaskQueryFilter(list);
+    });
+  }
+
+  /**
+   * Hide/show the already rendered cards by title. Keeps a single
+   * «Sin resultados» row in sync so an aggressive query never leaves
+   * a blank list.
+   */
+  private applyTaskQueryFilter(list: HTMLElement): void {
+    const query = this.taskQuery.trim().toLocaleLowerCase();
+    let noResults = list.querySelector<HTMLElement>(
+      ".devhelper-task-no-results",
+    );
+    if (noResults === null) {
+      noResults = list.createEl("li", {
+        cls: "devhelper-task-empty devhelper-task-no-results",
+        text: "Sin resultados para esta búsqueda.",
+      });
+    }
+    if (query === "") {
+      for (const child of Array.from(list.children)) {
+        if (child !== noResults) (child as HTMLElement).style.display = "";
+      }
+      noResults.style.display = "none";
+      return;
+    }
+    let visible = 0;
+    for (const child of Array.from(list.children)) {
+      if (child === noResults) continue;
+      const el = child as HTMLElement;
+      const title = (el.dataset["title"] ?? "").toLocaleLowerCase();
+      const match = title.includes(query);
+      el.style.display = match ? "" : "none";
+      if (match) visible++;
+    }
+    noResults.style.display = visible === 0 ? "" : "none";
+  }
+
+  /**
+   * A task gets the red `--attention` ring when it is still open and
+   * carries `priority: high` (or `attention: true`) in its frontmatter.
+   * Anything else falls back to the plain `--open` ring.
+   */
+  private isTaskAttention(task: TaskRecord): boolean {
+    const priority = task.properties["priority"];
+    if (typeof priority === "string" && priority.toLocaleLowerCase() === "high") {
+      return true;
+    }
+    return task.properties["attention"] === true;
   }
 
   private renderTaskCard(
@@ -396,18 +522,28 @@ export class DashboardView extends ItemView {
   ): HTMLElement {
     const card = createEl("li", { cls: "devhelper-task-card" });
     if (task.status === "done") card.addClass("is-done");
+    // Used by the in-place search filter (`applyTaskQueryFilter`).
+    card.dataset["title"] = task.title;
+    card.dataset["status"] = task.status;
 
-    // The title is the primary affordance: clicking it opens the note.
-    const titleEl = card.createEl("h4", {
+    // Left: title + subtitle stacked. Right (`actions`) stays inline
+    // so the card reads as a single horizontal row like the design ref.
+    const main = card.createEl("div", { cls: "devhelper-task-main" });
+
+    // Title row: clickable title plus the optional project badge in
+    // `showAll` mode (omitted in project mode where it would repeat
+    // the panel context).
+    const titleRow = main.createEl("div", {
+      cls: "devhelper-task-title-row",
+    });
+    const titleEl = titleRow.createEl("h4", {
       cls: "devhelper-task-title",
       text: task.title,
     });
     titleEl.addEventListener("click", () => this.openNote(task.path));
 
-    // In `showAll` mode the parent project is not obvious from the
-    // panel header, so each card gets a small pill next to its title.
     if (projectTitle !== undefined) {
-      card.createEl("span", {
+      titleRow.createEl("span", {
         cls: "devhelper-task-project-badge",
         text: projectTitle,
       });
@@ -415,36 +551,42 @@ export class DashboardView extends ItemView {
 
     // Placeholder subtitle until the `description` property lands (spec
     // roadmap); always rendered so the card height is stable.
-    card.createEl("p", {
+    main.createEl("p", {
       cls: "devhelper-task-subtitle",
       text: "Sin descripción",
     });
 
     const actions = card.createEl("div", { cls: "devhelper-task-actions" });
 
-    // Delete is not part of v1: the button is rendered but inert.
+    // Delete goes to Obsidian's trash (recoverable) after an explicit
+    // confirmation.
     const deleteBtn = actions.createEl("button", {
       cls: "devhelper-icon-button devhelper-task-icon",
       attr: {
         "aria-label": "Eliminar tarea",
         type: "button",
-        title: "Disponible en una versión futura",
+        title: "Mover a la papelera",
       },
     });
     setIcon(deleteBtn, "trash-2");
-    deleteBtn.disabled = true;
+    deleteBtn.addEventListener("click", () => this.openDeleteTask(task));
 
+    // Edit jumps straight to the note; the title is edited there.
     const editBtn = actions.createEl("button", {
       cls: "devhelper-icon-button devhelper-task-icon",
       attr: { "aria-label": "Editar tarea", type: "button" },
     });
     setIcon(editBtn, "pencil");
-    editBtn.addEventListener("click", () => void this.openEditTask(task));
+    editBtn.addEventListener("click", () => this.openNote(task.path));
 
     // The status circle carries no text/icon: its appearance is pure
-    // CSS (`--open` hollow, `--done` filled green).
+    // CSS (`--open` hollow gray, `--done` filled green, `--attention`
+    // red hollow for flagged tasks).
+    const attention =
+      task.status === "open" && this.isTaskAttention(task);
+    if (attention) card.addClass("is-attention");
     const statusCircle = actions.createEl("button", {
-      cls: `devhelper-status-circle devhelper-status-circle--${task.status}`,
+      cls: `devhelper-status-circle devhelper-status-circle--${task.status === "done" ? "done" : attention ? "attention" : "open"}`,
       attr: { "aria-label": "Cambiar estado", type: "button" },
     });
     statusCircle.addEventListener("click", () =>
@@ -666,6 +808,18 @@ export class DashboardView extends ItemView {
   }
 
   /**
+   * Open the dashboard's own vault search: a fuzzy modal in the same
+   * style as the favorites picker. Lists every Markdown note in the
+   * vault; picking one opens it.
+   */
+  private openVaultSearch(): void {
+    const modal = new VaultSearchModal(this.app, (file) =>
+      this.openNote(file.path),
+    );
+    modal.open();
+  }
+
+  /**
    * Open the fuzzy picker that lets the user promote a non-favorite
    * project to favorites (or create a new one through the synthetic
    * "Crear proyecto nuevo…" entry). The picker always operates on
@@ -726,30 +880,15 @@ export class DashboardView extends ItemView {
     modal.open();
   }
 
-  private async openEditTask(task: TaskRecord): Promise<void> {
-    // Pull the project list from the live vault so the dropdown
-    // matches what the repository would actually accept.
-    const projects = (await this.repository.load()).projects;
-    const modal = new TaskFormModal(this.app, {
-      mode: "edit",
-      initial: {
-        title: task.title,
-        projectPath: task.projectPath,
-        path: task.path,
-      },
-      projects,
-      defaultProjectPath: task.projectPath,
-      onSubmit: async (payload) => {
+  private openDeleteTask(task: TaskRecord): void {
+    const modal = new ConfirmDeleteModal(this.app, {
+      taskTitle: task.title,
+      onConfirm: async () => {
         try {
-          if (payload.title !== task.title) {
-            await this.repository.renameTask(task.path, payload.title);
-          }
-          if (payload.projectPath !== task.projectPath) {
-            await this.repository.reassignTask(task.path, payload.projectPath);
-          }
+          await this.repository.deleteTask(task.path);
           await this.refresh();
         } catch (err) {
-          console.error("DevHelper: failed to edit task", err);
+          console.error("DevHelper: failed to delete task", err);
         }
       },
     });
