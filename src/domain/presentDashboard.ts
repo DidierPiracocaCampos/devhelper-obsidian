@@ -12,6 +12,14 @@
  *  - Tasks:    `status` (`open` before `done`); within each status,
  *               `title` ascending case-insensitive; ties broken by
  *               `path`.
+ *  - Files:    `name` ascending, case-insensitive; ties broken by `path`.
+ *
+ * Files scope (proyecto sombra General, `ProjectRecord.isGeneral`):
+ *
+ *  - `showAll` (`kind: "all"` o fallback) → solo los files del proyecto
+ *    con `isGeneral: true`; sin General → `files` vacío (nunca lanza).
+ *  - `kind: "project"` → solo los files de `match.path`, salvo que el
+ *    match sea General (selección directa prohibida → fallback a `all`).
  *
  * Selection contract (discriminated `DashboardSelection`):
  *
@@ -34,8 +42,10 @@
  */
 
 import type {
+  CredentialsRecord,
   DashboardData,
   DashboardIssue,
+  FileRecord,
   NoteRecord,
   ProjectRecord,
   TaskRecord,
@@ -63,6 +73,8 @@ export interface DashboardPresentation {
   showAll: boolean;
   tasks: TaskRecord[];
   notes: NoteRecord[];
+  /** Archivos en scope: los de General en `showAll`, los del proyecto en modo proyecto. */
+  files: FileRecord[];
   issues: DashboardIssue[];
 }
 
@@ -119,6 +131,33 @@ function compareNotes(a: NoteRecord, b: NoteRecord): number {
 }
 
 /**
+ * File comparator. Case-insensitive on `name`, then `path` as the
+ * deterministic tiebreaker (comparación directa, igual que en proyectos
+ * y tareas).
+ */
+function compareFiles(a: FileRecord, b: FileRecord): number {
+  const nameCmp = compareIgnoreCase(a.name, b.name);
+  if (nameCmp !== 0) return nameCmp;
+  if (a.path < b.path) return -1;
+  if (a.path > b.path) return 1;
+  return 0;
+}
+
+/**
+ * Archivos del proyecto General (proyecto con `isGeneral: true`), ordenados
+ * con `compareFiles`. Sin General → lista vacía. Nunca lanza: `data.files`
+ * ausente se trata como vacía (el repositorio aún no la puebla).
+ */
+function generalFiles(data: DashboardData): FileRecord[] {
+  const general = data.projects.find((p) => p.isGeneral === true);
+  if (general === undefined) return [];
+  const all = data.files ?? [];
+  return all
+    .filter((f) => f.projectPath === general.path)
+    .sort(compareFiles);
+}
+
+/**
  * Compute the dashboard's current view from the latest repository data
  * and the view's previously selected scope.
  *
@@ -149,6 +188,7 @@ export function presentDashboard(
       showAll: true,
       tasks: allTasks,
       notes: allNotes,
+      files: [],
       issues: data.issues,
     };
   }
@@ -160,22 +200,25 @@ export function presentDashboard(
       showAll: true,
       tasks: allTasks,
       notes: allNotes,
+      files: generalFiles(data),
       issues: data.issues,
     };
   }
 
   // selection.kind === "project"
   const match = sortedProjects.find((p) => p.path === selection.path);
-  if (match === undefined) {
+  if (match === undefined || match.isGeneral === true) {
     // The requested project disappeared (was renamed/deleted, or the
-    // path was a phantom). Fall back to "all" so the user always sees
-    // something rather than an empty panel.
+    // path was a phantom) — or it is the General shadow project, which
+    // can never be selected directly. Fall back to "all" so the user
+    // always sees something rather than an empty panel.
     return {
       selection: allModeSelection,
       selectedProject: null,
       showAll: true,
       tasks: allTasks,
       notes: allNotes,
+      files: generalFiles(data),
       issues: data.issues,
     };
   }
@@ -190,6 +233,53 @@ export function presentDashboard(
     notes: (data.notes ?? [])
       .filter((n) => n.projectPath === match.path)
       .sort(compareNotes),
+    files: (data.files ?? [])
+      .filter((f) => f.projectPath === match.path)
+      .sort(compareFiles),
     issues: data.issues,
   };
+}
+
+/**
+ * Which credentials record the "Contraseña" section shows for a given
+ * selection. Pure: the view calls it before decrypting.
+ *
+ *  - `{ kind: "project", path }` → that project's own record (or `null`
+ *    when it has no `Credenciales.md` yet — creating the first entry
+ *    materialises the note).
+ *  - `{ kind: "all" }` → the **General** project's record: General holds
+ *    the shared/global credentials. `null` when no General project
+ *    exists, and the view asks the user to pick a project instead.
+ *
+ * General is recognised by folder basename or title, case-insensitive,
+ * so renames like "general" keep working while "Mi General" does not
+ * hijack the slot.
+ */
+export function resolveVisibleCredentialsRecord(
+  data: DashboardData,
+  selection: DashboardSelection,
+): { projectPath: string; record: CredentialsRecord | null } | null {
+  if (selection.kind === "project") {
+    const projectPath = selection.path;
+    const record =
+      data.credentials.find((c) => c.projectPath === projectPath) ?? null;
+    return { projectPath, record };
+  }
+  const general = data.projects.find(
+    (p) =>
+      basenameOf(p.folderPath).toLocaleLowerCase() === "general" ||
+      p.title.toLocaleLowerCase() === "general",
+  );
+  if (general === undefined) {
+    return null;
+  }
+  return {
+    projectPath: general.path,
+    record:
+      data.credentials.find((c) => c.projectPath === general.path) ?? null,
+  };
+}
+
+function basenameOf(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
 }
