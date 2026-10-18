@@ -42,6 +42,7 @@ import type {
   CredentialsRecord,
   DashboardData,
   DashboardIssue,
+  FileRecord,
   NoteRecord,
   NoteSnapshot,
   ParsedNote,
@@ -51,6 +52,13 @@ import type {
 } from "../domain/types";
 import type { PluginSettings } from "../settings";
 import type { VaultAdapter, VaultNoteRef } from "./VaultAdapter";
+
+/**
+ * Nombre de la carpeta del proyecto sombra bajo `settings.projectsFolder`.
+ * Su hub es `<projectsFolder>/General/General.md` y solo es visible en
+ * modo «Todos» (el presenter lo oculta de la selección directa).
+ */
+export const GENERAL_FOLDER = "General";
 
 export class ProjectTaskRepository {
   private readonly adapter: VaultAdapter;
@@ -85,28 +93,41 @@ export class ProjectTaskRepository {
   /**
    * V2 scan.
    *
-   *  1. Ensure `projectsFolder` exists, then seed the three templates
+   *  1. Ensure `projectsFolder` exists, then seed the four templates
    *     and validate each one (one issue per invalid template).
+   *  1b. Seed the `General` shadow project (hub, `Tareas/`, `Notas/`,
+   *     `Archivos/`, `Credenciales.md`) when missing — never
+   *     overwritten. Its hub is flagged `isGeneral` when parsed.
    *  2. Any loose `.md` sitting at the root of `projectsFolder` is
    *     reported as a V1 straggler.
    *  3. Every direct subfolder (excluding `templatesFolder`) is a
    *     project. Each project MUST contain `<F>/<F>.md`; otherwise the
    *     folder is reported and skipped.
-   *  4. Tasks are read from `<F>/Tareas/` (when it exists).
+   *  4. Tasks and notes are read from `<F>/Tareas/` (when it exists).
+   *  4b. Notes and tasks are read from `<F>/Notas/` (when it exists).
    *  5. Credentials are read from `<F>/Credenciales.md` (when it
    *     exists).
+   *  6. Files are listed from `<F>/Archivos/` (when it exists, any
+   *     extension, non-recursive) into `files`, each bound to its
+   *     project hub via `projectPath`.
    */
   async load(): Promise<DashboardData> {
     const projects: ProjectRecord[] = [];
     const tasks: TaskRecord[] = [];
     const notes: NoteRecord[] = [];
     const credentials: CredentialsRecord[] = [];
+    const files: FileRecord[] = [];
     const issues: DashboardIssue[] = [];
 
     await this.adapter.createFolder(this.settings.projectsFolder);
 
     // 1. Seed + validate templates.
     await this.seedTemplates();
+    // 1b. Proyecto sombra General: se siembra si falta (nunca se
+    // sobrescribe) para que el modo «Todos» siempre tenga ámbito.
+    await this.ensureGeneralProject();
+    const generalHubPath =
+      `${this.settings.projectsFolder}/${GENERAL_FOLDER}/${GENERAL_FOLDER}.md`;
     const kinds: TemplateKind[] = ["project", "task", "note", "credentials"];
     for (const kind of kinds) {
       const issueMessage = await this.templateIssue(kind);
@@ -153,9 +174,18 @@ export class ProjectTaskRepository {
       const hubSnapshot = await this.readSnapshot(hubRef);
       const hubParsed = parseProjectTaskNote(hubSnapshot, this.resolveProject);
       switch (hubParsed.kind) {
-        case "project":
+        case "project": {
+          // El hub del proyecto sombra se marca para que el presenter lo
+          // oculte de la selección directa y lo use en modo «Todos».
+          if (
+            normalizePathForCompare(hubParsed.project.path) ===
+            normalizePathForCompare(generalHubPath)
+          ) {
+            hubParsed.project.isGeneral = true;
+          }
           projects.push(hubParsed.project);
           break;
+        }
         case "issue":
           issues.push(hubParsed.issue);
           break;
@@ -260,10 +290,25 @@ export class ProjectTaskRepository {
             break;
         }
       }
+
+      // 6. Archivos from <F>/Archivos (optional). Every top-level file
+      // counts — any extension, including `.md` — except dotfiles
+      // (already excluded by `listFiles`) and nested subfolders (the
+      // listing is non-recursive, like `listMarkdownFiles`).
+      const archivosFolder = `${folder}/Archivos`;
+      if (this.adapter.exists(archivosFolder)) {
+        for (const ref of this.adapter.listFiles(archivosFolder)) {
+          files.push({
+            path: ref.path,
+            name: ref.basename,
+            extension: extensionOf(ref.basename),
+            projectPath: hubPath,
+          });
+        }
+      }
     }
 
-    // Task 2 (Archivos) poblará `files`; hasta entonces la lista va vacía.
-    return { projects, tasks, notes, credentials, files: [], issues };
+    return { projects, tasks, notes, credentials, files, issues };
   }
 
   // -------------------------------------------------------------------------
@@ -271,7 +316,7 @@ export class ProjectTaskRepository {
   // -------------------------------------------------------------------------
 
   /**
-   * Ensure each of the three templates exists on disk. Templates that
+   * Ensure each template exists on disk. Templates that
    * already exist (for example because the user forked them) are NOT
    * overwritten — `seedTemplates` is non-destructive.
    */
@@ -284,6 +329,55 @@ export class ProjectTaskRepository {
       if (!this.adapter.exists(fullPath)) {
         await this.adapter.createMarkdown(fullPath, DEFAULT_TEMPLATE_CONTENT[kind]);
       }
+    }
+  }
+
+  /**
+   * Siembra el proyecto sombra `General` (`<projectsFolder>/General/`
+   * con `General.md`, `Tareas/`, `Notas/`, `Archivos/` y
+   * `Credenciales.md`) cuando falta. Corre en cada `load()`, tras
+   * `seedTemplates()`, pero nunca sobrescribe: lo que ya existe se
+   * deja intacto (incluido un `General.md` roto, que el escaneo normal
+   * reporta como issue).
+   *
+   * El hub se genera desde la plantilla `project` del usuario y las
+   * credenciales desde la plantilla `credentials`, igual que
+   * `createProject`. Si una plantilla está rota, el hub resultante será
+   * inválido y saldrá como issue — `load()` nunca lanza.
+   */
+  private async ensureGeneralProject(): Promise<void> {
+    const folder = `${this.settings.projectsFolder}/${GENERAL_FOLDER}`;
+    const hubPath = `${folder}/${GENERAL_FOLDER}.md`;
+    const credsPath = `${folder}/Credenciales.md`;
+    await this.adapter.createFolder(folder);
+    await this.adapter.createFolder(`${folder}/Tareas`);
+    await this.adapter.createFolder(`${folder}/Notas`);
+    await this.adapter.createFolder(`${folder}/Archivos`);
+
+    if (!this.adapter.exists(hubPath)) {
+      const templateRef: VaultNoteRef = {
+        path: this.templatePath("project"),
+        basename: TEMPLATE_FILE_NAMES.project,
+      };
+      const templateContent = await this.adapter.read(templateRef);
+      const hubContent = applyTemplate(templateContent, "project", {
+        title: GENERAL_FOLDER,
+        today: todayStamp(),
+      });
+      await this.adapter.createMarkdown(hubPath, hubContent);
+    }
+
+    if (!this.adapter.exists(credsPath)) {
+      const templateRef: VaultNoteRef = {
+        path: this.templatePath("credentials"),
+        basename: TEMPLATE_FILE_NAMES.credentials,
+      };
+      const templateContent = await this.adapter.read(templateRef);
+      const credsContent = applyTemplate(templateContent, "credentials", {
+        title: GENERAL_FOLDER,
+        today: todayStamp(),
+      });
+      await this.adapter.createMarkdown(credsPath, credsContent);
     }
   }
 
@@ -648,6 +742,52 @@ export class ProjectTaskRepository {
   }
 
   // -------------------------------------------------------------------------
+  // Mutations: files (Archivos/)
+  //
+  // Los ficheros de `<Proyecto>/Archivos/` son opacos para el plugin:
+  // se copian tal cual vía `createBinary` y nunca pasan por
+  // `processFrontMatter`. La confirmación previa al borrado vive en la
+  // vista; aquí el borrado va directo a la papelera de Obsidian.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Copia un fichero externo (bytes ya leídos por la vista) al
+   * `Archivos/` del proyecto dueño de `projectPath`. Devuelve la ruta
+   * creada en el vault.
+   *
+   * Solo el stem se sanitiza con `sanitizeFilename` (la extensión va
+   * intacta, con sus mayúsculas); `../` y `/` quedan plegados al stem,
+   * así el fichero nunca escapa de `Archivos/`. Si el nombre ya
+   * existe, se desambigua con ` 2`, ` 3`, … antes de la extensión
+   * (`foto.png` → `foto 2.png`).
+   */
+  async addFile(
+    projectPath: string,
+    fileName: string,
+    data: ArrayBuffer,
+  ): Promise<string> {
+    const { stem, ext } = splitFileName(fileName);
+    const sanitizedStem = sanitizeFilename(stem);
+    const safeName = ext.length > 0 ? `${sanitizedStem}.${ext}` : sanitizedStem;
+    const projectFolder = folderOf(projectPath);
+    const archivosFolder = `${projectFolder}/Archivos`;
+    await this.adapter.createFolder(archivosFolder);
+    const targetPath = await this.uniqueFilePath(archivosFolder, safeName);
+    await this.adapter.createBinary(targetPath, data);
+    return targetPath;
+  }
+
+  /**
+   * Manda un fichero de `Archivos/` a la papelera (recuperable — nunca
+   * borrado permanente). Lanza cuando la ruta no existe, igual que
+   * `deleteTask`. No hay borrado de carpetas.
+   */
+  async deleteFile(path: string): Promise<void> {
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.trash(ref);
+  }
+
+  // -------------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------------
 
@@ -773,6 +913,51 @@ export class ProjectTaskRepository {
   }
 
   /**
+   * Devuelve una ruta única dentro de `folderPath` para `fileName`
+   * (nombre con extensión, ya sanitizado por `addFile`). Si la ruta
+   * existe (fichero o carpeta), desambigua con ` 2`, ` 3`, … antes de
+   * la extensión (`foto.png` → `foto 2.png`); sin extensión, el sufijo
+   * va al final (`SINEXT` → `SINEXT 2`).
+   *
+   * Usa `adapter.exists` (cubre `.md` y binarios) en vez de
+   * `listMarkdownFiles`, porque `Archivos/` guarda toda extensión.
+   */
+  private async uniqueFilePath(
+    folderPath: string,
+    fileName: string,
+    ignorePath?: string,
+  ): Promise<string> {
+    if (fileName.includes("/") || fileName.includes("\\")) {
+      throw new Error(
+        `ProjectTaskRepository: unsafe filename: ${fileName}`,
+      );
+    }
+    const basePath = `${folderPath}/${fileName}`;
+    if (
+      !this.adapter.exists(basePath) ||
+      (ignorePath !== undefined && basePath === ignorePath)
+    ) {
+      return basePath;
+    }
+
+    const { stem, ext } = splitFileName(fileName);
+    for (let counter = 2; counter < 10_000; counter++) {
+      const candidateName =
+        ext.length > 0 ? `${stem} ${counter}.${ext}` : `${stem} ${counter}`;
+      const candidatePath = `${folderPath}/${candidateName}`;
+      if (
+        !this.adapter.exists(candidatePath) ||
+        (ignorePath !== undefined && candidatePath === ignorePath)
+      ) {
+        return candidatePath;
+      }
+    }
+    throw new Error(
+      `ProjectTaskRepository: could not disambiguate ${fileName} inside ${folderPath}`,
+    );
+  }
+
+  /**
    * Resolve the absolute vault-relative path of the template file for
    * `kind`. The repository owns the canonical naming
    * (`TEMPLATE_FILE_NAMES`) so the call sites stay short.
@@ -804,6 +989,32 @@ export function sanitizeFilename(title: string): string {
     .replace(/^[\s.\-]+|[\s.\-]+$/g, "");
   if (replaced.length === 0) return "Untitled";
   return replaced;
+}
+
+/**
+ * Separa un nombre de fichero en stem y extensión por el ÚLTIMO punto.
+ * La extensión va sin punto y tal cual (con mayúsculas si las trae);
+ * quien la necesite normalizada usa `extensionOf`.
+ *
+ *  - `"foto.png"` → `{ stem: "foto", ext: "png" }`
+ *  - `"archive.tar.gz"` → `{ stem: "archive.tar", ext: "gz" }`
+ *  - `"SINEXT"` / `".oculto"` / `"foto."` → `{ stem: <nombre>, ext: "" }`
+ */
+export function splitFileName(name: string): { stem: string; ext: string } {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || dot === name.length - 1) {
+    return { stem: name, ext: "" };
+  }
+  return { stem: name.slice(0, dot), ext: name.slice(dot + 1) };
+}
+
+/**
+ * Extensión de un nombre de fichero en minúsculas y sin punto
+ * (`"FOTO.PNG"` → `"png"`; `""` cuando no hay extensión). Los
+ * dotfiles devuelven `""` (el punto inicial no cuenta como separador).
+ */
+function extensionOf(fileName: string): string {
+  return splitFileName(fileName).ext.toLowerCase();
 }
 
 /**

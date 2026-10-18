@@ -102,17 +102,30 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
 
     async rename(note: VaultNoteRef, newPath: string): Promise<VaultNoteRef> {
       const content = files.get(note.path);
-      if (content === undefined) {
-        throw new Error(`Fake vault: cannot rename missing file: ${note.path}`);
+      if (content !== undefined) {
+        files.delete(note.path);
+        files.set(newPath, content);
+        const dir = newPath.includes("/")
+          ? newPath.slice(0, newPath.lastIndexOf("/"))
+          : "";
+        if (dir.length > 0) folders.add(dir);
+        const basename = newPath.slice(newPath.lastIndexOf("/") + 1);
+        return { path: newPath, basename };
       }
-      files.delete(note.path);
-      files.set(newPath, content);
-      const dir = newPath.includes("/")
-        ? newPath.slice(0, newPath.lastIndexOf("/"))
-        : "";
-      if (dir.length > 0) folders.add(dir);
-      const basename = newPath.slice(newPath.lastIndexOf("/") + 1);
-      return { path: newPath, basename };
+      // Los binarios de Archivos/ también pueden renombrarse (misma
+      // semántica opaca que las notas: mover bytes sin tocar contenido).
+      const data = binaries.get(note.path);
+      if (data !== undefined) {
+        binaries.delete(note.path);
+        binaries.set(newPath, data);
+        const dir = newPath.includes("/")
+          ? newPath.slice(0, newPath.lastIndexOf("/"))
+          : "";
+        if (dir.length > 0) folders.add(dir);
+        const basename = newPath.slice(newPath.lastIndexOf("/") + 1);
+        return { path: newPath, basename };
+      }
+      throw new Error(`Fake vault: cannot rename missing file: ${note.path}`);
     },
 
     async processFrontMatter(
@@ -207,6 +220,16 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
         files.set(next, content);
       }
 
+      // Rewrite every binary whose path lives inside the renamed folder.
+      for (const path of Array.from(binaries.keys())) {
+        if (!path.startsWith(oldPrefix)) continue;
+        const suffix = path.slice(oldPrefix.length);
+        const next = `${newPrefix}${suffix}`;
+        const data = binaries.get(path)!;
+        binaries.delete(path);
+        binaries.set(next, data);
+      }
+
       // Rewrite every descendant folder entry.
       for (const path of Array.from(folders)) {
         if (!path.startsWith(oldPrefix)) continue;
@@ -233,10 +256,15 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
     },
 
     async trash(note: VaultNoteRef): Promise<void> {
-      if (!files.has(note.path)) {
-        throw new Error(`Fake vault: cannot trash missing file: ${note.path}`);
+      if (files.has(note.path)) {
+        files.delete(note.path);
+        return;
       }
-      files.delete(note.path);
+      if (binaries.has(note.path)) {
+        binaries.delete(note.path);
+        return;
+      }
+      throw new Error(`Fake vault: cannot trash missing file: ${note.path}`);
     },
   };
 
@@ -488,7 +516,11 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.projects).toHaveLength(2);
+        expect(data.projects.filter((p) => !p.isGeneral)).toHaveLength(2);
+        // General se siembra junto a los proyectos del usuario.
+        expect(data.projects.find((p) => p.isGeneral === true)?.path).toBe(
+          "Projects/General/General.md",
+        );
         const website = data.projects.find((p) => p.title === "Website")!;
         expect(website).toBeDefined();
         expect(website.path).toBe("Projects/Website/Website.md");
@@ -537,7 +569,7 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.projects.map((p) => p.title)).toEqual(["Good"]);
+        expect(data.projects.map((p) => p.title)).toEqual(["General", "Good"]);
         // The broken hub note must produce an issue pointing at it.
         expect(
           data.issues.some(
@@ -600,8 +632,10 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.projects).toHaveLength(1);
-        expect(data.projects[0].path).toBe("Projects/A/A.md");
+        expect(data.projects.filter((p) => !p.isGeneral)).toHaveLength(1);
+        expect(
+          data.projects.find((p) => !p.isGeneral)?.path,
+        ).toBe("Projects/A/A.md");
         expect(data.tasks).toHaveLength(0);
         expect(data.issues).toHaveLength(0);
       });
@@ -760,8 +794,8 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.projects).toHaveLength(1);
-        expect(data.projects[0].title).toBe("Website");
+        expect(data.projects.filter((p) => !p.isGeneral)).toHaveLength(1);
+        expect(data.projects.find((p) => !p.isGeneral)?.title).toBe("Website");
       });
     });
 
@@ -787,7 +821,7 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.projects).toHaveLength(1);
+        expect(data.projects.filter((p) => !p.isGeneral)).toHaveLength(1);
         const strayIssue = data.issues.find((i) => i.path === "Projects/Loose note.md");
         expect(strayIssue).toBeDefined();
         expect(strayIssue!.message).toMatch(/suelta/i);
@@ -857,9 +891,13 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.projects).toHaveLength(1);
-        expect(data.projects[0].folderPath).toBe("Projects/Website");
-        expect(data.projects[0].properties.client).toBe("Acme");
+        expect(data.projects.filter((p) => !p.isGeneral)).toHaveLength(1);
+        const websiteProject = data.projects.find(
+          (p) => p.path === "Projects/Website/Website.md",
+        )!;
+        expect(websiteProject).toBeDefined();
+        expect(websiteProject.folderPath).toBe("Projects/Website");
+        expect(websiteProject.properties.client).toBe("Acme");
 
         expect(data.tasks).toHaveLength(2);
         const copy = data.tasks.find((t) => t.title === "Write copy")!;
@@ -867,10 +905,12 @@ describe("ProjectTaskRepository", () => {
         const domain = data.tasks.find((t) => t.title === "Buy domain")!;
         expect(domain.status).toBe("done");
 
-        expect(data.credentials).toHaveLength(1);
-        expect(data.credentials[0].projectPath).toBe("Projects/Website/Website.md");
-        expect(data.credentials[0].entries).toHaveLength(1);
-        expect(data.credentials[0].entries[0].service).toBe("Hosting");
+        const websiteCreds = data.credentials.find(
+          (c) => c.projectPath === "Projects/Website/Website.md",
+        )!;
+        expect(websiteCreds).toBeDefined();
+        expect(websiteCreds.entries).toHaveLength(1);
+        expect(websiteCreds.entries[0].service).toBe("Hosting");
 
         expect(data.issues).toHaveLength(0);
       });
@@ -893,7 +933,17 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.credentials).toHaveLength(0);
+        // Website no aporta credenciales; General sí (vacías, sembradas).
+        expect(
+          data.credentials.find(
+            (c) => c.projectPath === "Projects/Website/Website.md",
+          ),
+        ).toBeUndefined();
+        const generalCreds = data.credentials.find(
+          (c) => c.projectPath === "Projects/General/General.md",
+        )!;
+        expect(generalCreds).toBeDefined();
+        expect(generalCreds.entries).toHaveLength(0);
         // No issues about a missing credentials note.
         expect(
           data.issues.some((i) => /Credenciales/i.test(i.message)),
@@ -914,10 +964,16 @@ describe("ProjectTaskRepository", () => {
         const repo = makeRepo(fake);
         const data = await repo.load();
 
-        expect(data.projects).toHaveLength(1);
-        expect(data.projects[0].title).toBe("Minimal");
+        expect(data.projects.filter((p) => !p.isGeneral)).toHaveLength(1);
+        expect(
+          data.projects.find((p) => p.path === "Projects/Minimal/Minimal.md")
+            ?.title,
+        ).toBe("Minimal");
         expect(data.tasks).toHaveLength(0);
-        expect(data.credentials).toHaveLength(0);
+        // Solo General aporta su Credenciales.md sembrado (vacío).
+        expect(data.credentials.map((c) => c.projectPath).sort()).toEqual([
+          "Projects/General/General.md",
+        ]);
         expect(data.issues).toHaveLength(0);
       });
     });
@@ -1007,14 +1063,14 @@ describe("ProjectTaskRepository", () => {
         const data = await repo.load();
 
         // The credentials record still appears with the valid row intact.
-        expect(data.credentials).toHaveLength(1);
-        expect(data.credentials[0].projectPath).toBe(
-          "Projects/Website/Website.md",
-        );
-        expect(data.credentials[0].entries).toHaveLength(1);
-        expect(data.credentials[0].entries[0].service).toBe("GitHub");
-        expect(data.credentials[0].entries[0].user).toBe("alice");
-        expect(data.credentials[0].entries[0].password).toBe("hunter2");
+        const websiteCreds = data.credentials.find(
+          (c) => c.projectPath === "Projects/Website/Website.md",
+        )!;
+        expect(websiteCreds).toBeDefined();
+        expect(websiteCreds.entries).toHaveLength(1);
+        expect(websiteCreds.entries[0].service).toBe("GitHub");
+        expect(websiteCreds.entries[0].user).toBe("alice");
+        expect(websiteCreds.entries[0].password).toBe("hunter2");
 
         // The broken row surfaces as a per-entry issue indexed at 0.
         const credsIssue = data.issues.find(
@@ -1719,6 +1775,335 @@ describe("ProjectTaskRepository", () => {
       expect(fake.files.has("Projects/A/Notas/Idea.md")).toBe(false);
       const data = await repo.load();
       expect(data.notes).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Contrato binario del falso (listFiles + createBinary conviven con .md)
+  // -------------------------------------------------------------------------
+
+  describe("vaultBinaryContract", () => {
+    it("listsNonMarkdownFilesSortedNonRecursive", async () => {
+      const fake = createFakeVault();
+      // Creación desordenada a propósito para afirmar el orden por path.
+      await fake.createBinary(
+        "Projects/A/Archivos/foto.png",
+        new ArrayBuffer(2),
+      );
+      await fake.createBinary(
+        "Projects/A/Archivos/doc.pdf",
+        new ArrayBuffer(3),
+      );
+      await fake.createBinary(
+        "Projects/A/Archivos/sub/nested.png",
+        new ArrayBuffer(1),
+      );
+
+      const refs = fake.listFiles("Projects/A/Archivos");
+
+      expect(refs.map((r) => r.path)).toEqual([
+        "Projects/A/Archivos/doc.pdf",
+        "Projects/A/Archivos/foto.png",
+      ]);
+    });
+
+    it("createBinaryEnsuresParentFolder", async () => {
+      const fake = createFakeVault();
+
+      await fake.createBinary(
+        "Projects/Nuevo/Archivos/scan.pdf",
+        new ArrayBuffer(4),
+      );
+
+      expect(fake.folders.has("Projects/Nuevo/Archivos")).toBe(true);
+      expect(fake.binaries.has("Projects/Nuevo/Archivos/scan.pdf")).toBe(true);
+      expect(fake.exists("Projects/Nuevo/Archivos/scan.pdf")).toBe(true);
+    });
+
+    it("createBinaryCoexistsWithMarkdown", async () => {
+      const fake = createFakeVault();
+      await fake.createMarkdown(
+        "Projects/A/Archivos/nota.md",
+        "# Nota\n",
+      );
+      await fake.createBinary(
+        "Projects/A/Archivos/foto.png",
+        new ArrayBuffer(2),
+      );
+
+      // Ambas semánticas conviven: el .md sigue en el store de notas…
+      expect(fake.files.has("Projects/A/Archivos/nota.md")).toBe(true);
+      // …y el binario en su propio store sin pisarlo.
+      expect(fake.binaries.has("Projects/A/Archivos/foto.png")).toBe(true);
+      // listMarkdownFiles no devuelve binarios…
+      expect(
+        fake.listMarkdownFiles("Projects/A/Archivos").map((r) => r.path),
+      ).toEqual(["Projects/A/Archivos/nota.md"]);
+      // …pero listFiles devuelve ambos, ordenados por path.
+      expect(fake.listFiles("Projects/A/Archivos").map((r) => r.path)).toEqual([
+        "Projects/A/Archivos/foto.png",
+        "Projects/A/Archivos/nota.md",
+      ]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Proyecto sombra General + Archivos (siembra, escaneo, addFile)
+  // -------------------------------------------------------------------------
+
+  describe("seedsGeneralShadowProject", () => {
+    it("siembra General en el primer load y lo marca isGeneral", async () => {
+      const fake = createFakeVault();
+      const repo = makeRepo(fake);
+
+      const first = await repo.load();
+
+      const general = first.projects.find((p) => p.isGeneral === true);
+      expect(general).toBeDefined();
+      expect(general!.path).toBe("Projects/General/General.md");
+      expect(general!.folderPath).toBe("Projects/General");
+      // Estructura completa del proyecto sombra.
+      expect(fake.folders.has("Projects/General/Tareas")).toBe(true);
+      expect(fake.folders.has("Projects/General/Archivos")).toBe(true);
+      expect(fake.files.has("Projects/General/General.md")).toBe(true);
+      expect(fake.files.has("Projects/General/Credenciales.md")).toBe(true);
+      // Ningún otro proyecto se marca como General.
+      expect(first.projects.filter((p) => p.isGeneral === true)).toHaveLength(
+        1,
+      );
+
+      // Segunda carga: no duplica ni sobrescribe el hub existente.
+      const hubBefore = fake.files.get("Projects/General/General.md")!;
+      const second = await repo.load();
+      expect(fake.files.get("Projects/General/General.md")).toBe(hubBefore);
+      expect(
+        second.projects
+          .filter((p) => p.isGeneral === true)
+          .map((p) => p.path),
+      ).toEqual(["Projects/General/General.md"]);
+    });
+
+    it("respeta una General ya sembrada a mano con sus credenciales", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/General/General.md", projectNote());
+      seedFile(
+        fake,
+        "Projects/General/Credenciales.md",
+        credentialsNote([
+          { service: "S", user: "u", password: "p" },
+        ]),
+      );
+      const repo = makeRepo(fake);
+
+      const data = await repo.load();
+
+      const general = data.projects.find((p) => p.isGeneral === true);
+      expect(general).toBeDefined();
+      expect(general!.path).toBe("Projects/General/General.md");
+      const creds = data.credentials.find(
+        (c) => c.projectPath === "Projects/General/General.md",
+      );
+      expect(creds).toBeDefined();
+      expect(creds!.entries).toHaveLength(1);
+    });
+
+    it("un General.md roto sale como issue sin tumbar el dashboard", async () => {
+      const fake = createFakeVault();
+      seedFile(
+        fake,
+        "Projects/General/General.md",
+        ["---", "type: project", "owner: alice", "Body"].join("\n"),
+      );
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      const repo = makeRepo(fake);
+
+      const data = await repo.load();
+
+      expect(
+        data.projects.some((p) => p.path === "Projects/A/A.md"),
+      ).toBe(true);
+      const generalIssue = data.issues.find(
+        (i) => i.path === "Projects/General/General.md",
+      );
+      expect(generalIssue).toBeDefined();
+    });
+  });
+
+  describe("listsFilesPerProject", () => {
+    it("load lista Archivos/ por proyecto con projectPath del hub", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      seedFile(fake, "Projects/B/B.md", projectNote());
+      await fake.createBinary("Projects/A/Archivos/foto.png", new ArrayBuffer(2));
+      await fake.createBinary("Projects/A/Archivos/doc.pdf", new ArrayBuffer(3));
+      await fake.createBinary(
+        "Projects/A/Archivos/sub/nested.png",
+        new ArrayBuffer(1),
+      );
+      await fake.createBinary("Projects/A/Archivos/SINEXT", new ArrayBuffer(1));
+      await fake.createBinary("Projects/A/Archivos/FOTO.PNG", new ArrayBuffer(1));
+      await fake.createBinary("Projects/B/Archivos/otro.pdf", new ArrayBuffer(1));
+      const repo = makeRepo(fake);
+
+      const data = await repo.load();
+
+      const filesA = data.files.filter(
+        (f) => f.projectPath === "Projects/A/A.md",
+      );
+      expect(filesA.map((f) => f.path).sort()).toEqual([
+        "Projects/A/Archivos/FOTO.PNG",
+        "Projects/A/Archivos/SINEXT",
+        "Projects/A/Archivos/doc.pdf",
+        "Projects/A/Archivos/foto.png",
+      ]);
+      const foto = filesA.find((f) => f.name === "foto.png")!;
+      expect(foto.extension).toBe("png");
+      // La extensión se normaliza a minúsculas…
+      const mayus = filesA.find((f) => f.name === "FOTO.PNG")!;
+      expect(mayus.extension).toBe("png");
+      // …y el fichero sin extensión informa "".
+      const sinExt = filesA.find((f) => f.name === "SINEXT")!;
+      expect(sinExt.extension).toBe("");
+      // El subnivel no se lista (igual que listMarkdownFiles).
+      expect(data.files.some((f) => f.path.includes("/sub/"))).toBe(false);
+      // Cada proyecto ata sus ficheros a su propio hub.
+      const filesB = data.files.filter(
+        (f) => f.projectPath === "Projects/B/B.md",
+      );
+      expect(filesB.map((f) => f.path)).toEqual([
+        "Projects/B/Archivos/otro.pdf",
+      ]);
+      // General recién sembrado no aporta ficheros.
+      expect(
+        data.files.filter(
+          (f) => f.projectPath === "Projects/General/General.md",
+        ),
+      ).toEqual([]);
+    });
+  });
+
+  describe("addFile", () => {
+    it("preserva la extension y desambigua con ' 2'", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      seedTemplates(fake);
+      const repo = makeRepo(fake);
+
+      const first = await repo.addFile(
+        "Projects/A/A.md",
+        "foto.png",
+        new ArrayBuffer(1),
+      );
+      expect(first).toBe("Projects/A/Archivos/foto.png");
+      const second = await repo.addFile(
+        "Projects/A/A.md",
+        "foto.png",
+        new ArrayBuffer(1),
+      );
+      expect(second).toBe("Projects/A/Archivos/foto 2.png");
+      // El original sigue intacto en el store binario.
+      expect(fake.binaries.has("Projects/A/Archivos/foto.png")).toBe(true);
+      expect(fake.binaries.has("Projects/A/Archivos/foto 2.png")).toBe(true);
+
+      const data = await repo.load();
+      expect(
+        data.files
+          .filter((f) => f.projectPath === "Projects/A/A.md")
+          .map((f) => f.path)
+          .sort(),
+      ).toEqual([
+        "Projects/A/Archivos/foto 2.png",
+        "Projects/A/Archivos/foto.png",
+      ]);
+    });
+
+    it("sanitiza traversal sin escapar de Archivos/", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      seedTemplates(fake);
+      const repo = makeRepo(fake);
+
+      const created = await repo.addFile(
+        "Projects/A/A.md",
+        "../evil.png",
+        new ArrayBuffer(1),
+      );
+
+      expect(created).toBe("Projects/A/Archivos/evil.png");
+      expect(created.includes("..")).toBe(false);
+    });
+
+    it("conserva la extension con mayusculas tal cual en disco", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      seedTemplates(fake);
+      const repo = makeRepo(fake);
+
+      const created = await repo.addFile(
+        "Projects/A/A.md",
+        "FOTO.PNG",
+        new ArrayBuffer(1),
+      );
+
+      expect(created).toBe("Projects/A/Archivos/FOTO.PNG");
+      const data = await repo.load();
+      const rec = data.files.find((f) => f.path === created)!;
+      expect(rec).toBeDefined();
+      expect(rec.extension).toBe("png");
+    });
+  });
+
+  describe("deleteFile", () => {
+    it("manda a papelera y desaparece del siguiente load", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      seedTemplates(fake);
+      const repo = makeRepo(fake);
+      const created = await repo.addFile(
+        "Projects/A/A.md",
+        "foto.png",
+        new ArrayBuffer(2),
+      );
+      await repo.addFile("Projects/A/A.md", "doc.pdf", new ArrayBuffer(3));
+
+      await repo.deleteFile(created);
+
+      expect(fake.binaries.has(created)).toBe(false);
+      const data = await repo.load();
+      expect(
+        data.files
+          .filter((f) => f.projectPath === "Projects/A/A.md")
+          .map((f) => f.path),
+      ).toEqual(["Projects/A/Archivos/doc.pdf"]);
+    });
+
+    it("lanza cuando el fichero no existe", async () => {
+      const fake = createFakeVault();
+      seedFile(fake, "Projects/A/A.md", projectNote());
+      const repo = makeRepo(fake);
+
+      await expect(
+        repo.deleteFile("Projects/A/Archivos/fantasma.png"),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe("splitFileName", () => {
+    it("separa stem y extension por el ultimo punto", async () => {
+      const mod = await import("../src/data/ProjectTaskRepository");
+
+      expect(mod.splitFileName("foto.png")).toEqual({
+        stem: "foto",
+        ext: "png",
+      });
+      expect(mod.splitFileName("archive.tar.gz")).toEqual({
+        stem: "archive.tar",
+        ext: "gz",
+      });
+      expect(mod.splitFileName("SINEXT")).toEqual({
+        stem: "SINEXT",
+        ext: "",
+      });
     });
   });
 });
