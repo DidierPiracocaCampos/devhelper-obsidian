@@ -1359,6 +1359,92 @@ describe("ProjectTaskRepository", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Favorite flag mutation tests (Task 2: setProjectFavorite + createProject
+  // returns the hub path)
+  // -------------------------------------------------------------------------
+
+  describe("setProjectFavorite", () => {
+    it("addsMissingPropPreservingRest", async () => {
+      const fake = createFakeVault();
+      const hubPath = "Projects/Website/Website.md";
+      // The fake's hand-rolled `processFrontMatter` strips quotes from
+      // bare-safe scalars (e.g. `created: "2026-01-15"` → `created:
+      //2026-01-15`), which `js-yaml.load` then parses as a Date
+      // object — failing the project's `created`-must-be-string check.
+      // Use a `/` date so the round-trip emits a quoted string that
+      // survives the subsequent `js-yaml.load`.
+      const initial = [
+        "---",
+        "type: project",
+        "status: active",
+        'created: "2026/01/15"',
+        "tags: []",
+        "description:",
+        "client:",
+        "owner: alice",
+        "---",
+        "# Website",
+        "",
+        "Original body of the project stays here.",
+      ].join("\n");
+      seedFile(fake, hubPath, initial);
+
+      const repo = makeRepo(fake);
+      await repo.setProjectFavorite(hubPath, true);
+
+      const data = await repo.load();
+      const project = data.projects.find((p) => p.path === hubPath);
+      expect(project).toBeDefined();
+      expect(project!.favorite).toBe(true);
+
+      // The user's custom property and the body must be intact.
+      const updated = fake.files.get(hubPath)!;
+      expect(updated).toMatch(/owner: alice/);
+      expect(updated).toMatch(/Original body of the project stays here\./);
+    });
+
+    it("turnsOffExistingProp", async () => {
+      const fake = createFakeVault();
+      const hubPath = "Projects/Website/Website.md";
+      const initial = [
+        "---",
+        "type: project",
+        "status: active",
+        'created: "2026/01/15"',
+        "tags: []",
+        "description:",
+        "client:",
+        "favorite: true",
+        "---",
+        "# Website",
+        "",
+        "Body.",
+      ].join("\n");
+      seedFile(fake, hubPath, initial);
+
+      const repo = makeRepo(fake);
+      await repo.setProjectFavorite(hubPath, false);
+
+      const data = await repo.load();
+      const project = data.projects.find((p) => p.path === hubPath);
+      expect(project).toBeDefined();
+      expect(project!.favorite).toBe(false);
+    });
+  });
+
+  describe("createProject returns the hub path", () => {
+    it("createProjectReturnsHubPath", async () => {
+      const fake = createFakeVault();
+      seedTemplates(fake);
+      const repo = makeRepo(fake);
+
+      const hubPath = await repo.createProject("Web Rediseño");
+
+      expect(hubPath).toBe("Projects/Web Rediseño/Web Rediseño.md");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Sanitization + disambiguation tests
   // -------------------------------------------------------------------------
 

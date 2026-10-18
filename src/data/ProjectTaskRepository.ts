@@ -308,7 +308,7 @@ export class ProjectTaskRepository {
   //    survive untouched.
   // -------------------------------------------------------------------------
 
-  async createProject(title: string): Promise<void> {
+  async createProject(title: string): Promise<string> {
     const sanitized = sanitizeFilename(title);
 
     // Validate the templates BEFORE we touch the filesystem so a
@@ -354,6 +354,8 @@ export class ProjectTaskRepository {
       today: todayStamp(),
     });
     await this.adapter.createMarkdown(credPath, credContent);
+
+    return hubPath;
   }
 
   async createTask(
@@ -516,6 +518,13 @@ export class ProjectTaskRepository {
     const ref = { path, basename: basenameOf(path) };
     await this.adapter.processFrontMatter(ref, (frontmatter) => {
       frontmatter["status"] = status;
+    });
+  }
+
+  async setProjectFavorite(path: string, favorite: boolean): Promise<void> {
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["favorite"] = favorite;
     });
   }
 
