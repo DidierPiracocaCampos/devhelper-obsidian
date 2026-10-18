@@ -12,10 +12,10 @@
      --background-modifier-border -> hairline borders on panels, chips, cards.
 
    Layout contract:
-     - Desktop (default): `.devhelper-dashboard-root` is a two-column grid
-       (1fr auto) with gap: 12px; the topbar spans both columns (and is just a
+     - Desktop (default): `.devhelper-dashboard-root` is a three-column grid
+       (1fr auto auto) with gap: 12px; the topbar spans all columns (and is just a
        transparent row of chips + the search field - no longer a panel of its
-       own), the tasks panel takes the wide column and the side rail lives
+       own), the tasks panel takes the wide column, the toolbar rail lives
        in the narrow one.
      - Narrow panels (< 640px, added by the responsive pass): the grid
        collapses to a single column; task card actions stack below 320px.
@@ -27,19 +27,22 @@
    round `+` chip), `.devhelper-icon-button` / `.devhelper-fab` (round icon
    buttons, the FAB is the accent-colored `+`), `.devhelper-search-wrap`
    + `.devhelper-search` + `.devhelper-search-hint` (decorative search field
-   with an inline Ctrl-K cue), `.devhelper-side-column` (narrow column:
-   `.devhelper-icon-rail` above `.devhelper-calendar`), and
+   with an inline Ctrl-K cue), `.devhelper-toolbar-rail` (vertical strip between tasks and calendar,
+   `.devhelper-side-column` holds `.devhelper-calendar`), and
    `.devhelper-bottom-sections` (full-width row of `.devhelper-section`
    placeholder panels with `.devhelper-placeholder-empty` bodies). Task
    cards carry an optional `.devhelper-task-project-badge` next to the title
    in the "Todas las tareas" view. The tasks panel and the issues panel
    live in the wide column; `.devhelper-issues` and
-   `.devhelper-bottom-sections` span both columns.
+   `.devhelper-bottom-sections` span all columns.
    ========================================================================== */
 
 .devhelper-dashboard-root {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
+  grid-template-rows: auto 1fr auto auto;
+  height: 100%;
+  box-sizing: border-box;
   /* Obsidian fuerza `height: 100%` sobre `.view-content` (que es este mismo
      nodo). Con el valor por defecto `align-content: normal` (= stretch) el
      espacio sobrante se repartía entre las filas y la primera fila medía
@@ -290,21 +293,20 @@
   gap: 12px;
 }
 
-/* The tasks panel reuses the panel chrome above and lays the header and
-   the FABs column on one row; the task list wraps to a full-width row. */
+/* The tasks panel reuses the panel chrome above and stacks header, filters
+   and list in a column; the list grows (`flex: 1`) and scrolls inside. */
 .devhelper-tasks-panel {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  /* Igual que en el root: sin esto, cuando el grid estira el panel, el
-     espacio extra se repartía entre sus dos líneas y la cabecera pasaba de
-     ~80px a ~236px. */
-  align-content: flex-start;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-self: stretch;
+  min-height: 0;
+  overflow: hidden;
   gap: 12px;
 }
 
 .devhelper-tasks-panel-header {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -377,6 +379,77 @@
   font-style: italic;
 }
 
+/* --- Empty states (centrados con icono) ------------------------------------
+   Silueta común para todos los paneles: icono arriba + texto debajo,
+   siempre centrado. Se usa en «sin proyectos», lista de tareas vacía,
+   «sin resultados», calendario y secciones Archivos/Contraseña. */
+.devhelper-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 28px 16px;
+}
+
+.devhelper-empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8e8e96;
+}
+
+.devhelper-empty-state-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.devhelper-empty-state-text {
+  margin: 0;
+  color: #63636b;
+  font-style: normal;
+  font-size: 0.9em;
+  line-height: 1.4;
+  max-width: 36ch;
+}
+
+/* El panel de tareas y el bloque «sin proyectos» estiran el vacío para
+   que quede centrado en vertical dentro del panel claro. */
+.devhelper-tasks-panel .devhelper-empty-state,
+.devhelper-main .devhelper-empty-state {
+  flex: 1 1 auto;
+  min-height: 140px;
+  justify-content: center;
+  margin: auto 0;
+}
+
+/* Compacto en calendario y secciones inferiores. */
+.devhelper-calendar .devhelper-empty-state {
+  padding: 12px 8px;
+  gap: 6px;
+  min-height: 0;
+}
+
+.devhelper-calendar .devhelper-empty-state-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.devhelper-section .devhelper-empty-state {
+  flex: 1 1 auto;
+  justify-content: center;
+  margin: auto 0;
+  padding: 20px 12px;
+}
+
+.devhelper-section .devhelper-empty-state-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
 /* --- Task list / cards ---------------------------------------------------- */
 .devhelper-task-list {
   list-style: none;
@@ -390,7 +463,7 @@
 /* Second header row inside the tasks panel: status chips left, search
    right. Wraps to its own full-width row below the title + buttons. */
 .devhelper-task-filters {
-  flex: 1 1 100%;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -435,13 +508,28 @@
 
 /* Force the list onto its own row inside the row-wrapped tasks panel. */
 .devhelper-tasks-panel .devhelper-task-list {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .devhelper-task-empty {
   color: #63636b;
   font-style: italic;
-  padding: 8px 0;
+  padding: 0;
+  /* Que el <li> rellene la lista para poder centrar en Y dentro del panel. */
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.devhelper-task-empty .devhelper-empty-state {
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: 28px 16px;
+  min-height: 160px;
+  margin: auto 0;
 }
 
 .devhelper-task-card {
@@ -622,29 +710,30 @@
   color: var(--text-muted);
 }
 
-/* --- Side column (icon rail + calendar) ----------------------------------- */
-/* Stacks the rail above the calendar in the narrow second grid column and
-   hugs the top of its cell (`align-self: start`). */
+/* --- Side column (toolbar rail + calendar) ----------------------------------- */
+/* Toolbar vertical entre tareas y calendario + calendario en la tercera
+   columna. Ambos abrazan la parte superior de su celda (`align-self: start`). */
+.devhelper-toolbar-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  align-self: start;
+}
+
+.devhelper-toolbar-rail .devhelper-icon-button {
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border-color: #2b2b30;
+  color: #fafafa;
+}
+
 .devhelper-side-column {
   display: flex;
   flex-direction: column;
   gap: 12px;
   align-self: start;
-}
-
-.devhelper-icon-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-}
-
-.devhelper-icon-rail .devhelper-icon-button {
-  background: #1b1b1e;
-  background-color: #1b1b1e;
-  border-color: #2b2b30;
-  color: #fafafa;
 }
 
 .devhelper-calendar {
@@ -746,11 +835,33 @@
   background-color: #efeff1;
   border: 1px solid #efeff1;
   color: #111114;
+  min-height: 120px;
 }
 
 .devhelper-section h3 {
   margin: 0;
   color: #111114;
+}
+
+/* Cabecera en una sola fila (título izq + botones der), igual que el
+   panel de tareas, para que el vacío quede centrado en el resto alto. */
+.devhelper-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.devhelper-section-header h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: #111114;
+}
+
+.devhelper-section-header .devhelper-panel-fabs {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .devhelper-section .devhelper-placeholder-empty {
@@ -810,13 +921,57 @@
 /* --- Narrow layout -------------------------------------------------------- */
 @media (max-width: 640px) {
   .devhelper-dashboard-root {
-    grid-template-columns: 1fr;
+    /* En estrecho se apila por flex en columna: cada bloque mide según
+       su contenido y la tira de herramientas se reordena tras la topbar. */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: auto;
   }
-  .devhelper-icon-rail {
-    display: none;
+  .devhelper-topbar {
+    order: 1;
+  }
+  /* Tira de herramientas visible bajo el buscador, en horizontal. */
+  .devhelper-toolbar-rail {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    align-self: flex-start;
+    order: 2;
+  }
+  .devhelper-tasks-panel {
+    overflow: visible;
+    align-self: stretch;
+    min-height: 40vh;
+    order: 3;
+  }
+  .devhelper-main {
+    order: 3;
+  }
+  .devhelper-tasks-panel .devhelper-task-list {
+    overflow-y: visible;
+    flex: none;
+  }
+  .devhelper-side-column {
+    order: 4;
+    align-self: stretch;
   }
   .devhelper-bottom-sections {
     flex-direction: column;
+    order: 5;
+  }
+  .devhelper-issues {
+    order: 6;
+  }
+  .devhelper-topbar-controls {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .devhelper-topbar-controls .devhelper-search-wrap {
+    flex: 1 1 auto;
+    width: auto;
   }
 }
 
@@ -857,5 +1012,15 @@
   }
   .devhelper-task-list {
     width: 100%;
+  }
+}
+
+/* --- Tall screens -----------------------------------------------------------
+   En pantallas muy altas el espacio libre se reparte: tareas se queda con
+   dos partes y la fila inferior (Archivos + Contraseña) con una, para que
+   tareas no crezca sin límite y los inferiores también respiren. */
+@media (min-height: 900px) and (min-width: 641px) {
+  .devhelper-dashboard-root {
+    grid-template-rows: auto 2fr 1fr auto;
   }
 }

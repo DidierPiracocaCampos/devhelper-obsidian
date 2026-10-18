@@ -111,15 +111,32 @@ export class DashboardView extends ItemView {
   // Render
   // -------------------------------------------------------------------------
 
+  /**
+   * Bloque vacío centrado con icono + texto. Se usa en todos los
+   * paneles (tareas, calendario, archivos, contraseñas, sin proyectos)
+   * para que los estados vacíos compartan la misma silueta.
+   */
+  private appendEmptyState(
+    parent: HTMLElement,
+    icon: string,
+    text: string,
+  ): HTMLElement {
+    const box = parent.createEl("div", { cls: "devhelper-empty-state" });
+    const iconEl = box.createEl("span", {
+      cls: "devhelper-empty-state-icon",
+      attr: { "aria-hidden": "true" },
+    });
+    setIcon(iconEl, icon);
+    box.createEl("p", { cls: "devhelper-empty-state-text", text });
+    return box;
+  }
+
   private renderEmpty(): void {
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-dashboard-root");
     const main = this.contentEl.createEl("div", { cls: "devhelper-main" });
     main.createEl("h2", { text: "Dashboard DevHelper" });
-    main.createEl("p", {
-      cls: "devhelper-empty",
-      text: "Cargando proyectos y tareas…",
-    });
+    this.appendEmptyState(main, "loader-circle", "Cargando proyectos y tareas…");
   }
 
   private render(data: DashboardData): void {
@@ -144,6 +161,7 @@ export class DashboardView extends ItemView {
     } else {
       this.renderTasksPanel(presentation, data);
     }
+    this.renderToolbarRail();
     this.renderSideColumn();
     this.renderBottomSections();
     this.renderIssues(presentation.issues);
@@ -319,10 +337,11 @@ export class DashboardView extends ItemView {
     const main = this.contentEl.createEl("section", {
       cls: "devhelper-main",
     });
-    main.createEl("p", {
-      cls: "devhelper-empty",
-      text: "No hay proyectos todavía. Crea el primero con el botón + de arriba.",
-    });
+    this.appendEmptyState(
+      main,
+      "folder-plus",
+      "No hay proyectos todavía. Crea el primero con el botón + de arriba.",
+    );
   }
 
   private renderTasksPanel(
@@ -383,19 +402,24 @@ export class DashboardView extends ItemView {
     const list = main.createEl("ul", { cls: "devhelper-task-list" });
     if (tasks.length === 0) {
       let emptyText = "Aún no hay tareas.";
+      let emptyIcon = "inbox";
       if (this.taskStatusFilter === "open") {
         emptyText = "No hay tareas abiertas.";
+        emptyIcon = "circle-dot";
       } else if (this.taskStatusFilter === "done") {
         emptyText = "No hay tareas terminadas.";
+        emptyIcon = "circle-check";
       } else if (presentation.showAll || presentation.selectedProject === null) {
         emptyText = "Aún no hay tareas en ningún proyecto.";
+        emptyIcon = "inbox";
       } else {
         emptyText = "Este proyecto aún no tiene tareas.";
+        emptyIcon = "inbox";
       }
-      list.createEl("li", {
+      const emptyItem = list.createEl("li", {
         cls: "devhelper-task-empty",
-        text: emptyText,
       });
+      this.appendEmptyState(emptyItem, emptyIcon, emptyText);
       // Still apply the query hiding so a stale query never shows
       // rows that should stay hidden.
       this.applyTaskQueryFilter(list);
@@ -481,8 +505,12 @@ export class DashboardView extends ItemView {
     if (noResults === null) {
       noResults = list.createEl("li", {
         cls: "devhelper-task-empty devhelper-task-no-results",
-        text: "Sin resultados para esta búsqueda.",
       });
+      this.appendEmptyState(
+        noResults,
+        "search-x",
+        "Sin resultados para esta búsqueda.",
+      );
     }
     if (query === "") {
       for (const child of Array.from(list.children)) {
@@ -616,39 +644,45 @@ export class DashboardView extends ItemView {
   }
 
   /**
-   * Right-hand column of the layout: the icon rail stacked above the
-   * weekly calendar card.
+   * Columna estrecha de herramientas entre el panel de tareas y el
+   * calendario. Contenedor listo para los botones que el usuario pueda
+   * configurar en el futuro; por ahora sólo trae el de Ajustes.
    *
-   * Everything here is a visual placeholder — the controls are rendered
-   * for the silhouette only and carry no listeners, so they cannot
-   * mutate the repository or the vault.
+   * Todo aquí es placeholder visual — el botón no tiene listener y no
+   * puede mutar el repositorio ni el vault.
+   */
+  private renderToolbarRail(): void {
+    const rail = this.contentEl.createEl("div", {
+      cls: "devhelper-toolbar-rail",
+    });
+
+    const settingsButton = rail.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: {
+        "aria-label": "Ajustes",
+        title: "Ajustes",
+        type: "button",
+      },
+    });
+    setIcon(settingsButton, "settings");
+
+    // Punto de extensión: aquí irán los botones configurables por el
+    // usuario (futuro). No renderizar nada más por ahora.
+  }
+
+  /**
+   * Columna derecha del layout: la tarjeta del calendario semanal.
+   *
+   * Todo aquí es un visual placeholder — los controles se renderizan
+   * sólo por silueta y no llevan listeners, así que no pueden
+   * mutar el repositorio ni el vault.
    */
   private renderSideColumn(): void {
     const column = this.contentEl.createEl("div", {
       cls: "devhelper-side-column",
     });
 
-    // 1. Icon rail: four inert round buttons.
-    const rail = column.createEl("div", { cls: "devhelper-icon-rail" });
-    const railIcons: Array<{ icon: string; label: string }> = [
-      { icon: "funnel", label: "Filtrar" },
-      { icon: "code", label: "Código" },
-      { icon: "settings", label: "Ajustes" },
-      { icon: "log-out", label: "Salir" },
-    ];
-    for (const entry of railIcons) {
-      const button = rail.createEl("button", {
-        cls: "devhelper-icon-button",
-        attr: {
-          "aria-label": entry.label,
-          title: entry.label,
-          type: "button",
-        },
-      });
-      setIcon(button, entry.icon);
-    }
-
-    // 2. Calendar card: month label, inert controls, weekday header,
+    // Calendar card: month label, inert controls, weekday header,
     //    the seven days of the current ISO week and an empty state.
     const strip = getWeekStrip(new Date());
     const calendar = column.createEl("section", {
@@ -694,10 +728,7 @@ export class DashboardView extends ItemView {
       if (day.isToday) cell.addClass("is-today");
     }
 
-    calendar.createEl("p", {
-      cls: "devhelper-placeholder-empty",
-      text: "No hay eventos este día",
-    });
+    this.appendEmptyState(calendar, "calendar-x", "No hay eventos este día");
   }
 
   /**
@@ -713,16 +744,16 @@ export class DashboardView extends ItemView {
     const renderSection = (
       title: string,
       emptyText: string,
+      emptyIcon: string,
       addLabel: string,
     ): void => {
       const section = row.createEl("section", { cls: "devhelper-section" });
-      section.createEl("h3", { text: title });
-      section.createEl("p", {
-        cls: "devhelper-placeholder-empty",
-        text: emptyText,
+      const header = section.createEl("div", {
+        cls: "devhelper-section-header",
       });
+      header.createEl("h3", { text: title });
 
-      const fabs = section.createEl("div", { cls: "devhelper-panel-fabs" });
+      const fabs = header.createEl("div", { cls: "devhelper-panel-fabs" });
 
       // Placeholder filter: no click listener on purpose (spec rule).
       const filterButton = fabs.createEl("button", {
@@ -738,10 +769,12 @@ export class DashboardView extends ItemView {
       });
       setIcon(addButton, "plus");
       addButton.disabled = true;
+
+      this.appendEmptyState(section, emptyIcon, emptyText);
     };
 
-    renderSection("Archivos", "No hay archivos", "Añadir archivo");
-    renderSection("Contraseña", "Sin contraseñas", "Añadir contraseña");
+    renderSection("Archivos", "No hay archivos", "files", "Añadir archivo");
+    renderSection("Contraseña", "Sin contraseñas", "key-round", "Añadir contraseña");
   }
 
   // -------------------------------------------------------------------------
