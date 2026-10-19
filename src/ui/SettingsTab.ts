@@ -4,9 +4,11 @@ import { mergePluginSettings, normalizeVaultFolderPath } from "../settings";
 import type { CredentialSession } from "../data/CredentialSession";
 
 /**
- * Settings tab that exposes the two vault folder paths the plugin reads
+ * Settings tab that exposes the vault folder paths the plugin reads
  * Markdown from. Persistence is delegated to the plugin's `loadData` /
  * `saveData` cycle, so `data.json` never stores project or task records.
+ * Credential key material (`credSaltB64` / `credVerifier`) is never shown
+ * nor edited here — only preserved through `mergePluginSettings`.
  */
 export class SettingsTab extends PluginSettingTab {
   private readonly plugin: Plugin;
@@ -51,6 +53,37 @@ export class SettingsTab extends PluginSettingTab {
           await this.writeSettings(settings);
         });
       });
+
+    new Setting(containerEl)
+      .setName("Carpeta de calendario")
+      .setDesc(
+        "Carpeta del vault donde se guardan los eventos del calendario. Por defecto «Calendario».",
+      )
+      .addText((text) => {
+        text.setValue(settings.calendarFolder).onChange(async (value) => {
+          settings.calendarFolder = normalizeVaultFolderPath(
+            value,
+            this.defaults.calendarFolder,
+          );
+          await this.writeSettings(settings);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Carpeta de plantillas de calendario")
+      .setDesc(
+        "Carpeta del vault donde se siembran las plantillas de eventos. Por defecto «Calendario/_templates».",
+      )
+      .addText((text) => {
+        text.setValue(settings.calendarTemplatesFolder).onChange(async (value) => {
+          settings.calendarTemplatesFolder = normalizeVaultFolderPath(
+            value,
+            this.defaults.calendarTemplatesFolder,
+          );
+          await this.writeSettings(settings);
+        });
+      });
+
     new Setting(containerEl)
       .setName("Bloqueo de credenciales (minutos)")
       .setDesc(

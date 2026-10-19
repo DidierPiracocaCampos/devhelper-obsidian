@@ -43,6 +43,9 @@ import {
   type TemplateKind,
 } from "../domain/templates";
 import type {
+  CalendarEventRecord,
+  CalendarKind,
+  CalendarRecurrence,
   CredentialsRecord,
   DashboardData,
   DashboardIssue,
@@ -121,12 +124,14 @@ export class ProjectTaskRepository {
     const notes: NoteRecord[] = [];
     const credentials: CredentialsRecord[] = [];
     const files: FileRecord[] = [];
+    const calendarEvents: CalendarEventRecord[] = [];
     const issues: DashboardIssue[] = [];
 
     await this.adapter.createFolder(this.settings.projectsFolder);
 
     // 1. Seed + validate templates.
     await this.seedTemplates();
+    await this.seedCalendarTemplates();
     // 1b. Proyecto sombra General: se siembra si falta (nunca se
     // sobrescribe) para que el modo «Todos» siempre tenga ámbito.
     await this.ensureGeneralProject();
@@ -142,6 +147,16 @@ export class ProjectTaskRepository {
         );
         issues.push({ path, message: issueMessage });
       }
+    }
+    const calendarTemplateIssueMessage = await this.templateIssue(
+      "calendar-event",
+      this.settings.calendarTemplatesFolder,
+    );
+    if (calendarTemplateIssueMessage !== null) {
+      issues.push({
+        path: this.calendarTemplatePath(),
+        message: calendarTemplateIssueMessage,
+      });
     }
 
     // 2. Stray V1 notes (loose .md at the root of projectsFolder).
@@ -319,7 +334,38 @@ export class ProjectTaskRepository {
       }
     }
 
-    return { projects, tasks, notes, credentials, files, issues };
+    // 7. Scan the flat calendar folder (non-recursive). Files inside
+    // `calendarTemplatesFolder` are never listed because
+    // `listMarkdownFiles` is non-recursive, but we guard explicitly.
+    await this.adapter.createFolder(this.settings.calendarFolder);
+    for (const ref of this.adapter.listMarkdownFiles(
+      this.settings.calendarFolder,
+    )) {
+      if (
+        normalizePathForCompare(folderOf(ref.path)) ===
+        normalizePathForCompare(this.settings.calendarTemplatesFolder)
+      ) {
+        continue;
+      }
+      const snapshot = await this.readSnapshot(ref);
+      const parsed = parseProjectTaskNote(snapshot, this.resolveProject);
+      switch (parsed.kind) {
+        case "calendar-event":
+          calendarEvents.push(parsed.event);
+          break;
+        case "issue":
+          issues.push(parsed.issue);
+          break;
+        default:
+          issues.push({
+            path: ref.path,
+            message: `La nota '${basenameOf(ref.path)}' de la carpeta de calendario debe ser de tipo 'calendar-event'.`,
+          });
+          break;
+      }
+    }
+
+    return { projects, tasks, notes, credentials, files, calendarEvents, issues };
   }
 
   // -------------------------------------------------------------------------
@@ -340,6 +386,23 @@ export class ProjectTaskRepository {
       if (!this.adapter.exists(fullPath)) {
         await this.adapter.createMarkdown(fullPath, DEFAULT_TEMPLATE_CONTENT[kind]);
       }
+    }
+  }
+
+  /**
+   * Ensure the calendar-event template exists under
+   * `calendarTemplatesFolder`. Like `seedTemplates`, it never overwrites
+   * a user-forked template.
+   */
+  private async seedCalendarTemplates(): Promise<void> {
+    await this.adapter.createFolder(this.settings.calendarTemplatesFolder);
+    const fileName = TEMPLATE_FILE_NAMES["calendar-event"];
+    const fullPath = joinPath(this.settings.calendarTemplatesFolder, fileName);
+    if (!this.adapter.exists(fullPath)) {
+      await this.adapter.createMarkdown(
+        fullPath,
+        DEFAULT_TEMPLATE_CONTENT["calendar-event"],
+      );
     }
   }
 
@@ -399,9 +462,12 @@ export class ProjectTaskRepository {
    * The file-name is woven into every message so the dashboard can
    * show "La plantilla 'proyecto.md' …" rather than a generic message.
    */
-  private async templateIssue(kind: TemplateKind): Promise<string | null> {
+  private async templateIssue(
+    kind: TemplateKind,
+    folder: string = this.settings.templatesFolder,
+  ): Promise<string | null> {
     const fileName = TEMPLATE_FILE_NAMES[kind];
-    const fullPath = joinPath(this.settings.templatesFolder, fileName);
+    const fullPath = joinPath(folder, fileName);
     if (!this.adapter.exists(fullPath)) return null;
     const ref: VaultNoteRef = { path: fullPath, basename: fileName };
     const content = await this.adapter.read(ref);
@@ -927,6 +993,114 @@ export class ProjectTaskRepository {
   }
 
   // -------------------------------------------------------------------------
+  // Mutations: calendar events
+  //
+  // Cada evento vive como una nota `type: calendar-event` en la carpeta
+  // plana `calendarFolder`. Las operaciones de escritura validan la
+  // plantilla `evento.md`, crean desde la plantilla del usuario y
+  // actualizan sólo las propiedades que tocan, siempre por
+  // `processFrontMatter` (salvo `create`, que materializa la nota de una
+  // vez con el contenido final para evitar escrituras parciales).
+  // -------------------------------------------------------------------------
+
+  async createCalendarEvent(
+    input: CalendarEventInput,
+  ): Promise<string> {
+    const issue = await this.templateIssue(
+      "calendar-event",
+      this.settings.calendarTemplatesFolder,
+    );
+    if (issue !== null) {
+      throw new Error(issue);
+    }
+
+    await this.adapter.createFolder(this.settings.calendarFolder);
+    const sanitized = sanitizeFilename(input.title);
+    const path = await this.uniqueMarkdownPath(
+      this.settings.calendarFolder,
+      sanitized,
+    );
+    const content = await this.buildCalendarEventContent(input);
+    await this.adapter.createMarkdown(path, content);
+    return path;
+  }
+
+  /**
+   * Actualiza sólo las propiedades de frontmatter de un evento de
+   * calendario. El título y el cuerpo no son mutables por este método:
+   * renombrar un evento requiere recrearlo (cambio de filename), y el
+   * cuerpo se edita directamente en la nota de Obsidian, igual que para
+   * tareas y notas simples.
+   */
+  async updateCalendarEvent(
+    path: string,
+    patch: Partial<CalendarEventPatch>,
+  ): Promise<void> {
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      if (patch.kind !== undefined) frontmatter["kind"] = patch.kind;
+      if (patch.date !== undefined) frontmatter["date"] = patch.date;
+      if (patch.endDate !== undefined) {
+        if (patch.endDate === null) {
+          delete frontmatter["endDate"];
+        } else {
+          frontmatter["endDate"] = patch.endDate;
+        }
+      }
+      if (patch.allDay !== undefined) {
+        frontmatter["allDay"] = patch.allDay;
+        if (patch.allDay) {
+          delete frontmatter["time"];
+        }
+      }
+      if (patch.time !== undefined) {
+        if (patch.time === null) {
+          delete frontmatter["time"];
+        } else {
+          frontmatter["time"] = patch.time;
+        }
+      }
+      if (patch.recurrence !== undefined) {
+        frontmatter["recurrence"] = patch.recurrence;
+      }
+      if (patch.recurrenceEnd !== undefined) {
+        if (patch.recurrenceEnd === null) {
+          delete frontmatter["recurrenceEnd"];
+        } else {
+          frontmatter["recurrenceEnd"] = patch.recurrenceEnd;
+        }
+      }
+      if (patch.projectLink !== undefined) {
+        if (patch.projectLink === null) {
+          delete frontmatter["project"];
+        } else {
+          const inner = projectPathToWikilinkInner(patch.projectLink);
+          frontmatter["project"] = wrapWikilink(inner);
+        }
+      }
+      if (patch.status !== undefined) frontmatter["status"] = patch.status;
+    });
+  }
+
+  async setCalendarEventStatus(
+    path: string,
+    status: "open" | "done",
+  ): Promise<void> {
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["status"] = status;
+    });
+  }
+
+  /**
+   * Manda una nota de calendario a la papelera (recuperable).
+   */
+  async deleteCalendarEvent(path: string): Promise<void> {
+    const ref = { path, basename: basenameOf(path) };
+    await this.adapter.trash(ref);
+  }
+
+  // -------------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------------
 
@@ -1158,11 +1332,143 @@ export class ProjectTaskRepository {
   private templatePath(kind: TemplateKind): string {
     return joinPath(this.settings.templatesFolder, TEMPLATE_FILE_NAMES[kind]);
   }
+
+  /**
+   * Resolve the vault-relative path of the calendar-event template.
+   */
+  private calendarTemplatePath(): string {
+    return joinPath(
+      this.settings.calendarTemplatesFolder,
+      TEMPLATE_FILE_NAMES["calendar-event"],
+    );
+  }
+
+  /**
+   * Build the final Markdown content for a new calendar event from the
+   * user's `calendar-event` template, stamping the values supplied by the
+   * caller and preserving any extra properties or body the template
+   * carries.
+   */
+  private async buildCalendarEventContent(
+    input: CalendarEventInput,
+  ): Promise<string> {
+    const templateRef: VaultNoteRef = {
+      path: this.calendarTemplatePath(),
+      basename: TEMPLATE_FILE_NAMES["calendar-event"],
+    };
+    const templateContent = await this.adapter.read(templateRef);
+
+    // Reutilizamos `applyTemplate` para estampar `created` y preservar el
+    // cuerpo / props extra; este paso ya hace el parseo/serializado base.
+    const stamped = applyTemplate(templateContent, "calendar-event", {
+      title: input.title,
+      today: todayStamp(),
+    });
+
+    const sliced = sliceFrontmatter(stamped);
+    if (sliced.kind !== "ok") {
+      // Validation should have caught this first; degrade gracefully.
+      return stamped;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = yaml.load(sliced.yaml);
+    } catch {
+      return stamped;
+    }
+    if (
+      parsed === null ||
+      parsed === undefined ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return stamped;
+    }
+
+    const props = parsed as Record<string, unknown>;
+    // Campos específicos de calendar-event que `applyTemplate` no toca.
+    props.kind = input.kind;
+    props.date = input.date;
+    props.allDay = input.allDay ?? true;
+    props.recurrence = input.recurrence ?? "none";
+    props.status = input.status ?? "open";
+
+    if (input.endDate !== undefined) {
+      props.endDate = input.endDate;
+    }
+
+    if (input.allDay === false && input.time !== undefined) {
+      props.time = input.time;
+    } else if (input.allDay !== false && input.time === undefined) {
+      delete props.time;
+    }
+
+    if (input.recurrenceEnd !== undefined) {
+      props.recurrenceEnd = input.recurrenceEnd;
+    }
+
+    if (input.projectLink !== undefined) {
+      const inner = projectPathToWikilinkInner(input.projectLink);
+      props.project = wrapWikilink(inner);
+    }
+
+    const dumped = yaml.dump(props, { lineWidth: -1 });
+    const body = input.body ?? sliced.body;
+    return `---\n${dumped}---\n${body}`;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Encrypted-credential helpers (exported input type + module privates).
 // ---------------------------------------------------------------------------
+
+/**
+ * User-supplied values for one calendar event. The repository stamps
+ * these into the frontmatter of a new `type: calendar-event` note,
+ * preserving the template's body and any extra user-defined properties.
+ */
+export interface CalendarEventInput {
+  title: string;
+  kind: CalendarKind;
+  date: string;
+  endDate?: string;
+  time?: string;
+  allDay?: boolean;
+  recurrence?: CalendarRecurrence;
+  recurrenceEnd?: string;
+  projectLink?: string;
+  body?: string;
+  status?: "open" | "done";
+}
+
+/**
+ * Keys mutables vía `updateCalendarEvent`. El título no es editable por
+ * este método (cambiarlo implica renombrar el archivo); el cuerpo tampoco
+ * (se edita directamente en Obsidian, igual que tareas y notas simples).
+ *
+ * `endDate`, `time`, `recurrenceEnd` y `projectLink` aceptan `null` para
+ * borrar explícitamente la propiedad del frontmatter. `undefined` sigue
+ * sin tocar la propiedad.
+ */
+export interface CalendarEventPatch {
+  kind?: CalendarKind;
+  date?: string;
+  /** `null` borra `endDate` del frontmatter; `undefined` no lo toca. */
+  endDate?: string | null;
+  /** `null` borra `time` del frontmatter; `undefined` no lo toca. */
+  time?: string | null;
+  allDay?: boolean;
+  recurrence?: CalendarRecurrence;
+  /** `null` borra `recurrenceEnd` del frontmatter; `undefined` no lo toca. */
+  recurrenceEnd?: string | null;
+  /**
+   * `null` borra `project` del frontmatter (evento global);
+   * `undefined` no lo toca.
+   */
+  projectLink?: string | null;
+  status?: "open" | "done";
+}
 
 /**
  * User-supplied values for one credential. `service` is stored in

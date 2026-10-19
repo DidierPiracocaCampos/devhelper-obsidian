@@ -1166,3 +1166,341 @@
     grid-template-rows: auto 2fr 1fr auto;
   }
 }
+
+/* ============================================================================
+   Calendar view (Task 5: vista mensual)
+   ========================================================================== */
+
+.devhelper-calendar-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  background-color: var(--background-primary);
+  overflow-y: auto;
+}
+
+.devhelper-calendar-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.devhelper-calendar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.devhelper-calendar-nav .devhelper-icon-button,
+.devhelper-calendar-nav-today {
+  background: var(--background-primary-alt);
+  background-color: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.devhelper-calendar-nav .devhelper-icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.devhelper-calendar-nav-today {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.9em;
+}
+
+.devhelper-calendar-month-label {
+  font-size: 1.1em;
+  color: var(--text-normal);
+}
+
+.devhelper-calendar-topbar .devhelper-fab {
+  margin-left: auto;
+  background: var(--background-primary-alt);
+  background-color: var(--background-primary-alt);
+  border-color: var(--background-primary-alt);
+  color: var(--text-normal);
+}
+
+.devhelper-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.devhelper-calendar-weekdays span {
+  text-align: center;
+  font-size: 0.75em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 4px;
+}
+
+.devhelper-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.devhelper-calendar-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 64px;
+  padding: 6px 2px;
+  border-radius: 8px;
+  background: transparent;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.devhelper-calendar-cell:hover {
+  background: var(--background-primary-alt);
+  background-color: var(--background-primary-alt);
+}
+
+.devhelper-calendar-cell.is-outside-month {
+  color: var(--text-muted);
+}
+
+.devhelper-calendar-cell.is-today .devhelper-calendar-cell-day {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--text-normal);
+}
+
+.devhelper-calendar-cell.is-selected {
+  background: var(--background-primary-alt);
+  background-color: var(--background-primary-alt);
+  border-color: var(--background-modifier-border);
+}
+
+.devhelper-calendar-cell-day {
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.devhelper-calendar-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+}
+
+.devhelper-calendar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.devhelper-dot--evento {
+  background: #3b82f6;
+  background-color: #3b82f6;
+}
+
+.devhelper-dot--reunion {
+  background: #a855f7;
+  background-color: #a855f7;
+}
+
+.devhelper-dot--fecha_limite {
+  background: #ef4444;
+  background-color: #ef4444;
+}
+
+.devhelper-dot--aviso {
+  background: #f59e0b;
+  background-color: #f59e0b;
+}
+
+.devhelper-day-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--background-secondary);
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-secondary);
+  color: var(--text-normal);
+  min-height: 120px;
+}
+
+.devhelper-day-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.devhelper-day-panel-header h3 {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--text-normal);
+}
+
+.devhelper-day-panel-header .devhelper-fab {
+  background: var(--background-primary-alt);
+  background-color: var(--background-primary-alt);
+  border-color: var(--background-primary-alt);
+  color: var(--text-normal);
+}
+
+.devhelper-day-panel .devhelper-task-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.devhelper-day-panel .devhelper-task-empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.devhelper-day-panel .devhelper-empty-state {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-height: 120px;
+  margin: auto 0;
+}
+
+.devhelper-event-card.devhelper-task-card {
+  align-items: flex-start;
+}
+
+.devhelper-event-time {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.devhelper-event-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.devhelper-event-kind-badge {
+  font-size: 0.7em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fafafa;
+}
+
+.devhelper-event-kind-badge--evento {
+  background: #3b82f6;
+  background-color: #3b82f6;
+}
+
+.devhelper-event-kind-badge--reunion {
+  background: #a855f7;
+  background-color: #a855f7;
+}
+
+.devhelper-event-kind-badge--fecha_limite {
+  background: #ef4444;
+  background-color: #ef4444;
+}
+
+.devhelper-event-kind-badge--aviso {
+  background: #f59e0b;
+  background-color: #f59e0b;
+}
+
+/* Checkbox rows inside the event modal (varios días / todo el día). */
+.devhelper-form-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.devhelper-form-inline .devhelper-form-row {
+  flex: 1 1 auto;
+  min-width: 140px;
+}
+
+.devhelper-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 0.95em;
+}
+
+/* --- Calendar responsive breakpoints -------------------------------------- */
+@media (max-width: 640px) {
+  .devhelper-calendar-root {
+    height: auto;
+    padding: 8px;
+  }
+
+  .devhelper-calendar-grid {
+    min-height: 280px;
+  }
+
+  .devhelper-calendar-cell {
+    min-height: 48px;
+    padding: 4px 1px;
+  }
+
+  .devhelper-day-panel {
+    min-height: 160px;
+  }
+}
+
+@media (max-width: 320px) {
+  .devhelper-calendar-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .devhelper-calendar-nav {
+    justify-content: space-between;
+  }
+
+  .devhelper-calendar-month-label {
+    margin: 0 auto;
+  }
+
+  .devhelper-calendar-topbar .devhelper-fab {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+
+  .devhelper-event-card.devhelper-task-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .devhelper-event-card .devhelper-task-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .devhelper-event-card .devhelper-task-actions button {
+    align-self: flex-start;
+  }
+}

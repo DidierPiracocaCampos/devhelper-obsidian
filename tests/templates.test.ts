@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import yaml from "js-yaml";
 import {
   DEFAULT_TEMPLATE_CONTENT,
+  FIXED_TEMPLATE_PROPERTIES,
   TEMPLATE_FILE_NAMES,
   applyTemplate,
   todayStamp,
@@ -21,7 +22,13 @@ import { sliceFrontmatter } from "../src/domain/frontmatter";
  * - todayStamp must produce a `YYYY-MM-DD` string in local time.
  */
 
-const ALL_KINDS: TemplateKind[] = ["project", "task", "note", "credentials"];
+const ALL_KINDS: TemplateKind[] = [
+  "project",
+  "task",
+  "note",
+  "credentials",
+  "calendar-event",
+];
 
 describe("DEFAULT_TEMPLATE_CONTENT", () => {
   it("seededTemplatesAreValid", () => {
@@ -166,6 +173,89 @@ describe("noteTemplate", () => {
     expect(parsed.project).toBe("[[Projects/Web]]");
     expect(parsed.type).toBe("note");
     expect(parsed.created).toBe("2026-02-20");
+  });
+});
+
+describe("calendarEventTemplate", () => {
+  it("calendarEventTemplateNameIsEvento", () => {
+    expect(TEMPLATE_FILE_NAMES["calendar-event"]).toBe("evento.md");
+  });
+
+  it("calendarEventFixedPropertiesMatchSpec", () => {
+    expect(FIXED_TEMPLATE_PROPERTIES["calendar-event"]).toEqual([
+      "type",
+      "kind",
+      "date",
+      "allDay",
+      "recurrence",
+      "created",
+      "status",
+    ]);
+  });
+
+  it("validateTemplateAcceptsTheDefaultCalendarEventSeed", () => {
+    expect(
+      validateTemplate(
+        DEFAULT_TEMPLATE_CONTENT["calendar-event"],
+        "calendar-event",
+      ),
+    ).toBeNull();
+  });
+
+  it("validateTemplateDetectsMissingCalendarFixedProperty", () => {
+    // Remove `kind` from the seeded calendar-event template.
+    const stripped = DEFAULT_TEMPLATE_CONTENT["calendar-event"]
+      .split("\n")
+      .filter((line) => !line.startsWith("kind:"))
+      .join("\n");
+
+    const result = validateTemplate(stripped, "calendar-event");
+
+    expect(result).not.toBeNull();
+    expect(result).toContain("kind");
+    expect(result).toContain(TEMPLATE_FILE_NAMES["calendar-event"]);
+  });
+
+  it("applyCalendarTemplateStampsCreatedAndPreservesSeed", () => {
+    const result = applyTemplate(
+      DEFAULT_TEMPLATE_CONTENT["calendar-event"],
+      "calendar-event",
+      { title: "Retrospectiva", today: "2026-10-19" },
+    );
+
+    const sliced = sliceFrontmatter(result);
+    expect(sliced.kind).toBe("ok");
+    if (sliced.kind !== "ok") return;
+
+    const parsed = yaml.load(sliced.yaml) as Record<string, unknown>;
+    expect(parsed.created).toBe("2026-10-19");
+    expect(parsed.type).toBe("calendar-event");
+    expect(parsed.kind).toBe("evento");
+    expect(parsed.allDay).toBe(true);
+    expect(parsed.recurrence).toBe("none");
+    expect(parsed.status).toBe("open");
+    expect(sliced.body).toBe("");
+  });
+
+  it("applyCalendarTemplateDoesNotStampProject", () => {
+    // El proyecto es opcional en un evento: aunque el caller pase
+    // projectLink, la plantilla no lo estampa (lo decide el repo).
+    const result = applyTemplate(
+      DEFAULT_TEMPLATE_CONTENT["calendar-event"],
+      "calendar-event",
+      {
+        title: "Retrospectiva",
+        today: "2026-10-19",
+        projectLink: "[[Projects/Web]]",
+      },
+    );
+
+    const sliced = sliceFrontmatter(result);
+    expect(sliced.kind).toBe("ok");
+    if (sliced.kind !== "ok") return;
+
+    const parsed = yaml.load(sliced.yaml) as Record<string, unknown>;
+    expect(parsed.project).toBeUndefined();
   });
 });
 
