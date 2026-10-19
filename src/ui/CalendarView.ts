@@ -514,23 +514,20 @@ export class CalendarView extends ItemView {
     event: CalendarEventRecord,
     payload: CalendarEventFormPayload,
   ): Promise<void> {
-    // `CalendarEventPatch` declara `string | undefined`, pero el repo
-    // trata `null` como borrado explícito de la propiedad. Casteamos
-    // para poder enviar `null` cuando el usuario limpia un campo.
-    const patch = {
+    const patch: Partial<CalendarEventPatch> = {
       kind: payload.kind,
       date: payload.date,
       allDay: payload.allDay,
       recurrence: payload.recurrence,
-      ...(payload.endDate !== undefined ? { endDate: payload.endDate } : {}),
-      ...(payload.time !== undefined ? { time: payload.time } : {}),
-      ...(payload.recurrenceEnd !== undefined
-        ? { recurrenceEnd: payload.recurrenceEnd }
-        : {}),
-      ...(payload.projectLink !== undefined
-        ? { projectLink: payload.projectLink }
-        : {}),
-    } as Partial<CalendarEventPatch>;
+    };
+    if (payload.endDate !== undefined) patch.endDate = payload.endDate;
+    if (payload.time !== undefined) patch.time = payload.time;
+    if (payload.recurrenceEnd !== undefined) {
+      patch.recurrenceEnd = payload.recurrenceEnd;
+    }
+    if (payload.projectLink !== undefined) {
+      patch.projectLink = payload.projectLink;
+    }
 
     try {
       await this.repository.updateCalendarEvent(event.path, patch);

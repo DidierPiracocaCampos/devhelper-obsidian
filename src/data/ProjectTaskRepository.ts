@@ -1438,8 +1438,29 @@ export interface CalendarEventInput {
  * Keys mutables vía `updateCalendarEvent`. El título no es editable por
  * este método (cambiarlo implica renombrar el archivo); el cuerpo tampoco
  * (se edita directamente en Obsidian, igual que tareas y notas simples).
+ *
+ * `endDate`, `time`, `recurrenceEnd` y `projectLink` aceptan `null` para
+ * borrar explícitamente la propiedad del frontmatter. `undefined` sigue
+ * sin tocar la propiedad.
  */
-export type CalendarEventPatch = Omit<CalendarEventInput, "title" | "body">;
+export interface CalendarEventPatch {
+  kind?: CalendarKind;
+  date?: string;
+  /** `null` borra `endDate` del frontmatter; `undefined` no lo toca. */
+  endDate?: string | null;
+  /** `null` borra `time` del frontmatter; `undefined` no lo toca. */
+  time?: string | null;
+  allDay?: boolean;
+  recurrence?: CalendarRecurrence;
+  /** `null` borra `recurrenceEnd` del frontmatter; `undefined` no lo toca. */
+  recurrenceEnd?: string | null;
+  /**
+   * `null` borra `project` del frontmatter (evento global);
+   * `undefined` no lo toca.
+   */
+  projectLink?: string | null;
+  status?: "open" | "done";
+}
 
 /**
  * User-supplied values for one credential. `service` is stored in
