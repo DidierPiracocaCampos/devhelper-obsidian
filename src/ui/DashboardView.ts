@@ -1,6 +1,8 @@
 import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import type { PluginSettings } from "../settings";
 import type {
+  CalendarEventRecord,
+  CalendarKind,
   CredentialsRecord,
   CredentialEntry,
   DashboardData,
@@ -25,6 +27,7 @@ import {
   type DashboardPresentation,
   type DashboardSelection,
 } from "../domain/presentDashboard";
+import { expandOccurrences, type CalendarOccurrence } from "../domain/calendar";
 import { getWeekStrip } from "../domain/weekStrip";
 import type {
   ProjectTaskRepository,
@@ -89,12 +92,14 @@ export class DashboardView extends ItemView {
   private taskQuery = "";
   private showFileFilters = false;
   private fileQuery = "";
+  private sideWeekOffset = 0;
 
   constructor(
     leaf: WorkspaceLeaf,
     repository: ProjectTaskRepository,
     settings: PluginSettings,
     credentialsDeps: CredentialDeps,
+    private readonly openCalendar: (isoDate?: string) => void,
   ) {
     super(leaf);
     // The plugin's `app` field is already set by `super(leaf)`.
@@ -209,7 +214,7 @@ export class DashboardView extends ItemView {
       this.renderTasksPanel(presentation, data);
     }
     this.renderToolbarRail();
-    this.renderSideColumn();
+    this.renderSideColumn(data);
     this.renderBottomSections(data, presentation, decrypted);
     this.renderIssues(presentation.issues);
   }
@@ -838,18 +843,20 @@ export class DashboardView extends ItemView {
   /**
    * Columna derecha del layout: la tarjeta del calendario semanal.
    *
-   * Todo aquí es un visual placeholder — los controles se renderizan
-   * sólo por silueta y no llevan listeners, así que no pueden
-   * mutar el repositorio ni el vault.
+   * Ahora es funcional: navegación de semana en memoria, puntitos por
+   * tipo de evento (`data.calendarEvents`) y apertura de la vista mes
+   * al pulsar `+` o un día concreto. No muta el repositorio.
    */
-  private renderSideColumn(): void {
+  private renderSideColumn(data: DashboardData): void {
     const column = this.contentEl.createEl("div", {
       cls: "devhelper-side-column",
     });
 
-    // Calendar card: month label, inert controls, weekday header,
-    //    the seven days of the current ISO week and an empty state.
-    const strip = getWeekStrip(new Date());
+    const today = new Date();
+    const base = new Date(today);
+    base.setDate(today.getDate() + this.sideWeekOffset * 7);
+    const strip = getWeekStrip(base);
+
     const calendar = column.createEl("section", {
       cls: "devhelper-calendar",
     });
@@ -859,23 +866,58 @@ export class DashboardView extends ItemView {
     });
     header.createEl("strong", { text: strip.monthLabel });
 
-    const calendarControls: Array<{ icon: string; label: string }> = [
-      { icon: "chevron-left", label: "Mes anterior" },
-      { icon: "plus", label: "Hoy" },
-      { icon: "chevron-right", label: "Mes siguiente" },
-      { icon: "plus", label: "Añadir evento" },
-    ];
-    for (const entry of calendarControls) {
-      const button = header.createEl("button", {
-        cls: "devhelper-icon-button",
-        attr: {
-          "aria-label": entry.label,
-          title: entry.label,
-          type: "button",
-        },
-      });
-      setIcon(button, entry.icon);
-    }
+    const prevBtn = header.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: {
+        type: "button",
+        "aria-label": "Semana anterior",
+        title: "Semana anterior",
+      },
+    });
+    setIcon(prevBtn, "chevron-left");
+    prevBtn.addEventListener("click", () => {
+      this.sideWeekOffset--;
+      void this.refresh();
+    });
+
+    const todayBtn = header.createEl("button", {
+      cls: "devhelper-calendar-nav-today",
+      text: "Hoy",
+      attr: {
+        type: "button",
+        title: "Ir a la semana actual",
+      },
+    });
+    todayBtn.addEventListener("click", () => {
+      this.sideWeekOffset = 0;
+      void this.refresh();
+    });
+
+    const nextBtn = header.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: {
+        type: "button",
+        "aria-label": "Semana siguiente",
+        title: "Semana siguiente",
+      },
+    });
+    setIcon(nextBtn, "chevron-right");
+    nextBtn.addEventListener("click", () => {
+      this.sideWeekOffset++;
+      void this.refresh();
+    });
+
+    const addBtn = header.createEl("button", {
+      cls: "devhelper-icon-button",
+      attr: {
+        type: "button",
+        "aria-label": "Abrir calendario",
+        title: "Abrir calendario",
+      },
+    });
+    setIcon(addBtn, "plus");
+    const baseIso = this.toIsoDate(base);
+    addBtn.addEventListener("click", () => this.openCalendar(baseIso));
 
     const weekdays = calendar.createEl("div", {
       cls: "devhelper-calendar-weekdays",
@@ -885,15 +927,66 @@ export class DashboardView extends ItemView {
     }
 
     const days = calendar.createEl("div", { cls: "devhelper-calendar-days" });
-    for (const day of strip.days) {
-      const cell = days.createEl("span", {
-        cls: "devhelper-calendar-day",
-        text: String(day.day),
-      });
-      if (day.isToday) cell.addClass("is-today");
-    }
+    const events = data.calendarEvents ?? [];
+    const monthCache = new Map<string, Map<string, CalendarOccurrence[]>>();
 
-    this.appendEmptyState(calendar, "calendar-x", "No hay eventos este día");
+    const monday = new Date(base);
+    const offsetToMonday = (base.getDay() + 6) % 7;
+    monday.setDate(base.getDate() - offsetToMonday);
+    const todayIso = this.toIsoDate(today);
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      const iso = this.toIsoDate(date);
+
+      const cell = days.createEl("button", {
+        cls: "devhelper-calendar-day",
+        attr: { type: "button", "aria-label": iso },
+      });
+      cell.style.flexDirection = "column";
+      cell.style.gap = "1px";
+      cell.createEl("span", { text: String(date.getDate()) });
+      if (iso === todayIso) cell.addClass("is-today");
+
+      const occurrences = this.getDayOccurrences(events, date, monthCache);
+      if (occurrences.length > 0) {
+        const dots = cell.createEl("div", {
+          cls: "devhelper-calendar-dots",
+        });
+        const seen = new Set<CalendarKind>();
+        for (const occurrence of occurrences) {
+          const kind = occurrence.event.kind;
+          if (seen.has(kind)) continue;
+          seen.add(kind);
+          dots.createEl("span", {
+            cls: `devhelper-calendar-dot devhelper-dot--${kind}`,
+          });
+        }
+      }
+
+      cell.addEventListener("click", () => this.openCalendar(iso));
+    }
+  }
+
+  private toIsoDate(date: Date): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  private getDayOccurrences(
+    events: CalendarEventRecord[],
+    date: Date,
+    cache: Map<string, Map<string, CalendarOccurrence[]>>,
+  ): CalendarOccurrence[] {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const key = `${year}-${month}`;
+    let byDate = cache.get(key);
+    if (byDate === undefined) {
+      byDate = expandOccurrences(events, year, month);
+      cache.set(key, byDate);
+    }
+    return byDate.get(this.toIsoDate(date)) ?? [];
   }
 
   private renderBottomSections(

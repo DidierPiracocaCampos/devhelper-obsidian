@@ -8,6 +8,10 @@ import {
   DashboardView,
   VIEW_TYPE_DEVHELPER_DASHBOARD,
 } from "./ui/DashboardView";
+import {
+  CalendarView,
+  VIEW_TYPE_DEVHELPER_CALENDAR,
+} from "./ui/CalendarView";
 
 /**
  * DevHelper Dashboard - Obsidian plugin entry point.
@@ -60,22 +64,33 @@ export default class DevHelperDashboardPlugin extends Plugin {
     this.registerView(
       VIEW_TYPE_DEVHELPER_DASHBOARD,
       (leaf) =>
-        new DashboardView(leaf, this.repository, this.settings!, {
-          session: this.credentialSession,
-          getSaltB64: () => this.settings.credSaltB64,
-          getVerifier: () => this.settings.credVerifier,
-          saveKeyMaterial: async (saltB64, verifier) => {
-            this.settings.credSaltB64 = saltB64;
-            this.settings.credVerifier = verifier;
-            await this.saveData(this.settings);
+        new DashboardView(
+          leaf,
+          this.repository,
+          this.settings!,
+          {
+            session: this.credentialSession,
+            getSaltB64: () => this.settings.credSaltB64,
+            getVerifier: () => this.settings.credVerifier,
+            saveKeyMaterial: async (saltB64, verifier) => {
+              this.settings.credSaltB64 = saltB64;
+              this.settings.credVerifier = verifier;
+              await this.saveData(this.settings);
+            },
+            clearKeyMaterial: async () => {
+              this.settings.credSaltB64 = undefined;
+              this.settings.credVerifier = undefined;
+              this.credentialSession.lock();
+              await this.saveData(this.settings);
+            },
           },
-          clearKeyMaterial: async () => {
-            this.settings.credSaltB64 = undefined;
-            this.settings.credVerifier = undefined;
-            this.credentialSession.lock();
-            await this.saveData(this.settings);
-          },
-        }),
+          this.activateCalendarView.bind(this),
+        ),
+    );
+
+    this.registerView(
+      VIEW_TYPE_DEVHELPER_CALENDAR,
+      (leaf) => new CalendarView(leaf, this.repository, this.settings!),
     );
 
     this.addCommand({
@@ -88,6 +103,18 @@ export default class DevHelperDashboardPlugin extends Plugin {
       "layout-dashboard",
       "Abrir dashboard DevHelper",
       () => this.activateDashboardView(),
+    );
+
+    this.addCommand({
+      id: "open-calendar",
+      name: "Abrir calendario",
+      callback: () => this.activateCalendarView(),
+    });
+
+    this.addRibbonIcon(
+      "calendar-days",
+      "Abrir calendario",
+      () => this.activateCalendarView(),
     );
 
     // Wire vault + metadata-cache events so external Markdown edits
@@ -143,9 +170,31 @@ export default class DevHelperDashboardPlugin extends Plugin {
   }
 
   /**
-   * Schedule a dashboard refresh. Repeated calls within `DEBOUNCE_MS`
-   * collapse into a single refresh so a flurry of vault writes
-   * produces one re-render rather than one per event.
+   * Open (or focus) the calendar view in a new tab. When `isoDate` is
+   * provided, the view is navigated to that month/day before refreshing.
+   */
+  async activateCalendarView(isoDate?: string): Promise<void> {
+    const leaf = this.app.workspace.getLeaf("tab");
+    await leaf.setViewState({
+      type: VIEW_TYPE_DEVHELPER_CALENDAR,
+      active: true,
+    });
+    const view = leaf.view;
+    if (view && typeof (view as CalendarView).refresh === "function") {
+      if (
+        isoDate !== undefined &&
+        typeof (view as CalendarView).setSelectedIsoDate === "function"
+      ) {
+        (view as CalendarView).setSelectedIsoDate(isoDate);
+      }
+      await (view as CalendarView).refresh();
+    }
+  }
+
+  /**
+   * Schedule a refresh of every open plugin view. Repeated calls within
+   * `DEBOUNCE_MS` collapse into a single refresh so a flurry of vault
+   * writes produces one re-render rather than one per event.
    */
   private scheduleDashboardRefresh(): void {
     if (this.refreshTimer !== null) {
@@ -153,8 +202,16 @@ export default class DevHelperDashboardPlugin extends Plugin {
     }
     this.refreshTimer = window.setTimeout(() => {
       this.refreshTimer = null;
-      void this.refreshDashboard();
+      void this.refreshAllViews();
     }, DEBOUNCE_MS);
+  }
+
+  /**
+   * Refresh dashboards and calendar leaves independently. The credential
+   * session expiry only refreshes dashboards (no secrets in the calendar).
+   */
+  private async refreshAllViews(): Promise<void> {
+    await Promise.all([this.refreshDashboard(), this.refreshCalendar()]);
   }
 
   /**
@@ -170,6 +227,21 @@ export default class DevHelperDashboardPlugin extends Plugin {
       const view = leaf.view;
       if (view && typeof (view as DashboardView).refresh === "function") {
         await (view as DashboardView).refresh();
+      }
+    }
+  }
+
+  /**
+   * Iterate every open calendar leaf and call `refresh()` on it.
+   */
+  private async refreshCalendar(): Promise<void> {
+    const leaves = this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_DEVHELPER_CALENDAR,
+    );
+    for (const leaf of leaves) {
+      const view = leaf.view;
+      if (view && typeof (view as CalendarView).refresh === "function") {
+        await (view as CalendarView).refresh();
       }
     }
   }

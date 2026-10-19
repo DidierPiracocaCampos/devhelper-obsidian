@@ -132,6 +132,20 @@ export class CalendarView extends ItemView {
     this.render();
   }
 
+  /**
+   * Navega la vista mensual a la fecha indicada (`YYYY-MM-DD`). Se usa
+   * desde `activateCalendarView` para que el día clicado en el lateral
+   * abra el calendario en su mes/día correspondiente.
+   */
+  setSelectedIsoDate(iso: string): void {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    const parsed = parseIsoDate(iso);
+    if (Number.isNaN(parsed.getTime())) return;
+    this.year = parsed.getFullYear();
+    this.month = parsed.getMonth() + 1;
+    this.selectedIsoDate = iso;
+  }
+
   private renderEmpty(): void {
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-calendar-root");
