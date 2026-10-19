@@ -214,6 +214,61 @@ describe("expandOccurrences", () => {
     expect([...map.keys()]).toEqual(["2026-11-06"]);
   });
 
+  it("fechas ISO corruptas nunca lanzan: date inválido se salta y endDate/recurrenceEnd corruptos degradan", () => {
+    const events = [
+      // `date` corrupto (rueda en `Date` o ni siquiera tiene pinta ISO):
+      // el evento entero se salta sin tumbar el resto.
+      makeEvent({ path: "Calendario/FechaRota.md", date: "2026-13-40" }),
+      makeEvent({ path: "Calendario/FechaTexto.md", date: "not-a-date" }),
+      // `endDate` corrupto: degrada a evento de un solo día.
+      makeEvent({
+        path: "Calendario/FinRoto.md",
+        date: "2026-11-04",
+        endDate: "not-a-date",
+      }),
+      // `recurrenceEnd` corrupto: degrada al tope de 6 meses y la
+      // recurrencia sigue expandiendo normalmente.
+      makeEvent({
+        path: "Calendario/RecRota.md",
+        date: "2026-11-05",
+        endDate: "2026-13-40",
+        recurrence: "weekly",
+        recurrenceEnd: "2026-13-40",
+      }),
+    ];
+
+    expect(() => expandOccurrences(events, 2026, 11)).not.toThrow();
+    expect(() => presentCalendar(makeData(events), 2026, 11)).not.toThrow();
+
+    const map = expandOccurrences(events, 2026, 11);
+    const emittedPaths = [...map.values()]
+      .flat()
+      .map((o) => o.event.path);
+    expect(emittedPaths).not.toContain("Calendario/FechaRota.md");
+    expect(emittedPaths).not.toContain("Calendario/FechaTexto.md");
+
+    // endDate corrupto → el evento sigue apareciendo en su `date`.
+    expect(
+      map.get("2026-11-04")?.some((o) => o.event.path === "Calendario/FinRoto.md"),
+    ).toBe(true);
+
+    // recurrenceEnd corrupto → sigue la recurrencia con el tope de 6 meses
+    // (4 vueltas semanales dentro de noviembre).
+    const recRota = [...map.values()]
+      .flat()
+      .filter((o) => o.event.path === "Calendario/RecRota.md");
+    expect(recRota).toHaveLength(4);
+
+    const p = presentCalendar(makeData(events), 2026, 11);
+    // Solo cuentan los eventos con fecha de partida válida: 1 + 4.
+    expect(p.counts).toEqual({
+      evento: 5,
+      reunion: 0,
+      fecha_limite: 0,
+      aviso: 0,
+    });
+  });
+
   it("ordena cada día: allDay primero → hora → título insensible a mayúsculas → path", () => {
     const events = [
       makeEvent({ path: "Calendario/zeta.md", title: "Zeta", date: "2026-11-04", time: "22:00", allDay: false }),
