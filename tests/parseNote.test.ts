@@ -859,6 +859,26 @@ describe("parseProjectTaskNote", () => {
       expect(result.event.time).toBeUndefined();
     });
 
+    it("does not even validate a time when allDay is true", () => {
+      // Con allDay true el time se ignora POR COMPLETO: un valor
+      // corrupto ("25:00") no es issue, se descarta y ya.
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          "allDay: true",
+          'time: "25:00"',
+          'created: "2026-10-19"',
+        ]),
+        noopResolve,
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.allDay).toBe(true);
+      expect(result.event.time).toBeUndefined();
+    });
+
     it("parses an inclusive multi-day range via endDate", () => {
       const result = parseProjectTaskNote(
         calendarEventNote([

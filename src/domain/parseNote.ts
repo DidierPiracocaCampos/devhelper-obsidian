@@ -401,9 +401,9 @@ function buildNote(
  *  - `endDate` opcional, misma validación que `date`, nunca anterior a
  *    `date` (rango inclusivo `[date..endDate]`).
  *  - `allDay` default `true`; un valor no booleano es un issue.
- *  - `time` opcional 'HH:mm' 24h; se valida siempre pero solo llega al
- *    record cuando `allDay` es `false` (con `allDay: true` se ignora,
- *    la UI no lo envía).
+ *  - `time` opcional 'HH:mm' 24h; con `allDay: true` se ignora por
+ *    completo (la UI no lo envía: ni se valida ni llega al record);
+ *    solo con `allDay: false` se exige el formato válido.
  *  - `recurrence` default `none`; `recurrenceEnd` opcional 'YYYY-MM-DD'
  *    (solo tope de expansión: el dominio lo ignora si es anterior a
  *    `date`, no es issue).
@@ -481,18 +481,18 @@ function buildCalendarEvent(
     allDay = allDayRaw;
   }
 
+  // time: con allDay true se ignora POR COMPLETO (la UI no lo envía),
+  // sin validar; solo con allDay false se exige 'HH:mm' 24h.
   let time: string | undefined;
   const timeRaw = properties.time;
-  if (timeRaw !== undefined && timeRaw !== null) {
+  if (!allDay && timeRaw !== undefined && timeRaw !== null) {
     if (typeof timeRaw !== "string" || !TIME_REGEX.test(timeRaw)) {
       return issue(
         note.path,
         `La propiedad 'time' debe ser una hora 'HH:mm' en formato 24h, se recibió: ${String(timeRaw)}.`,
       );
     }
-    if (!allDay) {
-      time = timeRaw;
-    }
+    time = timeRaw;
   }
 
   let recurrence: CalendarRecurrence = "none";
