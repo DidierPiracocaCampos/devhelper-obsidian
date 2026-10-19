@@ -141,6 +141,17 @@ export class CalendarView extends ItemView {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
     const parsed = parseIsoDate(iso);
     if (Number.isNaN(parsed.getTime())) return;
+
+    // Rechaza fechas que "ruedan" (p. ej. "2026-13-40" -> 2027-02-09).
+    const [year, month, day] = iso.split("-").map(Number);
+    if (
+      parsed.getFullYear() !== year ||
+      parsed.getMonth() !== month - 1 ||
+      parsed.getDate() !== day
+    ) {
+      return;
+    }
+
     this.year = parsed.getFullYear();
     this.month = parsed.getMonth() + 1;
     this.selectedIsoDate = iso;
@@ -271,8 +282,28 @@ export class CalendarView extends ItemView {
 
         cellEl.addEventListener("click", () => {
           this.selectedIsoDate = cell.isoDate;
+          this.updateGridSelection();
           this.renderDayPanel(presentation, data);
         });
+      }
+    }
+  }
+
+  /**
+   * Actualiza la clase `is-selected` de las celdas del grid sin volver a
+   * renderizarlo, para no perder el foco ni recargar datos del repo.
+   */
+  private updateGridSelection(): void {
+    const cells = this.contentEl.querySelectorAll<HTMLElement>(
+      ".devhelper-calendar-cell",
+    );
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      const iso = cell.getAttribute("aria-label");
+      if (iso === this.selectedIsoDate) {
+        cell.addClass("is-selected");
+      } else {
+        cell.removeClass("is-selected");
       }
     }
   }

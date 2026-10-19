@@ -1357,17 +1357,25 @@ export class ProjectTaskRepository {
       basename: TEMPLATE_FILE_NAMES["calendar-event"],
     };
     const templateContent = await this.adapter.read(templateRef);
-    const sliced = sliceFrontmatter(templateContent);
+
+    // Reutilizamos `applyTemplate` para estampar `created` y preservar el
+    // cuerpo / props extra; este paso ya hace el parseo/serializado base.
+    const stamped = applyTemplate(templateContent, "calendar-event", {
+      title: input.title,
+      today: todayStamp(),
+    });
+
+    const sliced = sliceFrontmatter(stamped);
     if (sliced.kind !== "ok") {
       // Validation should have caught this first; degrade gracefully.
-      return templateContent;
+      return stamped;
     }
 
     let parsed: unknown;
     try {
       parsed = yaml.load(sliced.yaml);
     } catch {
-      return templateContent;
+      return stamped;
     }
     if (
       parsed === null ||
@@ -1375,16 +1383,16 @@ export class ProjectTaskRepository {
       typeof parsed !== "object" ||
       Array.isArray(parsed)
     ) {
-      return templateContent;
+      return stamped;
     }
 
     const props = parsed as Record<string, unknown>;
+    // Campos específicos de calendar-event que `applyTemplate` no toca.
     props.kind = input.kind;
     props.date = input.date;
     props.allDay = input.allDay ?? true;
     props.recurrence = input.recurrence ?? "none";
     props.status = input.status ?? "open";
-    props.created = todayStamp();
 
     if (input.endDate !== undefined) {
       props.endDate = input.endDate;
