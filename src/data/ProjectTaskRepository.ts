@@ -1025,9 +1025,16 @@ export class ProjectTaskRepository {
     return path;
   }
 
+  /**
+   * Actualiza sólo las propiedades de frontmatter de un evento de
+   * calendario. El título y el cuerpo no son mutables por este método:
+   * renombrar un evento requiere recrearlo (cambio de filename), y el
+   * cuerpo se edita directamente en la nota de Obsidian, igual que para
+   * tareas y notas simples.
+   */
   async updateCalendarEvent(
     path: string,
-    patch: Partial<CalendarEventInput>,
+    patch: Partial<CalendarEventPatch>,
   ): Promise<void> {
     const ref = { path, basename: basenameOf(path) };
     await this.adapter.processFrontMatter(ref, (frontmatter) => {
@@ -1072,8 +1079,6 @@ export class ProjectTaskRepository {
         }
       }
       if (patch.status !== undefined) frontmatter["status"] = patch.status;
-      // `body` no se actualiza aquí: `processFrontMatter` sólo toca
-      // frontmatter. El cuerpo se edita directamente en la nota.
     });
   }
 
@@ -1428,6 +1433,13 @@ export interface CalendarEventInput {
   body?: string;
   status?: "open" | "done";
 }
+
+/**
+ * Keys mutables vía `updateCalendarEvent`. El título no es editable por
+ * este método (cambiarlo implica renombrar el archivo); el cuerpo tampoco
+ * (se edita directamente en Obsidian, igual que tareas y notas simples).
+ */
+export type CalendarEventPatch = Omit<CalendarEventInput, "title" | "body">;
 
 /**
  * User-supplied values for one credential. `service` is stored in
