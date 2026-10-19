@@ -120,10 +120,56 @@ export interface FileRecord {
 }
 
 /**
+ * Tipo de evento de calendario (los 4 fijos de la V1 del plan
+ * calendario). El parser lo valida contra el frontmatter y la vista lo
+ * usa para colorear los puntitos por tipo.
+ */
+export type CalendarKind = "evento" | "reunion" | "fecha_limite" | "aviso";
+
+/**
+ * Recurrencia de un evento de calendario. `none` es puntual (o rango
+ * multi-día con `endDate`); el resto se expande virtualmente en
+ * `domain/calendar.ts` (nunca se materializan notas).
+ */
+export type CalendarRecurrence =
+  | "none"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly";
+
+/**
+ * Evento de calendario validado derivado de una nota `type: calendar-event`
+ * en la carpeta de calendario. `date`/`endDate`/`recurrenceEnd` son
+ * `YYYY-MM-DD`; `endDate` es inclusivo y nunca menor que `date` (el parser
+ * lo convierte en issue si no se cumple). `time` es `HH:mm` y solo aplica
+ * cuando `allDay` es `false`. `projectPath` ausente = evento global.
+ */
+export interface CalendarEventRecord {
+  path: string;
+  title: string;
+  kind: CalendarKind;
+  date: string;
+  endDate?: string;
+  time?: string;
+  allDay: boolean;
+  recurrence: CalendarRecurrence;
+  recurrenceEnd?: string;
+  projectPath?: string; // undefined = global
+  status: "open" | "done";
+  properties: Record<string, unknown>;
+}
+
+/**
  * The aggregate payload produced by the repository on every `load()`.
  *
  * `files` lista los ficheros de `<Proyecto>/Archivos/` de cada proyecto
  * (el presenter los acota por selección; en «Todos» solo los de General).
+ *
+ * `calendarEvents` lo puebla el repositorio al escanear la carpeta de
+ * calendario (plan `2026-10-19-calendario-mensual`). Es opcional para no
+ * romper los constructores existentes de `DashboardData`;
+ * `presentCalendar` lo trata como lista vacía cuando falta.
  */
 export interface DashboardData {
   projects: ProjectRecord[];
@@ -132,6 +178,7 @@ export interface DashboardData {
   credentials: CredentialsRecord[];
   files: FileRecord[];
   issues: DashboardIssue[];
+  calendarEvents?: CalendarEventRecord[];
 }
 
 /**
