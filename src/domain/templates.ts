@@ -1,10 +1,12 @@
 /**
  * Pure templates module for the DevHelper Dashboard.
  *
- * Three note kinds are recognised:
- *  - `project`     — managed via `Projects/.../<proyecto>.md`
- *  - `task`        — managed via `Projects/.../<tarea>.md`
- *  - `credentials` — managed via `Projects/.../<credenciales>.md`
+ * Five note kinds are recognised:
+ *  - `project`        — managed via `Projects/.../<proyecto>.md`
+ *  - `task`           — managed via `Projects/.../<tarea>.md`
+ *  - `note`           — managed via `Projects/.../<nota>.md`
+ *  - `credentials`    — managed via `Projects/.../<credenciales>.md`
+ *  - `calendar-event` — managed via `Calendario/<evento>.md`
  *
  * For each kind the module exposes:
  *  - the canonical file name,
@@ -28,13 +30,19 @@ import { sliceFrontmatter } from "./frontmatter";
 // Public type and constants
 // ---------------------------------------------------------------------------
 
-export type TemplateKind = "project" | "task" | "note" | "credentials";
+export type TemplateKind =
+  | "project"
+  | "task"
+  | "note"
+  | "credentials"
+  | "calendar-event";
 
 export const TEMPLATE_FILE_NAMES: Record<TemplateKind, string> = {
   project: "proyecto.md",
   task: "tarea.md",
   note: "nota.md",
   credentials: "credenciales.md",
+  "calendar-event": "evento.md",
 };
 
 /**
@@ -47,6 +55,15 @@ export const FIXED_TEMPLATE_PROPERTIES: Record<TemplateKind, string[]> = {
   task: ["type", "project", "status", "created", "due", "priority"],
   note: ["type", "project", "created"],
   credentials: ["type", "credentials"],
+  "calendar-event": [
+    "type",
+    "kind",
+    "date",
+    "allDay",
+    "recurrence",
+    "created",
+    "status",
+  ],
 };
 
 /**
@@ -90,6 +107,18 @@ export const DEFAULT_TEMPLATE_CONTENT: Record<TemplateKind, string> = {
     "---",
     "type: credentials",
     "credentials: []",
+    "---",
+    "",
+  ].join("\n"),
+  "calendar-event": [
+    "---",
+    "type: calendar-event",
+    "kind: evento",
+    "date:",
+    "allDay: true",
+    "recurrence: none",
+    "created: 1970-01-01",
+    "status: open",
     "---",
     "",
   ].join("\n"),

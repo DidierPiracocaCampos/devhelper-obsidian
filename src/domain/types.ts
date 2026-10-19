@@ -198,6 +198,7 @@ export interface NoteSnapshot {
  *  - `"task"`        => the note is a valid task.
  *  - `"note"`        => the note is a valid simple note.
  *  - `"credentials"` => the note is a valid credentials file.
+ *  - `"calendar-event"` => the note is a valid calendar event.
  *  - `"issue"`       => the note is malformed or fails validation;
  *    exactly one issue is returned so the folder scan can continue.
  */
@@ -206,6 +207,7 @@ export type ParsedNote =
   | { kind: "task"; task: TaskRecord }
   | { kind: "note"; note: NoteRecord }
   | { kind: "credentials"; credentials: ParsedCredentialsNote }
+  | { kind: "calendar-event"; event: CalendarEventRecord }
   | { kind: "issue"; issue: DashboardIssue };
 
 /**

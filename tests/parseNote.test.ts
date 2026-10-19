@@ -3,7 +3,7 @@ import {
   parseCredentialsNote,
   parseProjectTaskNote,
 } from "../src/domain/parseNote";
-import type { NoteSnapshot } from "../src/domain/types";
+import type { NoteSnapshot, ParsedNote } from "../src/domain/types";
 
 /**
  * Tests for the pure Markdown frontmatter parser used by the dashboard.
@@ -25,6 +25,27 @@ function snapshot(
   content: string,
 ): NoteSnapshot {
   return { path, basename, content };
+}
+
+/**
+ * Helper for calendar-event notes: wraps the given frontmatter lines in
+ * a `type: calendar-event` block so each test only spells out the
+ * properties under test.
+ */
+function calendarEventNote(lines: string[]): NoteSnapshot {
+  return snapshot(
+    "Calendario/Evento.md",
+    "Evento.md",
+    ["---", "type: calendar-event", ...lines, "---"].join("\n"),
+  );
+}
+
+function expectCalendarIssue(result: ParsedNote, ...contains: string[]): void {
+  expect(result.kind).toBe("issue");
+  if (result.kind !== "issue") return;
+  for (const fragment of contains) {
+    expect(result.issue.message).toContain(fragment);
+  }
 }
 
 describe("parseProjectTaskNote", () => {
@@ -738,6 +759,319 @@ describe("parseProjectTaskNote", () => {
       const result = parseProjectTaskNote(note, () => "Projects/Website/Website.md");
 
       expect(result.kind).toBe("issue");
+    });
+  });
+
+  describe("parsesCalendarEvent", () => {
+    it("parses a minimal calendar-event note as a global all-day event", () => {
+      const minimal = [
+        "---",
+        "type: calendar-event",
+        "kind: evento",
+        'date: "2026-11-04"',
+        'created: "2026-10-19"',
+        "---",
+        "Detalles del evento.",
+      ].join("\n");
+
+      // Caso verbatim del brief: el tipo discriminado deja de caer a issue.
+      expect(
+        parseProjectTaskNote(
+          { path: "Calendario/X.md", basename: "X.md", content: minimal },
+          () => null,
+        ).kind,
+      ).toBe("calendar-event");
+
+      const result = parseProjectTaskNote(
+        snapshot("Calendario/X.md", "X.md", minimal),
+        () => null,
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.path).toBe("Calendario/X.md");
+      expect(result.event.title).toBe("X");
+      expect(result.event.kind).toBe("evento");
+      expect(result.event.date).toBe("2026-11-04");
+      // Defaults: sin endDate, sin time (allDay true lo ignora), todo el
+      // día, sin recurrencia, estado abierto y sin proyecto = global.
+      expect(result.event.endDate).toBeUndefined();
+      expect(result.event.time).toBeUndefined();
+      expect(result.event.allDay).toBe(true);
+      expect(result.event.recurrence).toBe("none");
+      expect(result.event.status).toBe("open");
+      expect(result.event.projectPath).toBeUndefined();
+    });
+
+    it("normalizes a bare YAML date into a YYYY-MM-DD string", () => {
+      // Sin comillas js-yaml parsea la fecha como objeto Date (patrón
+      // Obsidian Properties); el parser debe devolver siempre cadena.
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          "date: 2026-11-04",
+          'created: "2026-10-19"',
+        ]),
+        noopResolve,
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.date).toBe("2026-11-04");
+      expect(result.event.properties.date).toBe("2026-11-04");
+    });
+
+    it("keeps a valid time when allDay is false", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: reunion",
+          'date: "2026-11-04"',
+          "allDay: false",
+          'time: "10:30"',
+          'created: "2026-10-19"',
+        ]),
+        noopResolve,
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.allDay).toBe(false);
+      expect(result.event.time).toBe("10:30");
+    });
+
+    it("ignores a time when allDay is true", () => {
+      // Regla del spec: con allDay true el time se ignora (la UI no lo
+      // envía), nunca llega al record.
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          "allDay: true",
+          'time: "10:30"',
+          'created: "2026-10-19"',
+        ]),
+        noopResolve,
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.allDay).toBe(true);
+      expect(result.event.time).toBeUndefined();
+    });
+
+    it("parses an inclusive multi-day range via endDate", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          'endDate: "2026-11-08"',
+          'created: "2026-10-19"',
+        ]),
+        noopResolve,
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.date).toBe("2026-11-04");
+      expect(result.event.endDate).toBe("2026-11-08");
+    });
+
+    it("parses weekly recurrence with a recurrenceEnd cap", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: aviso",
+          'date: "2026-11-04"',
+          "recurrence: weekly",
+          'recurrenceEnd: "2027-02-01"',
+          'created: "2026-10-19"',
+          "status: done",
+        ]),
+        noopResolve,
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.recurrence).toBe("weekly");
+      expect(result.event.recurrenceEnd).toBe("2027-02-01");
+      expect(result.event.status).toBe("done");
+    });
+
+    it("resolves the optional project link to a vault path", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: fecha_limite",
+          'date: "2026-11-04"',
+          'project: "[[Projects/Web]]"',
+          'created: "2026-10-19"',
+        ]),
+        (_link, source) => {
+          expect(source).toBe("Calendario/Evento.md");
+          return "Projects/Web";
+        },
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.projectPath).toBe("Projects/Web.md");
+    });
+
+    it("treats a missing project as a global event without calling resolveProject", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          'created: "2026-10-19"',
+        ]),
+        () => {
+          throw new Error("resolveProject no debe llamarse sin project");
+        },
+      );
+
+      expect(result.kind).toBe("calendar-event");
+      if (result.kind !== "calendar-event") return;
+      expect(result.event.projectPath).toBeUndefined();
+    });
+
+    it("returns an issue when kind is missing", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote(['date: "2026-11-04"']),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "kind");
+    });
+
+    it("returns an issue for an unknown kind value", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote(['kind: "fiesta"', 'date: "2026-11-04"']),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "kind", "fiesta");
+    });
+
+    it("returns an issue when date is missing", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote(["kind: evento"]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "date");
+    });
+
+    it("returns an issue for a date that rolls over in the Date constructor", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote(['kind: evento', 'date: "2026-13-40"']),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "date", "2026-13-40");
+    });
+
+    it("returns an issue when endDate is earlier than date", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-08"',
+          'endDate: "2026-11-04"',
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "endDate", "date");
+    });
+
+    it("returns an issue for a time that is not HH:mm", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: reunion",
+          'date: "2026-11-04"',
+          "allDay: false",
+          'time: "25:00"',
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "time", "25:00");
+    });
+
+    it("returns an issue for a non-boolean allDay", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          'allDay: "yes"',
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "allDay");
+    });
+
+    it("returns an issue for a recurrence outside the allowed set", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          "recurrence: fortnightly",
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "recurrence", "fortnightly");
+    });
+
+    it("returns an issue for a corrupt recurrenceEnd", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          "recurrence: daily",
+          'recurrenceEnd: "not-a-date"',
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "recurrenceEnd", "not-a-date");
+    });
+
+    it("returns an issue for a status outside open|done", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          "status: paused",
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "status", "paused");
+    });
+
+    it("returns an issue for a project that is not a wikilink", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          'project: "Projects/Web"',
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "project", "wikilink");
+    });
+
+    it("returns an issue for an unresolvable project link", () => {
+      const result = parseProjectTaskNote(
+        calendarEventNote([
+          "kind: evento",
+          'date: "2026-11-04"',
+          'project: "[[Desaparecido]]"',
+        ]),
+        noopResolve,
+      );
+
+      expectCalendarIssue(result, "Desaparecido");
     });
   });
 });

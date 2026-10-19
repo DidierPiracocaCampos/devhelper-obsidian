@@ -1,6 +1,6 @@
 /**
- * Pure Markdown frontmatter parser for project, task and credentials
- * notes.
+ * Pure Markdown frontmatter parser for project, task, credentials and
+ * calendar-event notes.
  *
  * Responsibilities:
  *  1. Slice a leading `---\n...\n---\n` frontmatter block out of the
@@ -14,6 +14,8 @@
  *      - `{ kind: "task" }`        for valid task notes (after resolving
  *        the `project` wikilink through the injected callback).
  *      - `{ kind: "credentials" }` for valid credentials notes.
+ *      - `{ kind: "calendar-event" }` for valid calendar event notes
+ *        (`type: calendar-event`, proyecto opcional).
  *      - `{ kind: "issue" }`       for any failure, including malformed
  *        frontmatter, missing required properties, invalid enum values,
  *        bad dates, or an unresolvable project link.
@@ -28,6 +30,9 @@ import yaml from "js-yaml";
 import { sliceFrontmatter } from "./frontmatter";
 import { ENCRYPTED_PREFIX, isEncryptedValue } from "./credentialsCrypto";
 import type {
+  CalendarEventRecord,
+  CalendarKind,
+  CalendarRecurrence,
   CredentialEntry,
   DashboardIssue,
   NoteSnapshot,
@@ -42,10 +47,24 @@ import type {
 const ALLOWED_PROJECT_STATUSES = new Set(["active", "on-hold", "done"]);
 const ALLOWED_TASK_STATUSES = new Set(["open", "done"]);
 const ALLOWED_TASK_PRIORITIES = new Set(["low", "medium", "high"]);
+const ALLOWED_CALENDAR_KINDS = new Set([
+  "evento",
+  "reunion",
+  "fecha_limite",
+  "aviso",
+]);
+const ALLOWED_CALENDAR_RECURRENCES = new Set([
+  "none",
+  "daily",
+  "weekly",
+  "monthly",
+  "yearly",
+]);
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
- * Parse a single Markdown note and return one of the four
+ * Parse a single Markdown note and return one of the five
  * `ParsedNote` variants. Never throws - every failure mode is
  * reported as a `kind: "issue"` with the note `path` and a
  * descriptive message.
@@ -97,7 +116,7 @@ export function parseProjectTaskNote(
   if (type === undefined || type === null) {
     return issue(
       note.path,
-      "Falta la propiedad requerida 'type' (esperado 'project', 'task', 'note' o 'credentials').",
+      "Falta la propiedad requerida 'type' (esperado 'project', 'task', 'note', 'credentials' o 'calendar-event').",
     );
   }
   if (typeof type !== "string") {
@@ -116,10 +135,13 @@ export function parseProjectTaskNote(
   if (type === "note") {
     return buildNote(note, title, properties, resolveProject);
   }
+  if (type === "calendar-event") {
+    return buildCalendarEvent(note, title, properties, resolveProject);
+  }
 
   return issue(
     note.path,
-    `Tipo desconocido '${type}' (esperado 'project', 'task', 'note' o 'credentials').`,
+    `Tipo desconocido '${type}' (esperado 'project', 'task', 'note', 'credentials' o 'calendar-event').`,
   );
 }
 
@@ -363,6 +385,218 @@ function buildNote(
 }
 
 // ---------------------------------------------------------------------------
+// Calendar event record construction
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a `type: calendar-event` note into a `CalendarEventRecord`.
+ *
+ * Reglas (spec calendario mensual):
+ *  - `kind` obligatorio; 4 valores fijos (`evento`, `reunion`,
+ *    `fecha_limite`, `aviso`).
+ *  - `date` obligatorio 'YYYY-MM-DD' y día real del calendario (el
+ *    round-trip por `new Date` descarta valores como '2026-13-40' que
+ *    JavaScript rueda). Acepta también el objeto `Date` que js-yaml
+ *    produce en las fechas sin comillas (patrón Obsidian Properties).
+ *  - `endDate` opcional, misma validación que `date`, nunca anterior a
+ *    `date` (rango inclusivo `[date..endDate]`).
+ *  - `allDay` default `true`; un valor no booleano es un issue.
+ *  - `time` opcional 'HH:mm' 24h; se valida siempre pero solo llega al
+ *    record cuando `allDay` es `false` (con `allDay: true` se ignora,
+ *    la UI no lo envía).
+ *  - `recurrence` default `none`; `recurrenceEnd` opcional 'YYYY-MM-DD'
+ *    (solo tope de expansión: el dominio lo ignora si es anterior a
+ *    `date`, no es issue).
+ *  - `status` default `open` (misma semántica que tareas: `done` tacha).
+ *  - `project` opcional: ausente = evento global (`projectPath`
+ *    undefined); presente debe ser un wikilink `[[…]]` resoluble.
+ *
+ * Never throws: every failure mode is a `kind: "issue"` in Spanish.
+ */
+function buildCalendarEvent(
+  note: NoteSnapshot,
+  title: string,
+  properties: Record<string, unknown>,
+  resolveProject: ResolveProjectFn,
+): ParsedNote {
+  const kindRaw = properties.kind;
+  if (kindRaw === undefined || kindRaw === null) {
+    return issue(
+      note.path,
+      "Falta la propiedad requerida 'kind' (esperado 'evento', 'reunion', 'fecha_limite' o 'aviso').",
+    );
+  }
+  if (typeof kindRaw !== "string" || !ALLOWED_CALENDAR_KINDS.has(kindRaw)) {
+    return issue(
+      note.path,
+      `La propiedad 'kind' debe ser 'evento', 'reunion', 'fecha_limite' o 'aviso', se recibió: ${String(kindRaw)}.`,
+    );
+  }
+
+  if (properties.date === undefined || properties.date === null) {
+    return issue(
+      note.path,
+      "Falta la propiedad requerida 'date' (esperado 'YYYY-MM-DD').",
+    );
+  }
+  const normalizedDate = normalizeCalendarDateProp(properties.date);
+  if (normalizedDate === null) {
+    return issue(
+      note.path,
+      `La propiedad 'date' debe ser una fecha 'YYYY-MM-DD' válida, se recibió: ${String(properties.date)}.`,
+    );
+  }
+  properties.date = normalizedDate;
+
+  let endDate: string | undefined;
+  if (properties.endDate !== undefined && properties.endDate !== null) {
+    const normalizedEnd = normalizeCalendarDateProp(properties.endDate);
+    if (normalizedEnd === null) {
+      return issue(
+        note.path,
+        `La propiedad 'endDate' debe ser una fecha 'YYYY-MM-DD' válida, se recibió: ${String(properties.endDate)}.`,
+      );
+    }
+    // Fechas ISO en 'YYYY-MM-DD': el orden lexicográfico es el orden
+    // cronológico.
+    if (normalizedEnd < normalizedDate) {
+      return issue(
+        note.path,
+        `La propiedad 'endDate' (${normalizedEnd}) no puede ser anterior a 'date' (${normalizedDate}).`,
+      );
+    }
+    properties.endDate = normalizedEnd;
+    endDate = normalizedEnd;
+  }
+
+  let allDay = true;
+  const allDayRaw = properties.allDay;
+  if (allDayRaw !== undefined && allDayRaw !== null) {
+    if (typeof allDayRaw !== "boolean") {
+      return issue(
+        note.path,
+        `La propiedad 'allDay' debe ser true o false, se recibió: ${String(allDayRaw)}.`,
+      );
+    }
+    allDay = allDayRaw;
+  }
+
+  let time: string | undefined;
+  const timeRaw = properties.time;
+  if (timeRaw !== undefined && timeRaw !== null) {
+    if (typeof timeRaw !== "string" || !TIME_REGEX.test(timeRaw)) {
+      return issue(
+        note.path,
+        `La propiedad 'time' debe ser una hora 'HH:mm' en formato 24h, se recibió: ${String(timeRaw)}.`,
+      );
+    }
+    if (!allDay) {
+      time = timeRaw;
+    }
+  }
+
+  let recurrence: CalendarRecurrence = "none";
+  const recurrenceRaw = properties.recurrence;
+  if (recurrenceRaw !== undefined && recurrenceRaw !== null) {
+    if (
+      typeof recurrenceRaw !== "string" ||
+      !ALLOWED_CALENDAR_RECURRENCES.has(recurrenceRaw)
+    ) {
+      return issue(
+        note.path,
+        `La propiedad 'recurrence' debe ser 'none', 'daily', 'weekly', 'monthly' o 'yearly', se recibió: ${String(recurrenceRaw)}.`,
+      );
+    }
+    recurrence = recurrenceRaw as CalendarRecurrence;
+  }
+
+  let recurrenceEnd: string | undefined;
+  if (
+    properties.recurrenceEnd !== undefined &&
+    properties.recurrenceEnd !== null
+  ) {
+    const normalizedRecEnd = normalizeCalendarDateProp(
+      properties.recurrenceEnd,
+    );
+    if (normalizedRecEnd === null) {
+      return issue(
+        note.path,
+        `La propiedad 'recurrenceEnd' debe ser una fecha 'YYYY-MM-DD' válida, se recibió: ${String(properties.recurrenceEnd)}.`,
+      );
+    }
+    properties.recurrenceEnd = normalizedRecEnd;
+    recurrenceEnd = normalizedRecEnd;
+  }
+
+  let status: "open" | "done" = "open";
+  const statusRaw = properties.status;
+  if (statusRaw !== undefined && statusRaw !== null) {
+    if (
+      typeof statusRaw !== "string" ||
+      !ALLOWED_TASK_STATUSES.has(statusRaw)
+    ) {
+      return issue(
+        note.path,
+        `La propiedad 'status' debe ser 'open' o 'done', se recibió: ${String(statusRaw)}.`,
+      );
+    }
+    status = statusRaw as "open" | "done";
+  }
+
+  // project opcional: ausente = evento global; presente = wikilink
+  // resoluble (mismos mensajes que tareas y notas).
+  let projectPath: string | undefined;
+  const projectLink = properties.project;
+  if (projectLink !== undefined && projectLink !== null) {
+    if (typeof projectLink !== "string") {
+      return issue(
+        note.path,
+        `La propiedad 'project' debe ser un wikilink '[[…]]', se recibió: ${String(projectLink)}.`,
+      );
+    }
+    if (!projectLink.startsWith("[[") || !projectLink.endsWith("]]")) {
+      return issue(
+        note.path,
+        `La propiedad 'project' debe ser un wikilink '[[…]]', se recibió: ${projectLink}.`,
+      );
+    }
+    const stripped = projectLink.slice(2, -2).trim();
+    if (stripped.length === 0) {
+      return issue(
+        note.path,
+        "La propiedad 'project' está vacía dentro del wikilink.",
+      );
+    }
+    const resolved = resolveProject(stripped, note.path);
+    if (resolved === null) {
+      return issue(
+        note.path,
+        `No se pudo resolver el enlace de proyecto '[[${stripped}]]'.`,
+      );
+    }
+    projectPath = resolved.toLowerCase().endsWith(".md")
+      ? resolved
+      : `${resolved}.md`;
+  }
+
+  const event: CalendarEventRecord = {
+    path: note.path,
+    title,
+    kind: kindRaw as CalendarKind,
+    date: normalizedDate,
+    allDay,
+    recurrence,
+    status,
+    properties,
+  };
+  if (endDate !== undefined) event.endDate = endDate;
+  if (time !== undefined) event.time = time;
+  if (recurrenceEnd !== undefined) event.recurrenceEnd = recurrenceEnd;
+  if (projectPath !== undefined) event.projectPath = projectPath;
+  return { kind: "calendar-event", event };
+}
+
+// ---------------------------------------------------------------------------
 // Fixed-property validators
 // ---------------------------------------------------------------------------
 
@@ -484,6 +718,38 @@ function normalizeDateProp(value: unknown): string | null {
     return formatDateUTC(value);
   }
   return null;
+}
+
+/**
+ * Normaliza un valor de fecha del frontmatter de calendario a
+ * 'YYYY-MM-DD' EXACTO: acepta cadenas y objetos `Date` (vía
+ * `normalizeDateProp`) pero además exige que la cadena marque un día
+ * real del calendario. Devuelve `null` para todo lo demás, incluidos
+ * los valores que `new Date` rueda en silencio ('2026-13-40' →
+ * 2027-02-09) o malformados ('2026/11/04', 'not-a-date').
+ */
+function normalizeCalendarDateProp(value: unknown): string | null {
+  const normalized = normalizeDateProp(value);
+  if (normalized === null || !isValidIsoDateString(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+/**
+ * True cuando `value` es 'YYYY-MM-DD' (DATE_REGEX) y el round-trip por
+ * `new Date` local reproduce exactamente año, mes y día.
+ */
+function isValidIsoDateString(value: string): boolean {
+  if (!DATE_REGEX.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(year, month - 1, day);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.getFullYear() === year &&
+    parsed.getMonth() === month - 1 &&
+    parsed.getDate() === day
+  );
 }
 
 /**
