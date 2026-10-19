@@ -13,7 +13,9 @@ Estado: **V3 entregada** (favoritos + vista «Todos»). V1 (`0df6689` → 8 comm
 (`→ 13a4109`, 8 commits) y V3 (`→ c713c09`, 5 commits sobre `master`) están en `master`.
 Sobre `master`: unificación **main + Archivos/General + credenciales cifradas** (proyecto
 sombra `General`, `FileRecord` + binarios en vault, `type: credentials` con AES-GCM,
-presenter acotado por selección, secciones Archivos/Contraseña/Notas vivas).
+presenter acotado por selección, secciones Archivos/Contraseña/Notas vivas) y
+**calendario mensual** (carpeta plana `Calendario/`, `type: calendar-event`, expansión
+virtual de rangos/recurrencia, segundo `ItemView` `CalendarView`).
 La suite completa pasa en verde, `main.js` se construye, `manifest.json` y `styles.css`
 están listos para instalarse (conteo exacto en «Tests» y «Verificación local»).
 
@@ -35,21 +37,29 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 
 - `src/main.ts` — entrypoint; exporta `DevHelperDashboardPlugin` como default.
   Carga settings, instancia `ProjectTaskRepository` con `ObsidianVaultAdapter`,
-  registra vista, comando `open-dashboard`, ribbon (`layout-dashboard`), settings tab
-  y listeners `vault.on('create|modify|delete|rename')` + `metadataCache.on('changed')`
-  con debounce de 250 ms. `onunload` cancela el timer pendiente.
+  registra **ambas** vistas (`VIEW_TYPE_DEVHELPER_DASHBOARD` y
+  `VIEW_TYPE_DEVHELPER_CALENDAR` con `CalendarView`), comandos `open-dashboard` y
+  `open-calendar` ("Abrir calendario"), ribbons (`layout-dashboard` y `calendar-days`),
+  settings tab y listeners `vault.on('create|modify|delete|rename')` +
+  `metadataCache.on('changed')` con debounce de 250 ms compartido: `scheduleDashboardRefresh`
+  refresca las hojas abiertas de dashboard **y** calendario. `activateCalendarView(isoDate?)`
+  abre/recupera la pestaña del calendario, aplica `setSelectedIsoDate(isoDate)` si se pasa
+  fecha y llama a su `refresh()`. `onunload` cancela el timer pendiente.
 - `src/settings.ts` — `PluginSettings`, `DEFAULT_SETTINGS = { projectsFolder: "Projects",
-  templatesFolder: "Projects/_templates", credentialLockTimeoutMinutes: 15 }`, y
+  templatesFolder: "Projects/_templates", calendarFolder: "Calendario",
+  calendarTemplatesFolder: "Calendario/_templates", credentialLockTimeoutMinutes: 15 }`, y
   `normalizeVaultFolderPath(path, fallback): string`. La
   normalización RECHAZA rutas absolutas, letras de unidad y `..` ANTES de trim barras.
   `mergePluginSettings(defaults, stored)` conserva el material clave de credenciales
-  (`credSaltB64` / `credVerifier`) al persistir: la pestaña de ajustes sólo edita las dos
-  carpetas + el timeout, y un merge ingenuo borraría la sal y el verificador del
-  `data.json` (bloqueando todas las credenciales). `data.json` guarda por tanto cinco
-  claves: `projectsFolder`, `templatesFolder`, `credentialLockTimeoutMinutes`,
+  (`credSaltB64` / `credVerifier`) al persistir: la pestaña de ajustes sólo edita las
+  cuatro carpetas + el timeout, y un merge ingenuo borraría la sal y el verificador del
+  `data.json` (bloqueando todas las credenciales). `data.json` guarda por tanto siete
+  claves: `projectsFolder`, `templatesFolder`, `calendarFolder`,
+  `calendarTemplatesFolder`, `credentialLockTimeoutMinutes`,
   `credSaltB64` (sal PBKDF2 en base64, una por vault) y `credVerifier` (testigo cifrado
   de la maestra, `devhelper-ok`). Nunca edites `credSaltB64`/`credVerifier` a mano.
-- `src/ui/SettingsTab.ts` — `PluginSettingTab` con dos `TextComponent` de carpetas más un
+- `src/ui/SettingsTab.ts` — `PluginSettingTab` con cuatro `TextComponent` de carpetas
+  (proyectos, plantillas, calendario y plantillas de calendario) más un
   campo numérico de timeout de bloqueo (`credentialLockTimeoutMinutes`, minutos),
   persiste vía `plugin.saveData()` con `mergePluginSettings` para no perder
   `credSaltB64`/`credVerifier`. No expone la sal ni el verificador.
@@ -61,14 +71,26 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   más `NoteRecord` (nota simple: sólo `project` + `created`, sin `status`), `CredentialEntry`
   (`service` en claro; `user`/`password`/`url`/`notes` cifrados; claves extra libres),
   `ParsedCredentialsNote` / `CredentialsRecord` (`projectPath` + `needsMigration` cuando
-  alguna entrada sigue en claro) y `FileRecord` (`path`, `name` con extensión, `extension`
-  sin punto en minúsculas, `projectPath` del hub propietario).
+  alguna entrada sigue en claro), `FileRecord` (`path`, `name` con extensión, `extension`
+  sin punto en minúsculas, `projectPath` del hub propietario) y los tipos de calendario:
+  `CalendarKind` (`"evento" | "reunion" | "fecha_limite" | "aviso"`),
+  `CalendarRecurrence` (`"none" | "daily" | "weekly" | "monthly" | "yearly"`) y
+  `CalendarEventRecord` (`path`, `title`, `kind`, `date`/`endDate`/`recurrenceEnd` en
+  `YYYY-MM-DD`, `time` `HH:mm` sólo con `allDay: false`, `recurrence`, `projectPath?`
+  ausente = global, `status`); `DashboardData` suma `calendarEvents?: CalendarEventRecord[]`
+  (opcional para no romper constructores existentes).
 - `src/domain/parseNote.ts` — `parseProjectTaskNote(note, resolveProject): ParsedNote`.
   Devuelve siempre un `ParsedNote` discriminado; **nunca lanza**. Errores → `kind: "issue"`.
   Usa `js-yaml.load` y la portada `---` debe ser la PRIMERA línea. Acepta también
-  `type: note` (sólo `project` + `created`) y `type: credentials` (lista de entradas con
+  `type: note` (sólo `project` + `created`), `type: credentials` (lista de entradas con
   `service` obligatorio; `password` en claro o `enc:v1:…`, nunca mezcla corrupta que tumbe
-  el resto: las entradas malformadas van a `entryIssues` y las válidas se conservan).
+  el resto: las entradas malformadas van a `entryIssues` y las válidas se conservan) y
+  `type: calendar-event` (devuelve `{ kind: "calendar-event"; event }`; valida `DATE_REGEX
+  ^\d{4}-\d{2}-\d{2}$` + fecha real y `TIME_REGEX ^([01]\d|2[0-3]):[0-5]\d$`; `allDay`
+  default `true` — si `time` está presente con `allDay: true` se ignora `time` —,
+  `recurrence` default `none`, `status` default `open`, `endDate` debe ser `>= date`,
+  `kind` uno de los cuatro fijos; `project` ausente = global válido, enlace irresoluble
+  = issue; mensajes en español, nunca lanza).
 - `src/domain/credentialsCrypto.ts` — cifrado puro sin imports de Obsidian (WebCrypto,
   funciona en Vitest/Node y en Electron). AES-GCM 256 + PBKDF2-SHA256 con 210 000
   iteraciones. Formato de campo cifrado `enc:v1:<iv-b64>:<cipher-b64>` (IV fresco de 12 B
@@ -99,6 +121,18 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 - `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
   sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
   del mes en español.
+- `src/domain/calendar.ts` — dominio puro del calendario (sin imports de Obsidian;
+  nada lanza: fechas corruptas las convierte el parser en issues). `getMonthGrid(year,
+  month1_12, today?)` devuelve la rejilla fija 6×7 de lunes a domingo (`MonthCell` con
+  `isoDate`, `day`, `inMonth`, `isToday`). `expandOccurrences(events, year, month)`
+  expande **virtualmente** rangos inclusivos (`date..endDate`) y recurrencias a un
+  `Map<isoDate, CalendarOccurrence[]>` limitado al mes pedido: **nunca se materializan
+  notas**; sin `recurrenceEnd` topa a 6 meses desde `date`; un evento no se duplica dos
+  veces en el mismo día aunque los bloques se solapen. `presentCalendar(data, year,
+  month)` devuelve `CalendarPresentation` (`monthLabel`, `grid`, `byDate`, `counts`) con
+  orden determinista por día: `allDay primero → time → title case-insensitive → path`.
+  `formatMonthLabel(year, month1_12)` da el nombre del mes en español con inicial
+  mayúscula (mismo `Intl.DateTimeFormat("es-ES", { month: "long" })` que `weekStrip`).
 - `src/data/VaultAdapter.ts` — interface pura (`VaultNoteRef`, 11 métodos:
   `listMarkdownFiles`, `read`, `createFolder`, `createMarkdown`, `rename`,
   `processFrontMatter`, `resolveLink`, `listSubfolders`, `exists`, `renameFolder`,
@@ -107,11 +141,13 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   cada nivel por separado (Obsidian sólo crea uno). `processFrontMatter` usa
   `app.fileManager.processFrontMatter`. `rename` devuelve ref del nuevo path.
 - `src/data/ProjectTaskRepository.ts` — escanea carpetas configuradas, llama al parser,
-  expone diecisiete mutaciones (proyectos/tareas/notas/archivos/credenciales/favoritos:
-  `createProject`, `createTask`, `renameProject`, `renameTask`,
+  expone veintidós mutaciones (proyectos/tareas/notas/archivos/credenciales/favoritos/
+  calendario: `createProject`, `createTask`, `renameProject`, `renameTask`,
   `reassignTask`, `setTaskStatus`, `setProjectFavorite`, `deleteTask`, `createNote`,
-  `renameNote`, `deleteNote`, `createCredential`, `updateCredential`, `deleteCredential`,
-  `migratePlaintextCredentials`, `addFile`, `deleteFile`). `createProject(title)` devuelve
+  `renameNote`, `reassignNote`, `deleteNote`, `createCredential`, `updateCredential`,
+  `deleteCredential`, `migratePlaintextCredentials`, `addFile`, `deleteFile`,
+  `createCalendarEvent`, `updateCalendarEvent`, `setCalendarEventStatus`,
+  `deleteCalendarEvent`). `createProject(title)` devuelve
   **`Promise<string>`** con el *hub path* del proyecto recién creado (la carpeta
   `Projects/<slug>/` que la vista usa para promoverlo a favorito y seleccionarlo).
   `migratePlaintextCredentials` devuelve **`Promise<number>`** (entradas migradas).
@@ -127,10 +163,21 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   credenciales sobre `Credenciales.md` por carpeta de proyecto (`createCredential` /
   `updateCredential` / `deleteCredential` sólo con sesión desbloqueada, `service` en claro
   y resto cifrado; `migratePlaintextCredentials` cifra de una vez las entradas heredadas en
-  claro y devuelve el conteo, ofrecida cuando `needsMigration` es `true`).
+  claro y devuelve el conteo, ofrecida cuando `needsMigration` es `true`); y calendario
+  sobre la carpeta plana `calendarFolder` (el escaneo la crea si falta y excluye
+  `calendarTemplatesFolder`; `seedTemplates` siembra `evento.md` en
+  `calendarTemplatesFolder` sin sobrescribir. `createCalendarEvent(input)` valida la
+  plantilla, crea la nota desde ella con `sanitize + disambiguate` y devuelve
+  **`Promise<string>`** con el path; `updateCalendarEvent(path, patch:
+  Partial<CalendarEventPatch>)` sólo toca frontmatter vía `processFrontMatter` — `null`
+  borra una propiedad opcional, `allDay: true` borra `time`, el título/cuerpo no son
+  mutables por este método —; `setCalendarEventStatus(path, status)`; y
+  `deleteCalendarEvent(path)` a la papelera).
 - `src/ui/DashboardView.ts` — `ItemView`
   (`VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard"`).
-  `selection: DashboardSelection` vive aquí (en memoria, nunca persistido), inicial
+  El constructor recibe el callback `openCalendar(isoDate?)` que el lateral usa para
+  abrir `CalendarView` en el día pedido. `selection: DashboardSelection` vive aquí (en
+  memoria, nunca persistido), inicial
   `{ kind: "all" }` para que el dashboard siempre abra mostrando «Todos».
   Cada `refresh()` re-llama `repository.load()` + `presentDashboard` y reescribe
   `this.selection` con el resultado del presenter (cubriendo el fallback a «all»);
@@ -143,8 +190,10 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   que pertenece. `openProjectFolder(folderPath)` intenta la API interna de Obsidian
   y, si falla, lanza un `Notice` descriptivo como degradación elegante. El render
   se organiza en métodos `renderTopBar`, `renderProjectChips`, `renderTasksPanel`,
-  `renderTaskCard`, `renderEmptyState`, `renderSideColumn` (rail + calendario),
-  `renderBottomSections` (Archivos + Contraseña) y `renderIssues`, más panel de Notas
+  `renderTaskCard`, `renderEmptyState`, `renderSideColumn` (rail de semana funcional:
+  `‹ Hoy ›` con estado en memoria, puntitos por `kind` vía clases CSS y click-día o `+`
+  que llaman a `openCalendar(isoDate)`), `renderBottomSections` (Archivos + Contraseña)
+  y `renderIssues`, más panel de Notas
   (tarjetas con filtro por título) y sección Archivos viva (filtro «Buscar archivos…»,
   botón «Añadir archivo» que copia a `<Proyecto>/Archivos/`, botón ver-en-explorador
   por archivo y papelera con confirmación). La sección Contraseña pide la maestra al
@@ -168,6 +217,21 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   `ProjectPickerResult` (`{ kind: "create" }` o `{ kind: "project"; project }`) al
   callback que se le pasa en el constructor; el placeholder del input es «Buscar
   proyecto…».
+- `src/ui/CalendarView.ts` — segundo `ItemView`
+  (`VIEW_TYPE_DEVHELPER_CALENDAR = "devhelper-calendar"`): vista mensual de los eventos
+  `type: calendar-event`. Estado en memoria `year`, `month` (1–12) y `selectedIsoDate`
+  (default hoy). `refresh()` re-llama `repository.load()` + `presentCalendar` y repinta;
+  el click en una celda sólo repinta el panel de día **sin** `refresh()` completo. La
+  topbar es «‹ …Mes Año… › Hoy» + botón «+ Nuevo»; el panel de día lista cada
+  ocurrencia (hora o «Todo el día» + título + badge `kind` + badge proyecto) con lápiz
+  (abre la nota o el modal de edición) y papelera (`ConfirmDeleteModal` →
+  `deleteCalendarEvent`), más «+ Añadir aquí». Las escrituras pasan siempre por el modal
+  o la confirmación, nunca desde un render path.
+- `src/ui/CalendarEventFormModal.ts` — `obsidian.Modal` de creación/edición de eventos:
+  título, `kind` (select de 4), fecha de inicio, «varios días» + fecha fin, «todo el
+  día» + hora, recurrencia + fin de recurrencia y proyecto opcional vía
+  `ProjectPickerModal` (sin General); validación inline en español con la misma silueta
+  que `TaskFormModal`.
 - `styles.css` — usa variables Obsidian (`--background-primary`, `--background-secondary`,
   `--text-normal`, `--interactive-accent`, etc.). Lienzo oscuro, paneles claros
   redondeados, tarjetas de tarea oscuras. Layout en grid de dos columnas (`1fr auto`)
@@ -178,22 +242,36 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   círculo de estado junto al título de la tarea han sido retirados. Los chips de
   favoritos conservan `is-selected` claro; las tarjetas de tarea muestran un *badge*
   con el nombre del proyecto (visible en modo «Todos»); FABs circulares; las credenciales
-  reutilizan el estilo de tarjeta oscura de las tareas. Breakpoints: `@media (max-width: 640px)` → una columna, oculta
-  el rail; `@media (max-width: 320px)` → controles y acciones apilados sin recorte.
+  reutilizan el estilo de tarjeta oscura de las tareas. Calendario: rejilla
+  `.devhelper-calendar-grid`/`.devhelper-calendar-cell` (6×7, Lun–Dom), puntitos
+  `.devhelper-dot--evento|--reunion|--fecha_limite|--aviso` por tipo y panel de día que
+  reutiliza `.devhelper-task-card`. Breakpoints: `@media (max-width: 640px)` → una
+  columna, oculta el rail y el panel del calendario pasa debajo de la rejilla;
+  `@media (max-width: 320px)` → controles y acciones apilados sin recorte.
 
-## Tests (`tests/`) — 163 en total, todos en verde
+## Tests (`tests/`) — 224 en total, todos en verde
 
-- `tests/settings.test.ts` — 14 tests (normalización de carpetas + preservación del
-  material clave `credSaltB64`/`credVerifier` en `mergePluginSettings`).
-- `tests/parseNote.test.ts` — 39 tests con casos específicos por modo de error, la
-  prop `favorite`, notas simples `type: note` y credenciales `type: credentials`
-  (entradas válidas + `entryIssues` sin tumbar el resto).
+- `tests/settings.test.ts` — 16 tests (normalización de carpetas —incluidas las de
+  calendario— + preservación del material clave `credSaltB64`/`credVerifier` en
+  `mergePluginSettings`).
+- `tests/parseNote.test.ts` — 60 tests con casos específicos por modo de error, la
+  prop `favorite`, notas simples `type: note`, credenciales `type: credentials`
+  (entradas válidas + `entryIssues` sin tumbar el resto) y eventos
+  `type: calendar-event` (válido mínimo, hora/allDay, rango, recurrencia, global,
+  `endDate<date` e `time`/`kind` inválidos como issues).
 - `tests/presentDashboard.test.ts` — 20 tests sobre orden determinista, modo «all»,
   filtro por proyecto y fallback automático a «all» cuando el proyecto desaparece,
   más acotación de `tasks`/`notes`/`files` por selección y regla Archivos→General.
+- `tests/calendar.test.ts` — 6 tests; cubre `getMonthGrid` (rejilla 6×7 Lun–Dom,
+  `inMonth`, bisiesto, `isToday`) y `formatMonthLabel` en español.
+- `tests/presentCalendar.test.ts` — 18 tests; cubre `expandOccurrences` (rango
+  inclusivo, weekly con `recurrenceEnd`, tope 6 meses sin fin, mensual día 31 que omite
+  febrero sin desplazar, solapes sin duplicar) y `presentCalendar` (orden
+  allDay→time→title→path, `counts`, eventos globales).
 - `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
-- `tests/templates.test.ts` — 10 tests; cubre validación y aplicación de plantillas.
+- `tests/templates.test.ts` — 16 tests; cubre validación y aplicación de plantillas,
+  incluida `calendar-event` (`evento.md`, propiedades fijas y estampado de `created`).
 - `tests/credentialsCrypto.test.ts` — 8 tests (formato `enc:v1`, round-trip AES-GCM,
   verificador, errores en español ante blob corrupto o clave errónea).
 - `tests/CredentialSession.test.ts` — 8 tests (unlock/lock, timeout con fake timers,
@@ -205,6 +283,10 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   `deleteTask` a la papelera (desaparece del siguiente `load`, error si no existe),
   más notas simples, siembra de General, `addFile`/`deleteFile`, CRUD de credenciales
   y `migratePlaintextCredentials`.
+- `tests/ProjectTaskRepository.calendar.test.ts` — 8 tests con el mismo falso adapter:
+  siembra de `Calendario/` + `_templates/evento.md`, `createCalendarEvent` devolviendo
+  el path, `updateCalendarEvent` por frontmatter preservando body y borrando props con
+  `null`, `deleteCalendarEvent` a la papelera y `endDate<date` a issues.
 
 Los tests **no usan mocks** — usan un `VaultAdapter` en memoria que simula
 determinísticamente los métodos del API.
@@ -219,15 +301,15 @@ determinísticamente los métodos del API.
   `\ / : * ? " < > |` y `#` → `-`; colapsar `-` repetidos; trim `.`/espacios al borde;
   vacío → `"Untitled"`. En caso de colisión, sufija ` 2`, ` 3`, … antes de `.md`.
 - **Borrado sólo a la papelera, con confirmación.** `deleteTask` / `deleteNote` /
-  `deleteFile` mandan a la papelera de Obsidian (recuperable, nunca
-  borrado permanente) tras confirmación explícita (`ConfirmDeleteModal`).
+  `deleteFile` / `deleteCalendarEvent` mandan a la papelera de Obsidian (recuperable,
+  nunca borrado permanente) tras confirmación explícita (`ConfirmDeleteModal`).
   `deleteCredential` elimina la entrada de la nota `Credenciales.md` (también con
   confirmación). No hay borrado de proyectos ni de carpetas. No hay borrado silencioso.
 - **Las notas Markdown son la única fuente de verdad.** No crees un store paralelo en
-  la config del plugin; `data.json` sólo guarda las dos carpetas configurables, el timeout
-  de bloqueo y el material clave (`credSaltB64`, `credVerifier`). La sal y el verificador
-  los gestiona el propio plugin al fijar/desbloquear la maestra; nunca los edites a mano
-  ni los expongas en la UI.
+  la config del plugin; `data.json` sólo guarda las cuatro carpetas configurables, el
+  timeout de bloqueo y el material clave (`credSaltB64`, `credVerifier`). La sal y el
+  verificador los gestiona el propio plugin al fijar/desbloquear la maestra; nunca los
+  edites a mano ni los expongas en la UI.
 - **Regla Archivos/General.** El proyecto sombra `Projects/General/General.md` se siembra
   automáticamente y nunca aparece en chips, favoritos, picker ni como selección directa.
   En modo «Todos» la sección Archivos muestra sólo los ficheros de General; en modo
@@ -239,6 +321,13 @@ determinísticamente los métodos del API.
   configurable. Sin sesión desbloqueada no hay lectura ni escritura de secretos: la vista
   muestra sólo `service`. Las entradas heredadas en claro se marcan con `needsMigration`
   y se migran en un clic (`migratePlaintextCredentials`).
+- **Rango + recurrencia se expande virtual, nunca se materializa.** Las ocurrencias de
+  un evento (`date..endDate` inclusivo y `daily|weekly|monthly|yearly`) se calculan en
+  memoria con `expandOccurrences` limitadas al mes pintado (sin `recurrenceEnd` topa a
+  6 meses desde `date`); no se crean notas por expansión. `updateCalendarEvent` sólo
+  muta frontmatter vía `CalendarEventPatch` (`null` borra una propiedad opcional); el
+  título se edita abriendo la nota (renombrar el archivo es recrear) y el cuerpo se
+  edita directo en Obsidian, igual que tareas y notas simples.
 - **Las propiedades del usuario y el cuerpo se preservan al editar.** Es un requisito
   del spec, no una nice-to-have.
 - **Todo el texto UI es en español** (panel, modales, issues, mensajes de error).
@@ -247,7 +336,7 @@ determinísticamente los métodos del API.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 163/163 verde
+npm test            # 224/224 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
@@ -310,6 +399,10 @@ falta; no se commitea al repo.
   `docs/superpowers/plans/2026-10-18-encrypted-credentials.md`
 - Plan unificación main + Archivos + credenciales (Task 6, este cierre):
   `docs/superpowers/plans/2026-10-18-unify-main-archivos-credentials.md`
+- Spec calendario mensual con vista propia:
+  `docs/superpowers/specs/2026-10-19-calendario-mensual-design.md`
+- Plan calendario mensual ejecutado:
+  `docs/superpowers/plans/2026-10-19-calendario-mensual.md`
 
 Si recibes un plan nuevo en el mismo formato, emplea `superpowers:subagent-driven-development`
 (o `superpowers:executing-plans` si no hay subagentes disponibles) para entregarlo
