@@ -165,7 +165,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   y resto cifrado; `migratePlaintextCredentials` cifra de una vez las entradas heredadas en
   claro y devuelve el conteo, ofrecida cuando `needsMigration` es `true`); y calendario
   sobre la carpeta plana `calendarFolder` (el escaneo la crea si falta y excluye
-  `calendarTemplatesFolder`; `seedTemplates` siembra `evento.md` en
+  `calendarTemplatesFolder`; `seedCalendarTemplates` siembra `evento.md` en
   `calendarTemplatesFolder` sin sobrescribir. `createCalendarEvent(input)` valida la
   plantilla, crea la nota desde ella con `sanitize + disambiguate` y devuelve
   **`Promise<string>`** con el path; `updateCalendarEvent(path, patch:
@@ -229,8 +229,9 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   o la confirmación, nunca desde un render path.
 - `src/ui/CalendarEventFormModal.ts` — `obsidian.Modal` de creación/edición de eventos:
   título, `kind` (select de 4), fecha de inicio, «varios días» + fecha fin, «todo el
-  día» + hora, recurrencia + fin de recurrencia y proyecto opcional vía
-  `ProjectPickerModal` (sin General); validación inline en español con la misma silueta
+  día» + hora, recurrencia + fin de recurrencia y proyecto opcional en un desplegable
+  nativo (`Setting.addDropdown`) con «— Ninguno (global) —» y los títulos de los
+  proyectos (sin General); validación inline en español con la misma silueta
   que `TaskFormModal`.
 - `styles.css` — usa variables Obsidian (`--background-primary`, `--background-secondary`,
   `--text-normal`, `--interactive-accent`, etc.). Lienzo oscuro, paneles claros
