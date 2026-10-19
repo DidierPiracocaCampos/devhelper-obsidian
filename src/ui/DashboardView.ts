@@ -811,10 +811,8 @@ export class DashboardView extends ItemView {
   /**
    * Columna estrecha de herramientas entre el panel de tareas y el
    * calendario. Contenedor listo para los botones que el usuario pueda
-   * configurar en el futuro; por ahora sólo trae el de Ajustes.
-   *
-   * Todo aquí es placeholder visual — el botón no tiene listener y no
-   * puede mutar el repositorio ni el vault.
+   * configurar en el futuro; por ahora sólo trae el de Ajustes, que
+   * abre la pestaña de ajustes del plugin.
    */
   private renderToolbarRail(): void {
     const rail = this.contentEl.createEl("div", {
@@ -830,9 +828,39 @@ export class DashboardView extends ItemView {
       },
     });
     setIcon(settingsButton, "settings");
+    settingsButton.addEventListener("click", () => this.openPluginSettings());
 
     // Punto de extensión: aquí irán los botones configurables por el
     // usuario (futuro). No renderizar nada más por ahora.
+  }
+
+  /**
+   * Abre los ajustes de Obsidian en la pestaña de este plugin. `setting`
+   * es API interna (no está en `obsidian.d.ts`), así que se estrecha el
+   * tipo vía `unknown` y se protege en runtime. Si no está disponible,
+   * degradación elegante con un `Notice` en español.
+   */
+  private openPluginSettings(): void {
+    const setting = this.app as unknown as {
+      setting?: {
+        open?: () => void;
+        openTabById?: (id: string) => void;
+      };
+    };
+    if (
+      typeof setting.setting?.open !== "function" ||
+      typeof setting.setting?.openTabById !== "function"
+    ) {
+      new Notice("No se pudo abrir los ajustes del plugin.");
+      return;
+    }
+    try {
+      setting.setting.open();
+      setting.setting.openTabById("devhelper-dashboard");
+    } catch (err) {
+      console.error("DevHelper: no se pudo abrir los ajustes", err);
+      new Notice("No se pudo abrir los ajustes del plugin.");
+    }
   }
 
   /**
