@@ -8,6 +8,8 @@
 export interface PluginSettings {
   projectsFolder: string;
   templatesFolder: string;
+  calendarFolder: string;
+  calendarTemplatesFolder: string;
   credentialLockTimeoutMinutes: number;
   credSaltB64?: string;
   credVerifier?: string;
@@ -16,6 +18,8 @@ export interface PluginSettings {
 export const DEFAULT_SETTINGS: PluginSettings = {
   projectsFolder: "Projects",
   templatesFolder: "Projects/_templates",
+  calendarFolder: "Calendario",
+  calendarTemplatesFolder: "Calendario/_templates",
   credentialLockTimeoutMinutes: 15,
 };
 
@@ -59,7 +63,7 @@ export function normalizeVaultFolderPath(path: string, fallback: string): string
  * Merge persisted settings over the defaults without losing fields the
  * settings tab does not edit.
  *
- * The tab only exposes the two folder paths and the lock timeout, but
+ * The tab only exposes the folder paths and the lock timeout, but
  * `data.json` also carries the credential key material (`credSaltB64` /
  * `credVerifier`). A naive `{...defaults, folders}` merge would drop the
  * key material, and the next `saveData` would wipe it from disk
@@ -80,6 +84,14 @@ export function mergePluginSettings(
     templatesFolder: normalizeVaultFolderPath(
       stored?.templatesFolder ?? defaults.templatesFolder,
       defaults.templatesFolder,
+    ),
+    calendarFolder: normalizeVaultFolderPath(
+      stored?.calendarFolder ?? defaults.calendarFolder,
+      defaults.calendarFolder,
+    ),
+    calendarTemplatesFolder: normalizeVaultFolderPath(
+      stored?.calendarTemplatesFolder ?? defaults.calendarTemplatesFolder,
+      defaults.calendarTemplatesFolder,
     ),
   };
 }

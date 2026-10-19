@@ -16,6 +16,22 @@ describe("settings", () => {
     });
   });
 
+  describe("usesDefaultCalendarFolders", () => {
+    it("exposes Calendario and Calendario/_templates as the default calendar folders", () => {
+      const defaults: PluginSettings = DEFAULT_SETTINGS;
+
+      expect(defaults.calendarFolder).toBe("Calendario");
+      expect(defaults.calendarTemplatesFolder).toBe("Calendario/_templates");
+    });
+
+    it("normalizes a user-supplied calendar folder path", () => {
+      expect(normalizeVaultFolderPath("  Calendario/ ", "Calendario")).toBe("Calendario");
+      expect(normalizeVaultFolderPath(" Calendario//_templates ", "Calendario/_templates")).toBe(
+        "Calendario/_templates",
+      );
+    });
+  });
+
   describe("defaultsCredentialLock", () => {
     it("locks credentials after 15 minutes with no key material by default", () => {
       const defaults: PluginSettings = DEFAULT_SETTINGS;
@@ -40,6 +56,8 @@ describe("settings", () => {
       // verifier and timeout from data.json on the next save.
       const stored: PluginSettings = {
         ...DEFAULT_SETTINGS,
+        calendarFolder: "  Agenda personal/ ",
+        calendarTemplatesFolder: "Plantillas//Calendario",
         credentialLockTimeoutMinutes: 30,
         credSaltB64: "c2FsdA==",
         credVerifier: "dmVyaWZpZXI=",
@@ -47,6 +65,10 @@ describe("settings", () => {
 
       const merged = mergePluginSettings(DEFAULT_SETTINGS, stored);
 
+      // Nuevas keys de calendario: se normalizan y sobreviven al merge
+      // junto al material clave, sin que la pestaña de ajustes las edite.
+      expect(merged.calendarFolder).toBe("Agenda personal");
+      expect(merged.calendarTemplatesFolder).toBe("Plantillas/Calendario");
       expect(merged.credentialLockTimeoutMinutes).toBe(30);
       expect(merged.credSaltB64).toBe("c2FsdA==");
       expect(merged.credVerifier).toBe("dmVyaWZpZXI=");
@@ -58,12 +80,16 @@ describe("settings", () => {
       const merged = mergePluginSettings(DEFAULT_SETTINGS, {
         projectsFolder: "  Areas//Web  ",
         templatesFolder: "/absoluta",
+        calendarFolder: "  Agenda/ ",
+        calendarTemplatesFolder: "/absoluta",
         credSaltB64: "c2FsdA==",
         credVerifier: "dmVyaWZpZXI=",
       });
 
       expect(merged.projectsFolder).toBe("Areas/Web");
       expect(merged.templatesFolder).toBe(DEFAULT_SETTINGS.templatesFolder);
+      expect(merged.calendarFolder).toBe("Agenda");
+      expect(merged.calendarTemplatesFolder).toBe(DEFAULT_SETTINGS.calendarTemplatesFolder);
       expect(merged.credSaltB64).toBe("c2FsdA==");
       expect(merged.credVerifier).toBe("dmVyaWZpZXI=");
       expect(merged.credentialLockTimeoutMinutes).toBe(
