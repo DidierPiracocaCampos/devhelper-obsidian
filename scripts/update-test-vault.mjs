@@ -3,8 +3,8 @@
  * Actualiza el vault de pruebas con la última build del plugin.
  *
  *  1. Ejecuta la build de producción (`node esbuild.config.mjs --production`).
- *  2. Copia `main.js`, `manifest.json` y `styles.css` a
- *     `<vault>/.obsidian/plugins/devhelper-dashboard/`.
+ *  2. Copia `main.js`, `manifest.json`, `styles.css` y la carpeta
+ *     `skills/` (recursiva) a `<vault>/.obsidian/plugins/devhelper-dashboard/`.
  *  3. Recarga el plugin con el CLI de Obsidian (si está disponible).
  *
  * Uso:

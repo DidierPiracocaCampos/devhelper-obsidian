@@ -22,7 +22,7 @@ description: "Crear, listar y razonar sobre eventos del calendario mensual de De
   type: calendar-event
   title: <título>
   date: <YYYY-MM-DD>
-  kind: evento | reunion | fecha_limite | aviso
+  # kind ∈ {evento, reunion, fecha_limite, aviso}  -- ver lista 'kind' abajo
   allDay: true
   status: open
   ---
