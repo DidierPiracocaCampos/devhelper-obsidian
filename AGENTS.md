@@ -320,6 +320,43 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 Los tests **no usan mocks** — usan un `VaultAdapter` en memoria que simula
 determinísticamente los métodos del API.
 
+## Skills de IA distribuidas (9)
+
+El plugin transporta una familia de skills de IA a la carpeta del plugin en el
+vault (`<vault>/.obsidian/plugins/devhelper-dashboard/skills/`). Las skills son
+semiactivas, en español, y enseñan el modelo de datos del plugin a IAs
+externas (no se cargan en el runtime del plugin).
+
+Fuente: `src/skills/devhelper-*/SKILL.md`. El paso de copia está en
+`esbuild.config.mjs`. El comando `npm run update:test-vault` también las
+publica en el vault de prueba.
+
+- `devhelper-dashboard` — núcleo: frontmatter universal, carpetas
+  configurables, sanitización, regla Archivos/General, política de borrado,
+  política de credenciales, plantillas.
+- `devhelper-projects` — crear/renombrar/listar proyectos.
+- `devhelper-tasks` — crear/cerrar/reabrir/reasignar tareas.
+- `devhelper-notes` — crear/renombrar/reasignar notas simples.
+- `devhelper-credentials` — listar `service`, contar entradas en claro,
+  detectar maestra y delegar.
+- `devhelper-files` — copiar/listar/borrar archivos del dashboard.
+- `devhelper-general` — identificar el proyecto sombra `Projects/General/`.
+- `devhelper-calendar` — crear/expandir eventos (rangos, recurrencias,
+  reglas `allDay`/`time`).
+- `devhelper-templates` — usar y sugerir plantillas configuradas.
+
+**Reglas para los mantenedores**: cualquier cambio al modelo de datos
+(frontmatter, props, carpetas, reglas de validación) debe actualizar la
+skill correspondiente en el mismo commit. Si añades un nuevo subsistema,
+crea `src/skills/devhelper-<área>/SKILL.md` y enlázalo desde
+`devhelper-dashboard`.
+
+**Reglas críticas para el frontmatter de las skills**: la `description:` debe
+ir entrecomillada con `"` si contiene `: ` (colon + espacio dentro de
+backticks). `js-yaml.load` rechaza escalares sin entrecomillar con esa forma.
+El `description` es además donde el harness decide si carga la skill, así que
+un fallo de parseo inutiliza la skill.
+
 ## Convenciones y reglas duras
 
 - **Una mutación = un sólo cambio atómico en una prop.** Cada método de mutación opera
