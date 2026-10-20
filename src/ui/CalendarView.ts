@@ -65,6 +65,30 @@ function isoIsInMonth(iso: string, year: number, month1_12: number): boolean {
 }
 
 /**
+ * `true` si el ISO cae en sábado (6) o domingo (0) según el huso local.
+ * El cálculo es el mismo `(getDay() + 6) % 7` que usa `getMonthGrid` para
+ * alinear la rejilla al lunes, así no hay forma de que un día que está en
+ * la columna S/D no se considere finde.
+ */
+function isWeekend(iso: string): boolean {
+  const date = parseIsoDate(iso);
+  const dow = date.getDay();
+  return dow === 0 || dow === 6;
+}
+
+/**
+ * Milisegundos que faltan hasta la medianoche local siguiente. Se usa para
+ * programar una única alarma que refresca la vista al cambiar el día, de modo
+ * que `is-today` no quede congelado en ayer si la pestaña sigue abierta al
+ * cruzar medianoche.
+ */
+function msUntilNextMidnight(now: Date = new Date()): number {
+  const next = new Date(now);
+  next.setHours(24, 0, 1, 0);
+  return next.getTime() - now.getTime();
+}
+
+/**
  * Vista mensual de calendario para eventos `type: calendar-event`.
  *
  * - Estado en memoria: `year`, `month` (1-12) y `selectedIsoDate`.
@@ -83,6 +107,13 @@ export class CalendarView extends ItemView {
 
   private currentData: DashboardData | null = null;
   private currentPresentation: CalendarPresentation | null = null;
+
+  /**
+   * Alarma de medianoche: al cambiar el día natural re-marcamos «hoy» y
+   * re-sincronizamos el mes/día seleccionados sin que el usuario tenga que
+   * cerrar la pestaña. `null` = sin alarma programada.
+   */
+  private midnightTimer: number | null = null;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -113,11 +144,47 @@ export class CalendarView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.renderEmpty();
+    this.scheduleMidnightRefresh();
     await this.refresh();
   }
 
   async onClose(): Promise<void> {
+    this.clearMidnightTimer();
     this.contentEl.empty();
+  }
+
+  /**
+   * Programa una única alarma para la medianoche local siguiente. Cuando
+   * salta, la vista se repinta con el nuevo «hoy» y se rearma para el día
+   * siguiente (un temporizador por día, no un polling).
+   */
+  private scheduleMidnightRefresh(): void {
+    this.clearMidnightTimer();
+    this.midnightTimer = window.setTimeout(() => {
+      this.midnightTimer = null;
+      void this.onMidnight();
+    }, msUntilNextMidnight());
+  }
+
+  private clearMidnightTimer(): void {
+    if (this.midnightTimer !== null) {
+      window.clearTimeout(this.midnightTimer);
+      this.midnightTimer = null;
+    }
+  }
+
+  /**
+   * Al cruzar medianoche, «hoy» ha cambiado. Si la selección estaba en un día
+   * ya pasado (típicamente el «hoy» de ayer), la llevamos al nuevo «hoy» para
+   * no dejar el panel apuntando a un día que no existe; si estaba en el futuro
+   * o en otro día, no movemos nada. En ambos casos se rearma la alarma.
+   */
+  private async onMidnight(): Promise<void> {
+    if (this.selectedIsoDate < todayIso()) {
+      this.selectedIsoDate = todayIso();
+    }
+    await this.refresh();
+    this.scheduleMidnightRefresh();
   }
 
   /**
@@ -175,8 +242,7 @@ export class CalendarView extends ItemView {
     this.contentEl.addClass("devhelper-calendar-root");
 
     this.renderTopBar(presentation);
-    this.renderWeekdays();
-    this.renderGrid(presentation, data);
+    this.renderMonthCard(presentation, data);
     this.renderDayPanel(presentation, data);
   }
 
@@ -185,21 +251,19 @@ export class CalendarView extends ItemView {
       cls: "devhelper-calendar-topbar",
     });
 
+    // Grupo izquierdo: «‹ [Hoy] › Mes Año» en una sola línea a la
+    // izquierda. La flecha anterior abre, luego la píldora «Hoy», luego
+    // la flecha siguiente, y por último la etiqueta «Mes Año».
     const nav = topbar.createEl("div", {
       cls: "devhelper-calendar-nav",
     });
 
     const prevBtn = nav.createEl("button", {
-      cls: "devhelper-icon-button",
+      cls: "devhelper-calendar-step",
       attr: { type: "button", "aria-label": "Mes anterior", title: "Mes anterior" },
     });
     setIcon(prevBtn, "chevron-left");
     prevBtn.addEventListener("click", () => this.changeMonth(-1));
-
-    const label = nav.createEl("strong", {
-      cls: "devhelper-calendar-month-label",
-      text: `${presentation.monthLabel} ${this.year}`,
-    });
 
     const todayBtn = nav.createEl("button", {
       cls: "devhelper-calendar-nav-today",
@@ -209,14 +273,25 @@ export class CalendarView extends ItemView {
     todayBtn.addEventListener("click", () => this.goToToday());
 
     const nextBtn = nav.createEl("button", {
-      cls: "devhelper-icon-button",
+      cls: "devhelper-calendar-step",
       attr: { type: "button", "aria-label": "Mes siguiente", title: "Mes siguiente" },
     });
     setIcon(nextBtn, "chevron-right");
     nextBtn.addEventListener("click", () => this.changeMonth(1));
 
-    const addBtn = topbar.createEl("button", {
-      cls: "devhelper-fab",
+    nav.createEl("strong", {
+      cls: "devhelper-calendar-month-label",
+      text: `${presentation.monthLabel} ${this.year}`,
+    });
+
+    // Grupo derecho: solo «+ Nuevo», pegado al borde.
+    const actions = topbar.createEl("div", {
+      cls: "devhelper-calendar-actions",
+    });
+
+    // Acción primaria: píldora clara con icono + texto.
+    const addBtn = actions.createEl("button", {
+      cls: "devhelper-calendar-add",
       attr: {
         type: "button",
         "aria-label": "Nuevo evento",
@@ -224,11 +299,24 @@ export class CalendarView extends ItemView {
       },
     });
     setIcon(addBtn, "plus");
+    addBtn.createEl("span", { text: "Nuevo" });
     addBtn.addEventListener("click", () => this.openCreateEvent());
   }
 
-  private renderWeekdays(): void {
-    const row = this.contentEl.createEl("div", {
+  /** Panel claro que agrupa cabecera de días de semana + rejilla del mes. */
+  private renderMonthCard(
+    presentation: CalendarPresentation,
+    data: DashboardData,
+  ): void {
+    const card = this.contentEl.createEl("div", {
+      cls: "devhelper-calendar-month-card",
+    });
+    this.renderWeekdays(card);
+    this.renderGrid(card, presentation, data);
+  }
+
+  private renderWeekdays(parent: HTMLElement): void {
+    const row = parent.createEl("div", {
       cls: "devhelper-calendar-weekdays",
     });
     for (const letter of WEEKDAY_LETTERS) {
@@ -237,10 +325,11 @@ export class CalendarView extends ItemView {
   }
 
   private renderGrid(
+    parent: HTMLElement,
     presentation: CalendarPresentation,
     data: DashboardData,
   ): void {
-    const grid = this.contentEl.createEl("div", {
+    const grid = parent.createEl("div", {
       cls: "devhelper-calendar-grid",
     });
 
@@ -254,6 +343,9 @@ export class CalendarView extends ItemView {
           },
         });
         if (!cell.inMonth) cellEl.addClass("is-outside-month");
+        if (cell.inMonth && isWeekend(cell.isoDate)) {
+          cellEl.addClass("is-weekend");
+        }
         if (cell.isToday) cellEl.addClass("is-today");
         if (cell.isoDate === this.selectedIsoDate) {
           cellEl.addClass("is-selected");
