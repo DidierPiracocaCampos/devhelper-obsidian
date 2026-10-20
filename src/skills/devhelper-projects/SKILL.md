@@ -1,6 +1,6 @@
 ---
 name: devhelper-projects
-description: Crear, renombrar y listar proyectos (`type: project`) en este vault, respetando las carpetas configuradas de DevHelper Dashboard. Usa cuando el usuario pida crear un proyecto, renombrarlo, marcarlo como favorito o listar los existentes.
+description: "Crear, renombrar y listar proyectos (`type: project`) en este vault, respetando las carpetas configuradas de DevHelper Dashboard. Usa cuando el usuario pida crear un proyecto, renombrarlo, marcarlo como favorito o listar los existentes."
 ---
 
 # devhelper-projects

@@ -1,6 +1,6 @@
 ---
 name: devhelper-notes
-description: Crear, renombrar, reasignar y listar notas simples (`type: note`) en este vault, dentro de la carpeta del proyecto que las aloja. Usa cuando el usuario pida añadir una nota suelta a un proyecto, o mover una nota entre proyectos.
+description: "Crear, renombrar, reasignar y listar notas simples (`type: note`) en este vault, dentro de la carpeta del proyecto que las aloja. Usa cuando el usuario pida añadir una nota suelta a un proyecto, o mover una nota entre proyectos."
 ---
 
 # devhelper-notes

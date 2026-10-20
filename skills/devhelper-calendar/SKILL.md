@@ -1,6 +1,6 @@
 ---
 name: devhelper-calendar
-description: Crear, listar y razonar sobre eventos del calendario mensual de DevHelper Dashboard (`type: calendar-event`). Respetar `allDay` ↔ `time`, validar `endDate >= date`, y `kind` ∈ {evento, reunion, fecha_limite, aviso}. Usa cuando el usuario pida trabajar con eventos.
+description: "Crear, listar y razonar sobre eventos del calendario mensual de DevHelper Dashboard (`type: calendar-event`). Respetar `allDay` ↔ `time`, validar `endDate >= date`, y `kind` ∈ {evento, reunion, fecha_limite, aviso}. Usa cuando el usuario pida trabajar con eventos."
 ---
 
 # devhelper-calendar

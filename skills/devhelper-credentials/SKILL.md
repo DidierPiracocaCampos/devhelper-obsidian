@@ -1,6 +1,6 @@
 ---
 name: devhelper-credentials
-description: Listar, contar y razonar sobre credenciales cifradas (`type: credentials`) en este vault. La IA nunca escribe secretos en claro cuando hay maestra fijada: delega al plugin. Usa cuando el usuario pida consultar o crear credenciales.
+description: "Listar, contar y razonar sobre credenciales cifradas (`type: credentials`) en este vault. La IA nunca escribe secretos en claro cuando hay maestra fijada: delega al plugin. Usa cuando el usuario pida consultar o crear credenciales."
 ---
 
 # devhelper-credentials

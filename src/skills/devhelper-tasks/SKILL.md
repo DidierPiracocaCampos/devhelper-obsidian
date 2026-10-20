@@ -1,6 +1,6 @@
 ---
 name: devhelper-tasks
-description: Crear, reabrir, renombrar, reasignar y cambiar de estado tareas (`type: task`) en este vault, respetando las carpetas configuradas y el wikilink `project` de DevHelper Dashboard. Usa cuando el usuario pida trabajar con tareas.
+description: "Crear, reabrir, renombrar, reasignar y cambiar de estado tareas (`type: task`) en este vault, respetando las carpetas configuradas y el wikilink `project` de DevHelper Dashboard. Usa cuando el usuario pida trabajar con tareas."
 ---
 
 # devhelper-tasks
