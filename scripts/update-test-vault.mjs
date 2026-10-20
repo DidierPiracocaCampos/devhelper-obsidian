@@ -15,7 +15,7 @@
  * la variable de entorno `DEVHELPER_TEST_VAULT`.
  */
 import { execSync } from "node:child_process";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, statSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,6 +42,14 @@ mkdirSync(pluginDir, { recursive: true });
 for (const file of FILES) {
   copyFileSync(resolve(repoRoot, file), resolve(pluginDir, file));
   console.log(`[update-test-vault]   ${file} OK`);
+}
+
+const skillsRepo = resolve(repoRoot, "skills");
+const skillsTest = resolve(pluginDir, "skills");
+if (existsSync(skillsRepo) && statSync(skillsRepo).isDirectory()) {
+  mkdirSync(skillsTest, { recursive: true });
+  cpSync(skillsRepo, skillsTest, { recursive: true });
+  console.log("[update-test-vault]   skills/ OK");
 }
 
 try {
