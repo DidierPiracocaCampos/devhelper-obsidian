@@ -147,47 +147,73 @@ export default class DevHelperDashboardPlugin extends Plugin {
   }
 
   /**
-   * Open (or focus) the dashboard view in a new tab in the main
-   * workspace leaf. The brief is explicit about the leaf strategy: a
-   * tab leaf means the dashboard never replaces the user's current
-   * note in the editor pane.
+   * Open (or focus) the dashboard view. Like the calendar, only one
+   * dashboard instance may exist: reusing an open leaf keeps repeated
+   * ribbon/command invocations from stacking tabs.
    */
   async activateDashboardView(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_DEVHELPER_DASHBOARD
+    );
+    if (existing.length > 0) {
+      const leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      const openView = leaf.view as DashboardView;
+      // Ask the view to pull data immediately so the user does not see
+      // a loading placeholder on activation.
+      if (openView && typeof openView.refresh === "function") {
+        await openView.refresh();
+      }
+      return;
+    }
+
     const leaf = this.app.workspace.getLeaf("tab");
     await leaf.setViewState({
       type: VIEW_TYPE_DEVHELPER_DASHBOARD,
       active: true,
     });
-    // Ask the freshly-mounted view to pull data immediately so the
-    // user does not see a loading placeholder on activation.
     const view = leaf.view;
-    if (
-      view &&
-      typeof (view as DashboardView).refresh === "function"
-    ) {
+    if (view && typeof (view as DashboardView).refresh === "function") {
       await (view as DashboardView).refresh();
     }
   }
 
   /**
-   * Open (or focus) the calendar view in a new tab. When `isoDate` is
+   * Open (or focus) the calendar view. There must be at most ONE monthly
+   * calendar open at a time: the dashboard's mini-calendar rail calls
+   * this on every day click, and `getLeaf("tab")` unconditionally creates
+   * a fresh tab. So we reuse an already-mounted calendar leaf when one
+   * exists and only create a new one when none does. When `isoDate` is
    * provided, the view is navigated to that month/day before refreshing.
    */
   async activateCalendarView(isoDate?: string): Promise<void> {
-    const leaf = this.app.workspace.getLeaf("tab");
-    await leaf.setViewState({
-      type: VIEW_TYPE_DEVHELPER_CALENDAR,
-      active: true,
-    });
-    const view = leaf.view;
-    if (view && typeof (view as CalendarView).refresh === "function") {
+    const existing = this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_DEVHELPER_CALENDAR
+    );
+    let view: CalendarView | undefined;
+
+    if (existing.length > 0) {
+      // Already open: focus it, never mount a second instance.
+      const leaf = existing[0];
+      this.app.workspace.revealLeaf(leaf);
+      view = leaf.view as CalendarView;
+    } else {
+      const leaf = this.app.workspace.getLeaf("tab");
+      await leaf.setViewState({
+        type: VIEW_TYPE_DEVHELPER_CALENDAR,
+        active: true,
+      });
+      view = leaf.view as CalendarView;
+    }
+
+    if (view && typeof view.refresh === "function") {
       if (
         isoDate !== undefined &&
-        typeof (view as CalendarView).setSelectedIsoDate === "function"
+        typeof view.setSelectedIsoDate === "function"
       ) {
-        (view as CalendarView).setSelectedIsoDate(isoDate);
+        view.setSelectedIsoDate(isoDate);
       }
-      await (view as CalendarView).refresh();
+      await view.refresh();
     }
   }
 

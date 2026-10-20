@@ -94,6 +94,13 @@ export class DashboardView extends ItemView {
   private fileQuery = "";
   private sideWeekOffset = 0;
 
+  /**
+   * Alarma de medianoche para el rail lateral. Sin ella, «hoy» y la semana
+   * mostrada quedan congelados en ayer si la pestaña sigue abierta al cruzar
+   * la medianoche (el render sólo ocurre por eventos del vault o del usuario).
+   */
+  private midnightTimer: number | null = null;
+
   constructor(
     leaf: WorkspaceLeaf,
     repository: ProjectTaskRepository,
@@ -125,10 +132,36 @@ export class DashboardView extends ItemView {
     // `load()` resolves. A subsequent `refresh()` will swap in the
     // real content.
     this.renderEmpty();
+    this.scheduleMidnightRefresh();
     await this.refresh();
   }
 
+  /**
+   * Programa una única alarma para la medianoche local siguiente. Al saltar,
+   * repinta el rail con el nuevo «hoy» y se rearma para el día siguiente.
+   */
+  private scheduleMidnightRefresh(): void {
+    this.clearMidnightTimer();
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 1, 0);
+    this.midnightTimer = window.setTimeout(() => {
+      this.midnightTimer = null;
+      // El offset de semana sigue siendo válido (0 = semana actual), así que
+      // basta con repintar; un nuevo render recalcula «hoy» y la semana.
+      void this.refresh().then(() => this.scheduleMidnightRefresh());
+    }, nextMidnight.getTime() - now.getTime());
+  }
+
+  private clearMidnightTimer(): void {
+    if (this.midnightTimer !== null) {
+      window.clearTimeout(this.midnightTimer);
+      this.midnightTimer = null;
+    }
+  }
+
   async onClose(): Promise<void> {
+    this.clearMidnightTimer();
     this.contentEl.empty();
   }
 
@@ -892,7 +925,9 @@ export class DashboardView extends ItemView {
     const header = calendar.createEl("div", {
       cls: "devhelper-calendar-header",
     });
-    header.createEl("strong", { text: strip.monthLabel });
+    header.createEl("strong", {
+      text: `${strip.monthLabel} ${strip.year}`,
+    });
 
     const prevBtn = header.createEl("button", {
       cls: "devhelper-icon-button",

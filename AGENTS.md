@@ -192,7 +192,8 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   se organiza en métodos `renderTopBar`, `renderProjectChips`, `renderTasksPanel`,
   `renderTaskCard`, `renderEmptyState`, `renderSideColumn` (rail de semana funcional:
   `‹ Hoy ›` con estado en memoria, puntitos por `kind` vía clases CSS y click-día o `+`
-  que llaman a `openCalendar(isoDate)`), `renderBottomSections` (Archivos + Contraseña)
+  que llaman a `openCalendar(isoDate)`; el día marcado «hoy» **no lleva círculo**, sólo
+  número oscuro con más peso), `renderBottomSections` (Archivos + Contraseña)
   y `renderIssues`, más panel de Notas
   (tarjetas con filtro por título) y sección Archivos viva (filtro «Buscar archivos…»,
   botón «Añadir archivo» que copia a `<Proyecto>/Archivos/`, botón ver-en-explorador
@@ -222,20 +223,47 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   `type: calendar-event`. Estado en memoria `year`, `month` (1–12) y `selectedIsoDate`
   (default hoy). `refresh()` re-llama `repository.load()` + `presentCalendar` y repinta;
   el click en una celda sólo repinta el panel de día **sin** `refresh()` completo. La
-  topbar es «‹ …Mes Año… › Hoy» + botón «+ Nuevo»; el panel de día lista cada
+  topbar es «‹ …Mes Año… ›» a la izquierda + un grupo derecho con «Hoy» y «+ Nuevo»
+  (`.devhelper-calendar-actions`); el panel de día lista cada
   ocurrencia (hora o «Todo el día» + título + badge `kind` + badge proyecto) con lápiz
   (abre la nota o el modal de edición) y papelera (`ConfirmDeleteModal` →
   `deleteCalendarEvent`), más «+ Añadir aquí». Las escrituras pasan siempre por el modal
   o la confirmación, nunca desde un render path.
+  **Alarma de medianoche** (`scheduleMidnightRefresh` / `msUntilNextMidnight`, limpiada
+  en `onClose`): como `today` sólo se calcula en el render, sin ella la marca `is-today`
+  y la selección quedan congeladas en ayer si la pestaña sigue abierta al cruzar
+  medianoche. Es una única alarma diaria, no un polling.
 - `src/ui/CalendarEventFormModal.ts` — `obsidian.Modal` de creación/edición de eventos:
   título, `kind` (select de 4), fecha de inicio, «varios días» + fecha fin, «todo el
   día» + hora, recurrencia + fin de recurrencia y proyecto opcional en un desplegable
   nativo (`Setting.addDropdown`) con «— Ninguno (global) —» y los títulos de los
   proyectos (sin General); validación inline en español con la misma silueta
   que `TaskFormModal`.
-- `styles.css` — usa variables Obsidian (`--background-primary`, `--background-secondary`,
-  `--text-normal`, `--interactive-accent`, etc.). Lienzo oscuro, paneles claros
-  redondeados, tarjetas de tarea oscuras. Layout en grid de dos columnas (`1fr auto`)
+- `styles.css` — paleta fija del plugin (lienzo oscuro `#0e0e10`, paneles oscuros
+  `#141417` con hairline `#232328`, tarjetas `#1b1b1e`); no depende del tema de
+  Obsidian. La vista de calendario usa la misma paleta en oscuro, dejando
+  el claro `#fafafa` sólo como acento puntual: topbar con flechas `‹`/`›` sueltas
+  sobre el lienzo (`.devhelper-calendar-step`, 28px, sin caja ni círculo) y
+  etiqueta `Mes Año` en `nowrap` (el año nunca se recorta); a la derecha, un grupo
+  `.devhelper-calendar-actions` (`margin-left: auto`) con la píldora oscura «Hoy»
+  (28px) y la acción primaria clara `.devhelper-calendar-add` («+ Nuevo», 28px);
+  la rejilla vive dentro del panel oscuro `.devhelper-calendar-month-card`
+  (`max-width: 960px`, centrado), y el panel de día comparte ese tope y ancho;
+  la cabecera de semana va sin cajas — el selector con padre anula el fondo gris
+  que el mini-calendario del rail aplica a la misma clase
+  `.devhelper-calendar-weekdays` —, hoy = círculo claro relleno `#fafafa` con
+  número oscuro, seleccionado = celda `#26262c` con borde `#3f3f46`. En el
+  mini-calendario del rail (`.devhelper-calendar`) los controles son **negros
+  sin caja ni círculo** (`.devhelper-calendar-header .devhelper-icon-button`
+  transparente, 28px) con «Hoy» como píldora oscura 28px; los días son celdas
+  limpias sin círculo (`.devhelper-calendar-day` transparente, `border-radius: 8px`)
+  y sólo **hoy** lleva círculo relleno oscuro `#18181b` con número claro. Todos
+  estos selectores repiten el padre (0,2,0) porque, si no, la regla
+  `button:not(.clickable-icon)` de Obsidian pinta cada día como un botón negro
+  redondeado. Los selectores de
+  botones repiten el padre (0,2,0) para ganar a la regla
+  `button:not(.clickable-icon)` de Obsidian. Layout
+  en grid de dos columnas (`1fr auto`)
   con la barra superior (`grid-column: 1 / -1`) y la fila inferior (Archivos +
   Contraseña) ocupando ambas columnas. La *topbar* ya no es un panel con borde ni
   título: es simplemente la fila transparente que aloja los chips de favoritos y los

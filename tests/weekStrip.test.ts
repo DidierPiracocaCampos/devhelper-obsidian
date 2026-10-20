@@ -33,4 +33,11 @@ describe("getWeekStrip", () => {
     expect(getWeekStrip(new Date(2026, 9, 17)).monthLabel).toBe("Octubre");
     expect(getWeekStrip(new Date(2026, 9, 1)).monthLabel).toBe("Octubre");
   });
+
+  it("expone el año de la semana como texto para componer «Mes Año»", () => {
+    expect(getWeekStrip(new Date(2026, 9, 17)).year).toBe("2026");
+    // Cambio de año: la semana de 31 dic 2026 cae en enero de 2027.
+    expect(getWeekStrip(new Date(2026, 11, 31)).year).toBe("2026");
+    expect(getWeekStrip(new Date(2027, 0, 4)).year).toBe("2027");
+  });
 });

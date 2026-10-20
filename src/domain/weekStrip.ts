@@ -16,6 +16,11 @@ export interface WeekDay {
 export interface WeekStrip {
   /** Nombre del mes en español (ej. "Octubre"). */
   monthLabel: string;
+  /**
+   * Año de la semana, como texto (ej. "2026"). Se expone aparte del mes para
+   * que la UI pueda componer «Mes Año» sin releer el `Date`.
+   */
+  year: string;
   days: WeekDay[];
 }
 
@@ -44,5 +49,5 @@ export function getWeekStrip(today: Date): WeekStrip {
   );
   const monthLabel = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
-  return { monthLabel, days };
+  return { monthLabel, year: String(today.getFullYear()), days };
 }
