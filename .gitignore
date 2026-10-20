@@ -5,6 +5,9 @@ node_modules/
 main.js
 *.js.map
 skills/
+# Do NOT ignore the source folder; only its release-artifact mirror.
+!src/skills/
+!src/skills/**
 
 # Plugin data
 data.json
