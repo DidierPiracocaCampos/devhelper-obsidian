@@ -25,7 +25,8 @@
   "files": [
     "main.js",
     "manifest.json",
-    "styles.css"
+    "styles.css",
+    "skills/**"
   ],
   "devDependencies": {
     "@types/js-yaml": "4.0.9",
