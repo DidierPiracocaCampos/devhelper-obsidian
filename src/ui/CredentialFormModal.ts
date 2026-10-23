@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Setting } from "obsidian";
+import { App, Modal, Notice, Setting, setIcon } from "obsidian";
 import type { CredentialDisplay } from "../domain/credentialsCrypto";
 import type { CredentialInput } from "../data/ProjectTaskRepository";
 
@@ -237,6 +237,7 @@ export class MasterPasswordModal extends Modal {
         text.inputEl.type = "password";
         this.passwordInput = text.inputEl;
       });
+    this.passwordInput.focus();
 
     if (this.mode === "create") {
       new Setting(form)
@@ -246,6 +247,13 @@ export class MasterPasswordModal extends Modal {
           text.inputEl.type = "password";
           this.confirmInput = text.inputEl;
         });
+    }
+
+    // Enter confirma desde cualquiera de los campos.
+    for (const input of [this.passwordInput, this.confirmInput]) {
+      input?.addEventListener("keydown", (evt) => {
+        if (evt.key === "Enter") this.submit();
+      });
     }
 
     this.errorEl = form.createEl("p", {
@@ -375,11 +383,22 @@ export class CredentialDetailModal extends Modal {
       attr: { readonly: "true" },
     });
     input.value = value;
-    const copyBtn = row.createEl("button", {
-      cls: "devhelper-button",
-      text: "Copiar",
+    this.addIconButton(row, "copy", "Copiar", () => this.onCopy(value));
+  }
+
+  private addIconButton(
+    row: HTMLElement,
+    icon: string,
+    label: string,
+    onClick: () => void,
+  ): HTMLElement {
+    const btn = row.createEl("button", {
+      cls: "devhelper-icon-button devhelper-detail-button",
+      attr: { "aria-label": label, title: label, type: "button" },
     });
-    copyBtn.addEventListener("click", () => this.onCopy(value));
+    setIcon(btn, icon);
+    btn.addEventListener("click", onClick);
+    return btn;
   }
 
   private addPasswordRow(form: HTMLElement, password: string): void {
@@ -394,20 +413,15 @@ export class CredentialDetailModal extends Modal {
     });
     input.value = password;
     this.passwordInput = input;
-    const toggleBtn = row.createEl("button", {
-      cls: "devhelper-button",
-      text: "Mostrar",
-    });
-    toggleBtn.addEventListener("click", () => {
+    const toggleBtn = this.addIconButton(row, "eye", "Mostrar", () => {
       this.passwordVisible = !this.passwordVisible;
       this.passwordInput.type = this.passwordVisible ? "text" : "password";
-      toggleBtn.setText(this.passwordVisible ? "Ocultar" : "Mostrar");
+      const label = this.passwordVisible ? "Ocultar" : "Mostrar";
+      toggleBtn.setAttribute("aria-label", label);
+      toggleBtn.setAttribute("title", label);
+      setIcon(toggleBtn, this.passwordVisible ? "eye-off" : "eye");
     });
-    const copyBtn = row.createEl("button", {
-      cls: "devhelper-button",
-      text: "Copiar",
-    });
-    copyBtn.addEventListener("click", () => this.onCopy(password));
+    this.addIconButton(row, "copy", "Copiar", () => this.onCopy(password));
   }
 }
 

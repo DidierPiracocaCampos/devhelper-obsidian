@@ -1070,7 +1070,9 @@ export class DashboardView extends ItemView {
     data: DashboardData,
     presentation: DashboardPresentation,
   ): void {
-    const section = row.createEl("section", { cls: "devhelper-section" });
+    const section = row.createEl("section", {
+      cls: "devhelper-section devhelper-section--files",
+    });
     const header = section.createEl("div", {
       cls: "devhelper-section-header",
     });
@@ -1300,7 +1302,9 @@ export class DashboardView extends ItemView {
     data: DashboardData,
     decrypted: Map<string, CredentialDisplay[]>,
   ): void {
-    const section = row.createEl("section", { cls: "devhelper-section" });
+    const section = row.createEl("section", {
+      cls: "devhelper-section devhelper-section--credentials",
+    });
     const header = section.createEl("div", {
       cls: "devhelper-section-header",
     });
@@ -1325,7 +1329,7 @@ export class DashboardView extends ItemView {
           "Protege todas las credenciales con una única contraseña maestra.",
         );
         const createBtn = section.createEl("button", {
-          cls: "devhelper-button",
+          cls: "devhelper-pill-button devhelper-pill-button--center",
           text: "Crear contraseña maestra",
         });
         createBtn.addEventListener("click", () =>
@@ -1345,35 +1349,40 @@ export class DashboardView extends ItemView {
       return;
     }
 
-    // Cabecera unificada con el resto de paneles (Tareas/Archivos):
-    // [+] para añadir + candado para bloquear/desbloquear.
+    // Cabecera: acción de sesión en una píldora con texto
+    // («Desbloquear» / «Bloquear») y, sólo con la sesión abierta, el [+].
     const isLocked = !this.credentialsDeps.session.isUnlocked();
     const fabs = header.createEl("div", { cls: "devhelper-panel-fabs" });
-    const addBtn = fabs.createEl("button", {
-      cls: "devhelper-fab",
-      attr: {
-        "aria-label": "Añadir contraseña",
-        title: isLocked ? "Desbloquea para añadir" : "Añadir contraseña",
-        type: "button",
-      },
-    });
-    setIcon(addBtn, "plus");
-    if (isLocked) {
-      addBtn.disabled = true;
-    } else {
+    if (!isLocked) {
+      const addBtn = fabs.createEl("button", {
+        cls: "devhelper-fab",
+        attr: {
+          "aria-label": "Añadir contraseña",
+          title: "Añadir contraseña",
+          type: "button",
+        },
+      });
+      setIcon(addBtn, "plus");
       addBtn.addEventListener("click", () =>
         this.openCreateCredential(visible.projectPath),
       );
     }
     const lockBtn = fabs.createEl("button", {
-      cls: "devhelper-icon-button",
+      cls: "devhelper-pill-button",
       attr: {
         "aria-label": isLocked ? "Desbloquear" : "Bloquear",
-        title: isLocked ? "Desbloquear" : "Bloquear",
+        title: isLocked
+          ? "Introduce la contraseña maestra"
+          : "Bloquear las credenciales ahora",
         type: "button",
       },
     });
-    setIcon(lockBtn, "lock");
+    const lockIcon = lockBtn.createEl("span", {
+      cls: "devhelper-pill-button-icon",
+      attr: { "aria-hidden": "true" },
+    });
+    setIcon(lockIcon, isLocked ? "lock-open" : "lock");
+    lockBtn.createEl("span", { text: isLocked ? "Desbloquear" : "Bloquear" });
     if (isLocked) {
       lockBtn.addEventListener("click", () => this.openUnlockMasterPassword());
     } else {
@@ -1408,14 +1417,19 @@ export class DashboardView extends ItemView {
       });
       for (const name of names) {
         const item = list.createEl("li", {
-          cls: "devhelper-credential-locked",
+          cls: "devhelper-task-card devhelper-credential-locked",
+          attr: { title: "Pulsa para desbloquear" },
         });
         const icon = item.createEl("span", {
           cls: "devhelper-credential-lock-icon",
           attr: { "aria-hidden": "true" },
         });
         setIcon(icon, "lock");
-        item.createEl("span", { text: name });
+        item.createEl("h4", {
+          text: name,
+          cls: "devhelper-task-title devhelper-credential-title",
+        });
+        item.addEventListener("click", () => this.openUnlockMasterPassword());
       }
     }
     const actions = section.createEl("div", {
@@ -1440,6 +1454,7 @@ export class DashboardView extends ItemView {
     const status = section.createEl("div", {
       cls: "devhelper-credential-status",
     });
+    status.createEl("span", { cls: "devhelper-credential-status-dot" });
     status.createEl("span", {
       text: `Desbloqueado · se bloquea en ${mins <= 1 ? "menos de un minuto" : `~${mins} min`}`,
     });
@@ -1457,7 +1472,7 @@ export class DashboardView extends ItemView {
         text: `Tienes ${count} credencial${count === 1 ? "" : "es"} sin cifrar.`,
       });
       const migrateBtn = banner.createEl("button", {
-        cls: "devhelper-button",
+        cls: "devhelper-pill-button",
         text: "Cifrar ahora",
       });
       migrateBtn.addEventListener("click", () =>
@@ -1515,10 +1530,15 @@ export class DashboardView extends ItemView {
     const titleRow = main.createEl("div", {
       cls: "devhelper-task-title-row",
     });
-    titleRow.createEl("h4", {
+    const titleEl = titleRow.createEl("h4", {
       text: entry.service,
       cls: "devhelper-task-title devhelper-credential-title",
     });
+    if (!display.corrupt) {
+      titleEl.addEventListener("click", () =>
+        this.openCredentialDetail(entry.service, display),
+      );
+    }
 
     if (display.corrupt) {
       main.createEl("p", {
@@ -1538,15 +1558,36 @@ export class DashboardView extends ItemView {
     if (!display.corrupt) {
       const detailBtn = actions.createEl("button", {
         cls: "devhelper-icon-button devhelper-task-icon",
-        attr: { "aria-label": "Ver y copiar credencial", type: "button" },
+        attr: {
+          "aria-label": "Ver detalle",
+          title: "Ver detalle",
+          type: "button",
+        },
       });
-      setIcon(detailBtn, "copy");
+      setIcon(detailBtn, "eye");
       detailBtn.addEventListener("click", () =>
         this.openCredentialDetail(entry.service, display),
       );
+      if (display.password !== null) {
+        const password = display.password;
+        const copyBtn = actions.createEl("button", {
+          cls: "devhelper-icon-button devhelper-task-icon",
+          attr: {
+            "aria-label": "Copiar contraseña",
+            title: "Copiar contraseña",
+            type: "button",
+          },
+        });
+        setIcon(copyBtn, "copy");
+        copyBtn.addEventListener("click", () => void this.copySecret(password));
+      }
       const editBtn = actions.createEl("button", {
         cls: "devhelper-icon-button devhelper-task-icon",
-        attr: { "aria-label": "Editar credencial", type: "button" },
+        attr: {
+          "aria-label": "Editar credencial",
+          title: "Editar",
+          type: "button",
+        },
       });
       setIcon(editBtn, "pencil");
       editBtn.addEventListener("click", () =>
@@ -1555,7 +1596,11 @@ export class DashboardView extends ItemView {
     }
     const deleteBtn = actions.createEl("button", {
       cls: "devhelper-icon-button devhelper-task-icon",
-      attr: { "aria-label": "Eliminar credencial", type: "button" },
+      attr: {
+        "aria-label": "Eliminar credencial",
+        title: "Eliminar",
+        type: "button",
+      },
     });
     setIcon(deleteBtn, "trash-2");
     deleteBtn.addEventListener("click", () =>
@@ -1587,7 +1632,7 @@ export class DashboardView extends ItemView {
       text: "Sin la contraseña maestra no hay recuperación posible: las credenciales cifradas quedarán ilegibles. Solo sigue si asumes esa pérdida.",
     });
     const confirm = warn.createEl("button", {
-      cls: "devhelper-button devhelper-button-danger",
+      cls: "devhelper-pill-button devhelper-pill-button--danger",
       text: "Restablecer y empezar de cero",
     });
     confirm.addEventListener("click", () => void this.resetKeyMaterial());
@@ -1612,7 +1657,7 @@ export class DashboardView extends ItemView {
     this.credentialsDeps.session.touch();
     try {
       await navigator.clipboard.writeText(value);
-      new Notice("Copiado.");
+      new Notice("Copiado al portapapeles.");
     } catch {
       new Notice("No se pudo copiar.");
     }

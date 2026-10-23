@@ -55,7 +55,7 @@
      regardless of the panel/window width. Sides get more than top
      because Obsidian's chrome (tab bar / view header) already supplies
      top spacing of its own. */
-  padding: 4px 16px 12px;
+  padding: 8px 20px 16px;
   /* Fixed image palette: near-black canvas with light text, scoped to
      the dashboard so Obsidian's own theme stays untouched. */
   color: #fafafa;
@@ -108,8 +108,10 @@
   align-items: center;
   gap: 4px;
   border-radius: 999px;
-  padding: 4px 14px;
-  height: 28px;
+  padding: 4px 20px;
+  height: 36px;
+  font-size: 1em;
+  font-weight: 500;
   background: #1b1b1e;
   background-color: #1b1b1e;
   box-shadow: none;
@@ -213,12 +215,12 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 260px;
-  height: 30px;
+  width: 340px;
+  height: 40px;
   margin-left: auto;
   background: #1b1b1e;
   border: 1px solid #2b2b30;
-  border-radius: 8px;
+  border-radius: 14px;
   cursor: pointer;
 }
 
@@ -233,8 +235,8 @@
 }
 
 .devhelper-search-wrap .devhelper-search-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 /* NOTE: selector con padre (0,2,0) a propósito — la regla propia de
@@ -250,7 +252,7 @@
   outline: none;
   box-shadow: none;
   color: #fafafa;
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
 }
 
@@ -278,8 +280,8 @@
 /* --- Main panels ---------------------------------------------------------- */
 .devhelper-main,
 .devhelper-tasks-panel {
-  padding: 12px 16px;
-  border-radius: 16px;
+  padding: 16px 20px;
+  border-radius: 20px;
   /* Image palette: light gray panel on the near-black canvas. */
   background: #efeff1;
   background-color: #efeff1;
@@ -352,6 +354,8 @@
 .devhelper-project-header h3 {
   margin: 0;
   color: #111114;
+  font-size: 1.5em;
+  font-weight: 700;
 }
 
 .devhelper-project-path {
@@ -360,6 +364,12 @@
 }
 
 /* Header buttons on the light panel: dark glyphs like the image. */
+.devhelper-tasks-panel-header .devhelper-icon-button,
+.devhelper-tasks-panel-header .devhelper-fab {
+  width: 40px;
+  height: 40px;
+}
+
 .devhelper-tasks-panel-header .devhelper-icon-button {
   background: #1b1b1e;
   background-color: #1b1b1e;
@@ -539,8 +549,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 16px 20px;
+  border-radius: 14px;
   /* Image palette: near-black card on the light panel. */
   background: #1b1b1e;
   background-color: #1b1b1e;
@@ -571,8 +581,8 @@
 
 .devhelper-task-title {
   margin: 0;
-  font-size: 1em;
-  font-weight: 600;
+  font-size: 1.1em;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -599,7 +609,7 @@
 .devhelper-task-subtitle {
   margin: 0;
   color: #a1a1aa;
-  font-size: 0.85em;
+  font-size: 0.95em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -724,8 +734,11 @@
 }
 
 .devhelper-toolbar-rail .devhelper-icon-button {
-  background: #1b1b1e;
-  background-color: #1b1b1e;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: #222226;
+  background-color: #222226;
   border-color: #2b2b30;
   color: #fafafa;
 }
@@ -743,8 +756,8 @@
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 14px;
-  border-radius: 16px;
+  padding: 16px 18px;
+  border-radius: 20px;
   /* Image palette: white card on the dark canvas. */
   background: #f4f4f5;
   background-color: #f4f4f5;
@@ -766,7 +779,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.95em;
+  font-size: 1.35em;
+  font-weight: 700;
 }
 
 /* Push the trailing `+` control to the right edge of the header. */
@@ -833,11 +847,11 @@
   width: 32px;
   padding: 2px 0;
   text-align: center;
-  font-size: 0.7em;
+  font-size: 0.8em;
+  font-weight: 500;
   text-transform: uppercase;
   color: #63636b;
-  background: #e4e4e7;
-  border-radius: 6px;
+  background: transparent;
 }
 
 .devhelper-calendar-days {
@@ -862,7 +876,7 @@
   background-color: transparent;
   border: 1px solid transparent;
   box-shadow: none;
-  font-size: 0.85em;
+  font-size: 0.95em;
   color: #111114;
   cursor: pointer;
   transition: background-color 120ms ease;
@@ -879,6 +893,7 @@
   background-color: #18181b;
   color: #fafafa;
   font-weight: 600;
+  border-radius: 50%;
 }
 
 .devhelper-calendar .devhelper-placeholder-empty {
@@ -897,8 +912,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 16px;
-  border-radius: 16px;
+  padding: 16px 20px;
+  border-radius: 20px;
   background: #efeff1;
   background-color: #efeff1;
   border: 1px solid #efeff1;
@@ -909,6 +924,74 @@
 .devhelper-section h3 {
   margin: 0;
   color: #111114;
+  font-size: 1.5em;
+  font-weight: 700;
+}
+
+/* Archivos: sin panel, el título vive directo sobre el lienzo oscuro y
+   cada fichero es una tarjeta clara, como en la referencia web. */
+.devhelper-section--files {
+  background: transparent;
+  background-color: transparent;
+  border-color: transparent;
+  color: #fafafa;
+  padding: 0 4px;
+}
+
+.devhelper-section--files h3,
+.devhelper-section--files .devhelper-section-header h3 {
+  color: #fafafa;
+}
+
+.devhelper-section--files .devhelper-file-card {
+  background: #efeff1;
+  background-color: #efeff1;
+  border-color: #efeff1;
+  color: #111114;
+}
+
+.devhelper-section--files .devhelper-file-card .devhelper-task-title {
+  color: #111114;
+}
+
+.devhelper-section--files .devhelper-file-card .devhelper-task-subtitle,
+.devhelper-section--files .devhelper-file-card .devhelper-file-icon {
+  color: #63636b;
+}
+
+.devhelper-section--files .devhelper-file-card .devhelper-task-actions .devhelper-icon-button {
+  color: #111114;
+}
+
+.devhelper-section--files .devhelper-file-card .devhelper-task-actions .devhelper-icon-button:hover {
+  background: #dcdce0;
+  background-color: #dcdce0;
+}
+
+/* Botones de cabecera: círculos claros sobre el lienzo oscuro. */
+.devhelper-bottom-sections .devhelper-section--files .devhelper-icon-button,
+.devhelper-bottom-sections .devhelper-section--files .devhelper-fab {
+  width: 40px;
+  height: 40px;
+  background: #fafafa;
+  background-color: #fafafa;
+  border-color: #fafafa;
+  color: #111114;
+}
+
+.devhelper-bottom-sections .devhelper-section--files .devhelper-section-header .devhelper-icon-button.is-active {
+  background: #2b2b30;
+  background-color: #2b2b30;
+  border-color: #2b2b30;
+  color: #fafafa;
+}
+
+.devhelper-section--files .devhelper-empty-state-icon {
+  color: #71717a;
+}
+
+.devhelper-section--files .devhelper-empty-state-text {
+  color: #a1a1aa;
 }
 
 /* Cabecera en una sola fila (título izq + botones der), igual que el
@@ -1039,16 +1122,84 @@
   gap: 8px;
 }
 
+/* Credencial bloqueada: la misma tarjeta oscura de las tareas, con candado
+   y sólo el servicio. Se pulsa para desbloquear. */
 .devhelper-credential-locked {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-muted);
+  justify-content: flex-start;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.devhelper-credential-locked:hover {
+  background: #26262c;
+  background-color: #26262c;
+}
+
+.devhelper-credential-locked .devhelper-credential-title {
+  flex: 1 1 auto;
+}
+
+.devhelper-credential-lock-icon {
+  display: inline-flex;
+  color: #a1a1aa;
 }
 
 .devhelper-credential-lock-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
+}
+
+/* Píldora de acción de los paneles claros: oscura, con icono + texto. Los
+   selectores repiten el padre (0,2,0) para ganar a
+   `button:not(.clickable-icon)` de Obsidian. */
+.devhelper-section .devhelper-pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: #1b1b1e;
+  background-color: #1b1b1e;
+  border: 1px solid #1b1b1e;
+  box-shadow: none;
+  color: #fafafa;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.devhelper-section .devhelper-pill-button:hover {
+  background: #2b2b30;
+  background-color: #2b2b30;
+}
+
+.devhelper-pill-button-icon {
+  display: inline-flex;
+}
+
+.devhelper-pill-button-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.devhelper-section .devhelper-pill-button--center {
+  align-self: center;
+  margin: 12px 0;
+}
+
+.devhelper-section .devhelper-pill-button--danger {
+  background: transparent;
+  background-color: transparent;
+  border-color: #dc2626;
+  color: #b91c1c;
+}
+
+.devhelper-section .devhelper-pill-button--danger:hover {
+  background: #dc2626;
+  background-color: #dc2626;
+  color: #fafafa;
 }
 
 /* Service title inside the reused task card: not clickable (there is
@@ -1074,38 +1225,70 @@
   color: var(--text-muted);
 }
 
+.devhelper-detail-row {
+  padding: 4px 0;
+}
+
+.devhelper-detail-button {
+  flex: 0 0 auto;
+}
+
 .devhelper-detail-value {
   flex: 1;
   min-width: 0;
 }
 
+/* Estado de la sesión: punto verde + texto discreto sobre el panel claro. */
 .devhelper-credential-status {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   font-size: 0.85em;
-  color: var(--text-muted);
-  margin-bottom: 8px;
+  color: #63636b;
+  margin-bottom: 4px;
+}
+
+.devhelper-credential-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
 }
 
 .devhelper-migration-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  padding: 8px 10px;
+  gap: 12px;
+  border-radius: 14px;
+  padding: 12px 16px;
   margin-bottom: 8px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #78350f;
+}
+
+.devhelper-migration-banner .devhelper-pill-button {
+  height: 32px;
 }
 
 .devhelper-danger-zone {
-  border: 1px solid var(--text-error);
-  border-radius: 6px;
-  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #7f1d1d;
+  border-radius: 14px;
+  padding: 12px 16px;
   margin-top: 12px;
   font-size: 0.9em;
+}
+
+.devhelper-danger-zone p {
+  margin: 0;
 }
 
 .devhelper-button-danger {
@@ -1113,13 +1296,17 @@
   color: var(--text-error);
 }
 
-.devhelper-link-button {
+.devhelper-section .devhelper-link-button {
   background: none;
+  background-color: transparent;
   border: none;
-  padding: 4px;
-  color: var(--text-muted);
+  box-shadow: none;
+  padding: 4px 2px;
+  color: #63636b;
   cursor: pointer;
-  font-size: 0.9em;
+  font-size: 0.85em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .devhelper-link-button:hover {
@@ -1268,7 +1455,7 @@
    sobresalga por los lados. En pantallas estrechas, al no haber tope, se
    estira con `width: 100%` igual que la tarjeta. */
   width: 100%;
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -1313,9 +1500,10 @@
 .devhelper-calendar-month-label {
   white-space: nowrap;
   text-align: center;
-  font-size: 1em;
-  font-weight: 600;
+  font-size: 1.6em;
+  font-weight: 700;
   color: #fafafa;
+  padding: 0 6px;
 }
 
 /* Grupo derecho: «Hoy» + «+ Nuevo» contiguos y pegados al borde. */
@@ -1352,8 +1540,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 16px 0 12px;
+  height: 36px;
+  padding: 0 18px 0 14px;
   border-radius: 999px;
   background: #fafafa;
   background-color: #fafafa;
@@ -1385,13 +1573,13 @@
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  background-color: transparent;
-  border: none;
+  padding: 16px 18px 18px;
+  border-radius: 20px;
+  background: #141417;
+  background-color: #141417;
+  border: 1px solid #232328;
   color: #fafafa;
 }
 
@@ -1409,12 +1597,12 @@
      inicio en vez de centrada en la celda. */
   width: 100%;
   text-align: center;
-  font-size: 0.7em;
+  font-size: 0.78em;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #8e8e96;
-  padding: 4px 0;
+  padding: 4px 0 6px;
   background: transparent;
   background-color: transparent;
   border-radius: 0;
@@ -1424,7 +1612,7 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(6, 1fr);
-  gap: 4px;
+  gap: 6px;
 }
 
 .devhelper-calendar-month-card .devhelper-calendar-cell {
@@ -1437,9 +1625,9 @@
   align-items: center;
   justify-content: flex-start;
   gap: 4px;
-  min-height: 52px;
-  padding: 4px 2px;
-  border-radius: 10px;
+  min-height: 84px;
+  padding: 6px 4px;
+  border-radius: 14px;
   background: transparent;
   background-color: transparent;
   border: 1px solid transparent;
@@ -1456,8 +1644,14 @@
    padding visual. */
 .devhelper-calendar-month-card .devhelper-calendar-cell-day {
   align-self: flex-start;
-  margin: 4px 0 0 6px;
-  font-size: 0.9em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  margin: 0 0 0 4px;
+  border-radius: 50%;
+  font-size: 0.95em;
   font-weight: 500;
 }
 
@@ -1480,9 +1674,9 @@
    no podría ganar por especificidad y los findes saldrían con el fondo
    laborable por error. */
 .devhelper-calendar-month-card .devhelper-calendar-cell:not(.is-outside-month):not(.is-today):not(.is-selected):not(.is-weekend) {
-  background: #232328;
-  background-color: #232328;
-  border-color: #2f2f35;
+  background: #1c1c20;
+  background-color: #1c1c20;
+  border-color: #2a2a30;
 }
 
 /* Fin de semana (S o D, solo dentro del mes): SIN fondo (igual que las
@@ -1491,30 +1685,27 @@
    número (blanco en vez de `#fafafa`), sin bloque de fondo ni pestaña
    lateral. */
 .devhelper-calendar-month-card .devhelper-calendar-cell.is-weekend {
-  background: transparent;
-  background-color: transparent;
-  border-color: #42424a;
+  background: #111114;
+  background-color: #111114;
+  border-color: #232328;
 }
 .devhelper-calendar-month-card .devhelper-calendar-cell.is-weekend .devhelper-calendar-cell-day {
-  color: #ffffff;
+  color: #a1a1aa;
 }
 
-/* Hoy: celda ENTERA con fondo blanco puro y número oscuro — el acento
-   más fuerte de la rejilla, sin círculo pequeño. El `!important` es la
-   única forma de garantizar que el blanco gana sobre la regla neutra
-   `:not(...)` del laborable: aunque `.is-today` ya queda excluido del
-   `:not(.is-today)`, el resto del flow puede pisar el color; con
-   `!important` la regla es intocable. */
+/* Hoy: sólo el número lleva círculo claro relleno con dígito oscuro; la
+   celda conserva su fondo para que la rejilla no tenga un bloque blanco
+   que grite más que los eventos. */
 .devhelper-calendar-month-card .devhelper-calendar-cell.is-today {
-  background: #ffffff !important;
-  background-color: #ffffff !important;
-  border-color: #ffffff !important;
+  background: #1c1c20;
+  background-color: #1c1c20;
+  border-color: #52525b;
 }
 .devhelper-calendar-month-card .devhelper-calendar-cell.is-today .devhelper-calendar-cell-day {
-  align-self: flex-start;
-  margin: 4px 0 0 6px;
-  font-weight: 600;
-  color: #111114 !important;
+  background: #fafafa;
+  background-color: #fafafa;
+  color: #111114;
+  font-weight: 700;
 }
 
 /* Seleccionado: superficie oscura un punto más clara con borde
@@ -1525,7 +1716,7 @@
 .devhelper-calendar-month-card .devhelper-calendar-cell.is-selected {
   background: #26262c;
   background-color: #26262c;
-  border-color: #5e5e66;
+  border-color: #fafafa;
 }
 
 .devhelper-calendar-cell-day {
@@ -1541,8 +1732,8 @@
 }
 
 .devhelper-calendar-dot {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
 }
 
@@ -1577,10 +1768,10 @@
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 14px 18px;
-  border-radius: 16px;
+  padding: 18px 22px;
+  border-radius: 20px;
   background: #18181b;
   background-color: #18181b;
   border: 1px solid #1f1f23;
@@ -1597,6 +1788,12 @@
   flex: 1 1 auto;
   margin: 0;
   color: #fafafa;
+  font-size: 1.3em;
+  font-weight: 700;
+}
+
+.devhelper-day-panel-header h3::first-letter {
+  text-transform: uppercase;
 }
 
 /* Botón «Añadir aquí»: círculo claro, el acento del panel (como «Nuevo»). */
