@@ -19,9 +19,12 @@ description: "Listar, contar y razonar sobre credenciales cifradas (`type: crede
   ```yaml
   ---
   type: credentials
+  project: "[[Projects/<proyecto>/<proyecto>]]"
   credentials: []
   ---
   ```
+
+  `project` enlaza la nota con su hub (grafo); el plugin lo rellena solo.
 
 - `service` siempre en claro (clave de búsqueda).
 - `user`, `password`, `url`, `notes` siempre cifrados con prefijo `enc:v1:<iv-b64>:<cipher-b64>` cuando hay maestra.

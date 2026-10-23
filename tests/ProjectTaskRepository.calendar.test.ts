@@ -314,8 +314,8 @@ describe("ProjectTaskRepository calendar", () => {
     await repo.load();
 
     expect(fake.folders.has("Calendario")).toBe(true);
-    expect(fake.folders.has("Calendario/_templates")).toBe(true);
-    expect(fake.files.has("Calendario/_templates/evento.md")).toBe(true);
+    expect(fake.folders.has("Plantillas/Calendario")).toBe(true);
+    expect(fake.files.has("Plantillas/Calendario/evento.md")).toBe(true);
   });
 
   it("create returns Calendario/Fiesta.md and load lists it", async () => {
@@ -435,11 +435,11 @@ describe("ProjectTaskRepository calendar", () => {
 
     await repo.load();
     // Add an extra file inside the templates folder; it must not count as event.
-    seedFile(fake, "Calendario/_templates/extra.md", "---\ntype: calendar-event\nkind: evento\ndate: 2026-11-04\nallDay: true\nrecurrence: none\ncreated: 2026-11-01\nstatus: open\n---\n");
+    seedFile(fake, "Plantillas/Calendario/extra.md", "---\ntype: calendar-event\nkind: evento\ndate: 2026-11-04\nallDay: true\nrecurrence: none\ncreated: 2026-11-01\nstatus: open\n---\n");
 
     const data = await repo.load();
     expect(
-      data.calendarEvents?.some((e) => e.path === "Calendario/_templates/extra.md"),
+      data.calendarEvents?.some((e) => e.path === "Plantillas/Calendario/extra.md"),
     ).toBe(false);
   });
 

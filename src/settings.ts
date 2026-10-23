@@ -17,9 +17,9 @@ export interface PluginSettings {
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   projectsFolder: "Projects",
-  templatesFolder: "Projects/_templates",
+  templatesFolder: "Plantillas",
   calendarFolder: "Calendario",
-  calendarTemplatesFolder: "Calendario/_templates",
+  calendarTemplatesFolder: "Plantillas/Calendario",
   credentialLockTimeoutMinutes: 15,
 };
 

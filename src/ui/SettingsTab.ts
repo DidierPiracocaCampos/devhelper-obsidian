@@ -42,7 +42,7 @@ export class SettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Carpeta de plantillas")
       .setDesc(
-        "Carpeta del vault donde se siembran las plantillas. Por defecto «Projects/_templates».",
+        "Carpeta del vault donde se siembran las plantillas. Por defecto «Plantillas».",
       )
       .addText((text) => {
         text.setValue(settings.templatesFolder).onChange(async (value) => {
@@ -72,7 +72,7 @@ export class SettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Carpeta de plantillas de calendario")
       .setDesc(
-        "Carpeta del vault donde se siembran las plantillas de eventos. Por defecto «Calendario/_templates».",
+        "Carpeta del vault donde se siembran las plantillas de eventos. Por defecto «Plantillas/Calendario».",
       )
       .addText((text) => {
         text.setValue(settings.calendarTemplatesFolder).onChange(async (value) => {

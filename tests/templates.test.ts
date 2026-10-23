@@ -101,8 +101,8 @@ describe("applyTemplate", () => {
     expect(parsed.created).toBe("2026-01-15");
     // type stays intact
     expect(parsed.type).toBe("project");
-    // The body is the empty body from the template.
-    expect(sliced.body).toBe("");
+    // El cuerpo es el de la plantilla: sección Tareas con la base incrustada.
+    expect(sliced.body).toContain("![[Tareas.base]]");
   });
 
   it("applyTemplateSetsProjectLink", () => {

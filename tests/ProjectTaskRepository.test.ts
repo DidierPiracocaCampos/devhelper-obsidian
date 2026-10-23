@@ -42,6 +42,8 @@ function createFakeVault(): FakeVaultState & VaultAdapter {
       for (const path of files.keys()) {
         if (!path.startsWith(prefix)) continue;
         if (path.slice(prefix.length).includes("/")) continue;
+        // Como `vault.getMarkdownFiles()`: sólo `.md` (las `.base` no cuentan).
+        if (!path.endsWith(".md")) continue;
         const basename = path.slice(path.lastIndexOf("/") + 1);
         refs.push({ path, basename });
       }
@@ -2328,6 +2330,71 @@ describe("ProjectTaskRepository", () => {
         (c) => c.projectPath === hubPath,
       )!;
       expect(website.needsMigration).toBe(true);
+    });
+  });
+
+  describe("bases y grafo", () => {
+    it("seedsTheThreeBasesWithoutOverwriting", async () => {
+      const fake = createFakeVault();
+      fake.files.set("Bases/Tareas.base", "personalizada");
+      const repo = makeRepo(fake);
+
+      const data = await repo.load();
+
+      expect(fake.files.has("Bases/Proyectos.base")).toBe(true);
+      expect(fake.files.has("Bases/Credenciales.base")).toBe(true);
+      expect(fake.files.has("Bases/Calendario.base")).toBe(true);
+      // Las plantillas no cuentan como credenciales/proyectos/eventos reales.
+      expect(fake.files.get("Bases/Credenciales.base")).toContain(
+        '!file.inFolder("Plantillas")',
+      );
+      const templatesBase = fake.files.get("Bases/Plantillas.base")!;
+      expect(templatesBase).toContain('file.inFolder("Plantillas")');
+      expect(templatesBase).toContain('file.inFolder("Plantillas/Calendario")');
+      expect(fake.files.get("Bases/Tareas.base")).toBe("personalizada");
+      expect([...fake.files.keys()].filter((p) => p.endsWith(".base")).every((p) => p.startsWith("Bases/"))).toBe(true);
+      expect(data.issues).toEqual([]);
+    });
+
+    it("movesLegacyLooseBasesIntoBasesFolder", async () => {
+      const fake = createFakeVault();
+      fake.files.set("Projects/Proyectos.base", "editada");
+      const repo = makeRepo(fake);
+
+      await repo.load();
+
+      expect(fake.files.has("Projects/Proyectos.base")).toBe(false);
+      expect(fake.files.get("Bases/Proyectos.base")).toBe("editada");
+    });
+
+    it("linksNewCredentialsNoteToItsProject", async () => {
+      const fake = createFakeVault();
+      const repo = makeRepo(fake);
+
+      await repo.load();
+      const hub = await repo.createProject("Alfa");
+
+      const creds = fake.files.get("Projects/Alfa/Credenciales.md")!;
+      expect(hub).toBe("Projects/Alfa/Alfa.md");
+      expect(creds).toContain("[[Projects/Alfa/Alfa]]");
+      expect(fake.files.get(hub)).toContain("![[Tareas.base]]");
+    });
+
+    it("backfillsProjectLinkOnLegacyCredentials", async () => {
+      const fake = createFakeVault();
+      const repo = makeRepo(fake);
+      await repo.load();
+      await repo.createProject("Beta");
+      fake.files.set(
+        "Projects/Beta/Credenciales.md",
+        "---\ntype: credentials\ncredentials: []\n---\n",
+      );
+
+      await repo.load();
+
+      expect(fake.files.get("Projects/Beta/Credenciales.md")).toContain(
+        "[[Projects/Beta/Beta]]",
+      );
     });
   });
 });

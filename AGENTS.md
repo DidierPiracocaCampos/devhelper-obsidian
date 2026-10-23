@@ -46,8 +46,8 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   abre/recupera la pestaña del calendario, aplica `setSelectedIsoDate(isoDate)` si se pasa
   fecha y llama a su `refresh()`. `onunload` cancela el timer pendiente.
 - `src/settings.ts` — `PluginSettings`, `DEFAULT_SETTINGS = { projectsFolder: "Projects",
-  templatesFolder: "Projects/_templates", calendarFolder: "Calendario",
-  calendarTemplatesFolder: "Calendario/_templates", credentialLockTimeoutMinutes: 15 }`, y
+  templatesFolder: "Plantillas", calendarFolder: "Calendario",
+  calendarTemplatesFolder: "Plantillas/Calendario", credentialLockTimeoutMinutes: 15 }`, y
   `normalizeVaultFolderPath(path, fallback): string`. La
   normalización RECHAZA rutas absolutas, letras de unidad y `..` ANTES de trim barras.
   `mergePluginSettings(defaults, stored)` conserva el material clave de credenciales
@@ -118,6 +118,19 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   crear la primera entrada materializa la nota); en «all» devuelve el de **General**
   (credenciales compartidas/globales; `null` si no hay General y la vista pide elegir
   proyecto). General se reconoce por basename de carpeta o título `general` case-insensitive.
+- `src/domain/bases.ts` — `BASE_FILES`: YAML estático de las cinco bases de Obsidian que el
+  repositorio siembra (sin sobrescribir) en la carpeta `Bases/` (raíz del vault, constante
+  `BASES_FOLDER`) en cada `load()`; las sueltas de versiones anteriores en `projectsFolder` se
+  mueven allí:
+  `Proyectos.base` (cards + tabla de `type: project`), `Tareas.base` (filtro
+  `type == "task" && file.hasLink(this.file)`; se incrusta en cada hub con `![[Tareas.base]]`,
+  donde `this` es el hub) y `Credenciales.base` (una fila por nota `type: credentials`, con
+  nº de entradas; nunca muestra secretos) `Calendario.base` (eventos `calendar-event`
+  por fecha) y `Plantillas.base` (generada con `buildTemplatesBase` a partir de
+  `templatesFolder`/`calendarTemplatesFolder`). Van fuera de `projectsFolder`: cualquier carpeta ahí sería un proyecto sin hub. `Credenciales.md` lleva además
+  `project: "[[…hub]]"` (extra libre, el parser lo ignora) para no quedar huérfana en el
+  grafo; `load()` lo rellena en las notas heredadas que no lo tengan
+  (`linkCredentialsToProject`, sólo esa prop).
 - `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
   sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
   del mes en español.
@@ -278,7 +291,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   columna, oculta el rail y el panel del calendario pasa debajo de la rejilla;
   `@media (max-width: 320px)` → controles y acciones apilados sin recorte.
 
-## Tests (`tests/`) — 224 en total, todos en verde
+## Tests (`tests/`) — 232 en total, todos en verde
 
 - `tests/settings.test.ts` — 16 tests (normalización de carpetas —incluidas las de
   calendario— + preservación del material clave `credSaltB64`/`credVerifier` en
@@ -313,7 +326,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   más notas simples, siembra de General, `addFile`/`deleteFile`, CRUD de credenciales
   y `migratePlaintextCredentials`.
 - `tests/ProjectTaskRepository.calendar.test.ts` — 8 tests con el mismo falso adapter:
-  siembra de `Calendario/` + `_templates/evento.md`, `createCalendarEvent` devolviendo
+  siembra de `Calendario/` + `Plantillas/Calendario/evento.md`, `createCalendarEvent` devolviendo
   el path, `updateCalendarEvent` por frontmatter preservando body y borrando props con
   `null`, `deleteCalendarEvent` a la papelera y `endDate<date` a issues.
 
@@ -402,7 +415,7 @@ un fallo de parseo inutiliza la skill.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 224/224 verde
+npm test            # 232/232 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```

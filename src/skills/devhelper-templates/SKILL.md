@@ -1,6 +1,6 @@
 ---
 name: devhelper-templates
-description: Usar y sugerir las plantillas configuradas (`Projects/_templates/`, `Calendario/_templates/`) del dashboard de DevHelper Dashboard. La IA las lee con `obsidian-cli` y aplica props fijas preservando cuerpo y props del usuario. Usa cuando el usuario pida crear una nota de cualquier tipo y pueda existir plantilla.
+description: Usar y sugerir las plantillas configuradas (`Plantillas/`, `Plantillas/Calendario/`) del dashboard de DevHelper Dashboard. La IA las lee con `obsidian-cli` y aplica props fijas preservando cuerpo y props del usuario. Usa cuando el usuario pida crear una nota de cualquier tipo y pueda existir plantilla.
 ---
 
 # devhelper-templates
@@ -16,17 +16,17 @@ description: Usar y sugerir las plantillas configuradas (`Projects/_templates/`,
 - Las plantillas son notas Markdown ordinarias con frontmatter (parcial o
   completo) que el plugin aplica al crear.
 - Rutas:
-  - `<projectsFolder>/_templates/` — plantillas de proyecto/tarea/nota
+  - `<templatesFolder>/` — plantillas de proyecto/tarea/nota
     (reconocidas por nombre: `proyecto.md`, `tarea.md`, `nota.md`, etc.).
-  - `<calendarFolder>/_templates/` — plantillas de evento de calendario
+  - `<calendarTemplatesFolder>/` — plantillas de evento de calendario
     (reconocidas: `evento.md`, `reunion.md`, `fecha_limite.md`, `aviso.md`).
 - Las plantillas **nunca** se sobrescriben.
 
 ## Receta: listar plantillas
 
 ```bash
-obsidian ls path="<projectsFolder>/_templates"
-obsidian ls path="<calendarFolder>/_templates"
+obsidian ls path="<templatesFolder>"
+obsidian ls path="<calendarTemplatesFolder>"
 ```
 
 Si la carpeta no existe, no crearla por defecto: preguntar al usuario antes
@@ -59,26 +59,26 @@ de `folder:create`.
 ## Receta: sugerir plantilla
 
 Cuando el usuario pida crear un evento `reunion`, preferir
-`<calendarFolder>/_templates/reunion.md` si existe. Si no,
+`<calendarTemplatesFolder>/reunion.md` si existe. Si no,
 preferir `evento.md` y sobrescribir `kind: reunion`. Para tareas,
-preferir `<projectsFolder>/_templates/tarea.md`. Si no hay ninguna,
+preferir `<templatesFolder>/tarea.md`. Si no hay ninguna,
 ir al mínimo del modelo de datos de la skill correspondiente.
 
 ## Lo que NO debe hacer
 
 - No sobrescribir plantillas existentes (`obsidian create ... silent overwrite` está prohibido).
-- No crear la carpeta `_templates/` si no existe: preguntar primero.
+- No crear la carpeta de plantillas si no existe: preguntar primero.
 - No alterar el cuerpo de la plantilla: sólo se aplica al crear notas nuevas.
 
 ## Errores comunes
 
-- Carpeta `_templates/` ausente → preguntar al usuario si la crea, no asumir.
+- Carpeta de plantillas ausente → preguntar al usuario si la crea, no asumir.
 - Prop `type:` ausente en la plantilla → completarla con el tipo conocido del nombre del archivo (no inventar).
 - Conflicto entre el `kind:` de la plantilla y el pedido del usuario → gana el usuario.
 
 ## Ejemplos YAML
 
-Plantilla mínima de proyecto (`Projects/_templates/proyecto.md`):
+Plantilla mínima de proyecto (`Plantillas/proyecto.md`):
 
 ```yaml
 ---
@@ -91,7 +91,7 @@ created: <YYYY-MM-DD>
 <Descripción inicial>
 ```
 
-Plantilla mínima de tarea (`Projects/_templates/tarea.md`):
+Plantilla mínima de tarea (`Plantillas/tarea.md`):
 
 ```yaml
 ---
@@ -106,7 +106,7 @@ created: <YYYY-MM-DD>
 <Detalles>
 ```
 
-Plantilla mínima de evento (`Calendario/_templates/evento.md`):
+Plantilla mínima de evento (`Plantillas/Calendario/evento.md`):
 
 ```yaml
 ---

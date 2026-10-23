@@ -8,20 +8,20 @@ import {
 
 describe("settings", () => {
   describe("usesDefaultFolders", () => {
-    it("exposes Projects and Projects/_templates as the default folder names", () => {
+    it("exposes Projects and Plantillas as the default folder names", () => {
       const defaults: PluginSettings = DEFAULT_SETTINGS;
 
       expect(defaults.projectsFolder).toBe("Projects");
-      expect(defaults.templatesFolder).toBe("Projects/_templates");
+      expect(defaults.templatesFolder).toBe("Plantillas");
     });
   });
 
   describe("usesDefaultCalendarFolders", () => {
-    it("exposes Calendario and Calendario/_templates as the default calendar folders", () => {
+    it("exposes Calendario and Plantillas/Calendario as the default calendar folders", () => {
       const defaults: PluginSettings = DEFAULT_SETTINGS;
 
       expect(defaults.calendarFolder).toBe("Calendario");
-      expect(defaults.calendarTemplatesFolder).toBe("Calendario/_templates");
+      expect(defaults.calendarTemplatesFolder).toBe("Plantillas/Calendario");
     });
 
     it("normalizes a user-supplied calendar folder path", () => {

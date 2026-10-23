@@ -23,11 +23,12 @@
  *  - A project's hub is the file `<F>/<F's basename>.md`. The folder's
  *    tasks live under `<F>/Tareas/`. Optional `<F>/Credenciales.md`
  *    carries the project's credentials.
- *  - Templates are seeded into `templatesFolder` (e.g. "Projects/_templates")
+ *  - Templates are seeded into `templatesFolder` (e.g. "Plantillas")
  *    and are NOT scanned as project folders.
  */
 
 import yaml from "js-yaml";
+import { BASES_FOLDER, buildBases } from "../domain/bases";
 import { sliceFrontmatter } from "../domain/frontmatter";
 import {
   encryptField,
@@ -132,6 +133,7 @@ export class ProjectTaskRepository {
     // 1. Seed + validate templates.
     await this.seedTemplates();
     await this.seedCalendarTemplates();
+    await this.seedBases();
     // 1b. Proyecto sombra General: se siembra si falta (nunca se
     // sobrescribe) para que el modo «Todos» siempre tenga ámbito.
     await this.ensureGeneralProject();
@@ -283,6 +285,7 @@ export class ProjectTaskRepository {
           basename: "Credenciales.md",
         };
         const credSnapshot = await this.readSnapshot(credRef);
+        await this.linkCredentialsToProject(credRef, credSnapshot, hubPath);
         const credParsed = parseCredentialsNote(credSnapshot);
         switch (credParsed.kind) {
           case "credentials": {
@@ -390,6 +393,57 @@ export class ProjectTaskRepository {
   }
 
   /**
+   * Siembra las bases de Obsidian (`Proyectos`, `Tareas`,
+   * `Credenciales` y `Calendario`) en `BASES_FOLDER`, fuera de
+   * `projectsFolder` para que el escaneo no las tome por un proyecto.
+   * Nunca sobrescribe una base que el usuario haya editado.
+   */
+  private async seedBases(): Promise<void> {
+    await this.adapter.createFolder(BASES_FOLDER);
+    const bases = buildBases(
+      this.settings.templatesFolder,
+      this.settings.calendarTemplatesFolder,
+    );
+    for (const [fileName, content] of Object.entries(bases)) {
+      const fullPath = joinPath(BASES_FOLDER, fileName);
+      if (this.adapter.exists(fullPath)) {
+        continue;
+      }
+      // Versiones anteriores las dejaban sueltas en `projectsFolder`:
+      // se mueven (conservando ediciones del usuario) en vez de duplicarlas.
+      const legacyPath = joinPath(this.settings.projectsFolder, fileName);
+      if (this.adapter.exists(legacyPath)) {
+        await this.adapter.rename(
+          { path: legacyPath, basename: fileName },
+          fullPath,
+        );
+        continue;
+      }
+      await this.adapter.createMarkdown(fullPath, content);
+    }
+  }
+
+  /**
+   * Las notas `Credenciales.md` heredadas no tienen `project`, así que
+   * quedan huérfanas en el grafo. Si falta, se escribe sólo esa prop
+   * (nunca se tocan las entradas cifradas).
+   */
+  private async linkCredentialsToProject(
+    ref: VaultNoteRef,
+    snapshot: NoteSnapshot,
+    hubPath: string,
+  ): Promise<void> {
+    const sliced = sliceFrontmatter(snapshot.content);
+    if (sliced.kind !== "ok" || /^project\s*:/m.test(sliced.yaml)) {
+      return;
+    }
+    const link = wrapWikilink(projectPathToWikilinkInner(hubPath));
+    await this.adapter.processFrontMatter(ref, (frontmatter) => {
+      frontmatter["project"] = link;
+    });
+  }
+
+  /**
    * Ensure the calendar-event template exists under
    * `calendarTemplatesFolder`. Like `seedTemplates`, it never overwrites
    * a user-forked template.
@@ -450,6 +504,7 @@ export class ProjectTaskRepository {
       const credsContent = applyTemplate(templateContent, "credentials", {
         title: GENERAL_FOLDER,
         today: todayStamp(),
+        projectLink: wrapWikilink(projectPathToWikilinkInner(hubPath)),
       });
       await this.adapter.createMarkdown(credsPath, credsContent);
     }
@@ -565,6 +620,7 @@ export class ProjectTaskRepository {
     const credContent = applyTemplate(credTemplateContent, "credentials", {
       title,
       today: todayStamp(),
+      projectLink: wrapWikilink(projectPathToWikilinkInner(hubPath)),
     });
     await this.adapter.createMarkdown(credPath, credContent);
 
@@ -1156,10 +1212,14 @@ export class ProjectTaskRepository {
     if (this.adapter.exists(credPath)) {
       return;
     }
-    await this.adapter.createFolder(folderOf(credPath));
+    const folder = folderOf(credPath);
+    await this.adapter.createFolder(folder);
+    const link = wrapWikilink(
+      projectPathToWikilinkInner(`${folder}/${basenameOf(folder)}.md`),
+    );
     await this.adapter.createMarkdown(
       credPath,
-      "---\ntype: credentials\ncredentials: []\n---\n",
+      `---\ntype: credentials\nproject: "${link}"\ncredentials: []\n---\n`,
     );
   }
 

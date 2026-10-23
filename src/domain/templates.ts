@@ -83,6 +83,10 @@ export const DEFAULT_TEMPLATE_CONTENT: Record<TemplateKind, string> = {
     "client:",
     "---",
     "",
+    "## Tareas",
+    "",
+    "![[Tareas.base]]",
+    "",
   ].join("\n"),
   task: [
     "---",
@@ -203,7 +207,9 @@ export function applyTemplate(
   kind: TemplateKind,
   values: TemplateValues,
 ): string {
-  if (kind === "credentials") {
+  // Las credenciales sólo se tocan para enlazarlas a su proyecto (así
+  // aparecen conectadas en el grafo); sin enlace se devuelven intactas.
+  if (kind === "credentials" && values.projectLink === undefined) {
     return content;
   }
 
@@ -228,7 +234,10 @@ export function applyTemplate(
 
   const properties = parsed as Record<string, unknown>;
   properties.created = values.today;
-  if ((kind === "task" || kind === "note") && values.projectLink !== undefined) {
+  if (
+    (kind === "task" || kind === "note" || kind === "credentials") &&
+    values.projectLink !== undefined
+  ) {
     properties.project = values.projectLink;
   }
 

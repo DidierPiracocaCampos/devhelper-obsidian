@@ -35,7 +35,7 @@ Cuando el disparador sea específico, **carga la skill hija**:
   obsidian eval 'app.plugins.plugins["devhelper-dashboard"].settings.projectsFolder'
   ```
 
-  Si la lectura falla, defaults: `projectsFolder=Projects`, `templatesFolder=Projects/_templates`, `calendarFolder=Calendario`, `calendarTemplatesFolder=Calendario/_templates`.
+  Si la lectura falla, defaults: `projectsFolder=Projects`, `templatesFolder=Plantillas`, `calendarFolder=Calendario`, `calendarTemplatesFolder=Plantillas/Calendario`.
 
 - **Sanitización de nombres** al crear archivos:
   - `\ / : * ? " < > | #` → `-`
@@ -69,8 +69,8 @@ Cuando el disparador sea específico, **carga la skill hija**:
 - Antes de crear una nota, listar plantillas disponibles:
 
   ```bash
-  obsidian ls path=<projectsFolder>/_templates
-  obsidian ls path=<calendarFolder>/_templates
+  obsidian ls path=<templatesFolder>
+  obsidian ls path=<calendarTemplatesFolder>
   ```
 
 - Si hay plantilla apropiada (p. ej. `proyecto.md`, `tarea.md`, `evento.md`), leerla y aplicar sus props fijas preservando cuerpo y props desconocidas.
