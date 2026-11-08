@@ -21,49 +21,49 @@ Objetivo: dos repos públicos listos para la tienda comunitaria de Obsidian:
 
 ## Fase 0 — Revisión de seguridad antes de exponer más (bloqueante)
 
-- [ ] Escanear todo el historial en busca de secretos: `gitleaks detect` o
+- [x] Escanear todo el historial en busca de secretos: `gitleaks detect` o
       `mcp github run_secret_scanning`. Revisar en especial `tests/` (fixtures de
       credenciales cifradas) y `docs/`.
-- [ ] Confirmar que `data.json` (sal + verificador) nunca se commiteó (`git log --all -- '**/data.json'`).
-- [ ] Decidir si `docs/superpowers/`, `.agents/`, `AGENTS.md`/`CLAUDE.md`,
+- [x] Confirmar que `data.json` (sal + verificador) nunca se commiteó (`git log --all -- '**/data.json'`).
+- [x] Decidir si `docs/superpowers/`, `.agents/`, `AGENTS.md`/`CLAUDE.md`,
       `skills-lock.json` se quedan públicos o se mueven/eliminan. Recomendación:
       mantener `docs/` (son specs útiles), quitar `.superpowers/` y `.worktrees/`
       si aparecen, y añadir `.claude/` al `.gitignore`.
 
 ## Fase 1 — Preparar el repo del plugin
 
-- [ ] `LICENSE` MIT en la raíz con `Copyright (c) 2026 Didier Piracoca`.
-- [ ] `manifest.json`: `author: "Didier Piracoca"`, `authorUrl: "https://github.com/DidierPiracocaCampos"`,
+- [x] `LICENSE` MIT en la raíz con `Copyright (c) 2026 Didier Piracoca`.
+- [x] `manifest.json`: `author: "Didier Piracoca"`, `authorUrl: "https://github.com/DidierPiracocaCampos"`,
       revisar `minAppVersion` (Bases requiere ≥ 1.9; ajustar si el plugin las usa) y
       descripción en inglés corta que no contenga «Obsidian» (requisito de la revisión).
-- [ ] Alinear `package.json.version` con `manifest.json.version` y crear `versions.json`
+- [x] Alinear `package.json.version` con `manifest.json.version` y crear `versions.json`
       (`{"0.3.0": "<minAppVersion>"}`). Añadir script `npm version` → `version-bump.mjs`
       (patrón del sample-plugin) que actualice manifest + versions.json.
-- [ ] README: añadir versión en inglés (o README bilingüe), capturas del dashboard,
+- [x] README: añadir versión en inglés (o README bilingüe), capturas del dashboard,
       sección de instalación vía BRAT y vía tienda, y nota de seguridad sobre credenciales cifradas.
-- [ ] Quitar el theme del repo del plugin cuando el repo del theme exista (Fase 3),
+- [x] Quitar el theme del repo del plugin cuando el repo del theme exista (Fase 3),
       dejando un enlace en el README.
-- [ ] `npm run typecheck && npm test && npm run build` en verde.
+- [x] `npm run typecheck && npm test && npm run build` en verde.
 
 ## Fase 2 — Releases automáticas del plugin
 
-- [ ] `.github/workflows/release.yml`: al hacer push de un tag `x.y.z` (sin `v`),
+- [x] `.github/workflows/release.yml`: al hacer push de un tag `x.y.z` (sin `v`),
       `npm ci && npm run build` y crear un GitHub Release con los assets
       `main.js`, `manifest.json`, `styles.css`.
-- [ ] `.github/workflows/ci.yml`: typecheck + test + build en cada PR/push.
-- [ ] Primer release: `git tag 0.3.0 && git push origin 0.3.0`; verificar assets en el release.
+- [x] `.github/workflows/ci.yml`: typecheck + test + build en cada PR/push.
+- [x] Primer release: `git tag 0.3.0 && git push origin 0.3.0`; verificar assets en el release.
 - [ ] Probar instalación limpia con **BRAT** (`DidierPiracocaCampos/devhelper-obsidian`) en un vault vacío.
 
 ## Fase 3 — Repo nuevo para el theme
 
-- [ ] Crear `DidierPiracocaCampos/obsidian-devhelper-theme` (público) conservando
+- [x] Crear `DidierPiracocaCampos/obsidian-devhelper-theme` (público) conservando
       historia: `git subtree split --prefix=theme -b theme-only` y push de esa rama como `main`.
-- [ ] En la raíz: `manifest.json` (`name: "DevHelper"`, `author: "Didier Piracoca"`,
+- [x] En la raíz: `manifest.json` (`name: "DevHelper"`, `author: "Didier Piracoca"`,
       `authorUrl`, `version: 1.0.0`, `minAppVersion`), `theme.css`, `LICENSE`, `README.md`,
       `screenshot.png` **en la raíz** (512×288, 16:9 — la tienda lo lee de ahí).
-- [ ] Workflow opcional que ejecute `scripts/check-theme.mjs` en CI.
-- [ ] Release `1.0.0` con `theme.css` + `manifest.json` como assets.
-- [ ] Comprobar que el nombre «DevHelper» no está ya en `community-css-themes.json`.
+- [x] Workflow opcional que ejecute `scripts/check-theme.mjs` en CI.
+- [x] Release `1.0.0` con `theme.css` + `manifest.json` como assets.
+- [x] Comprobar que el nombre «DevHelper» no está ya en `community-css-themes.json`.
 
 ## Fase 4 — Envío a la tienda comunitaria de Obsidian
 
@@ -88,3 +88,14 @@ Objetivo: dos repos públicos listos para la tienda comunitaria de Obsidian:
 2. ¿Reescribir el autor de los commits antiguos (`devhelper@example.com`) o dejarlos?
    Reescribir obliga a `push --force` sobre un repo público; recomendación: dejarlos.
 3. ¿Nombre del repo del theme: `obsidian-devhelper-theme` o `devhelper-theme`?
+
+## Registro de ejecución (2026-11-08)
+
+- Fase 0: sin secretos en los 111 commits (solo contraseñas de prueba en tests/docs).
+- Fase 1–2: release `0.3.0` publicada con `main.js`, `manifest.json`, `styles.css`
+  y `devhelper-skills.zip`; CI en verde. `minAppVersion` 1.9.0.
+- Fase 3: `DidierPiracocaCampos/obsidian-devhelper-theme` público, release `1.0.0`.
+- Decisiones: README bilingüe; skills como zip en la release; repo del theme
+  `obsidian-devhelper-theme`; no se reescribe el historial de autores.
+- `devhelper-dashboard` y «DevHelper» están libres en obsidian-releases.
+- Pendiente: probar con BRAT y enviar los PRs de la Fase 4.
