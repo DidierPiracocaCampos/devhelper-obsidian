@@ -425,9 +425,17 @@ Luego `git log -5` para confirmar mensajes siguiendo conventional-commits Spanis
 
 ## Releases
 
-El plugin se publica como copia manual de `main.js`, `manifest.json` y `styles.css`
-dentro de `<vault>/.obsidian/plugins/devhelper-dashboard/`. `package.json` ya declara
-estos archivos en `files`.
+Las releases las crea GitHub Actions (`.github/workflows/release.yml`) al hacer push de
+un tag igual a la versión del manifest (sin `v`). Flujo:
+
+```bash
+npm version patch          # sube package.json, manifest.json y versions.json + commit + tag
+git push origin master --follow-tags
+```
+
+El release adjunta `main.js`, `manifest.json` y `styles.css`. `minAppVersion` es 1.9.0
+porque el plugin siembra archivos `.base` (Bases). La carpeta `skills/` NO viaja por
+la tienda de Obsidian (solo distribuye esos tres archivos).
 
 ## Habilidades (skills) cargadas en este harness
 

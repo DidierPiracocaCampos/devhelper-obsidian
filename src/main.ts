@@ -129,8 +129,6 @@ export default class DevHelperDashboardPlugin extends Plugin {
     // Metadata-cache changes do NOT fire on rename (see Obsidian docs);
     // the vault 'rename' subscription above covers that case.
     this.registerEvent(this.app.metadataCache.on("changed", schedule));
-
-    console.log(`${this.manifest.name} v${this.manifest.version} loaded`);
   }
 
   onunload(): void {
