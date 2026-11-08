@@ -1,7 +1,7 @@
 {
   "id": "devhelper-dashboard",
   "name": "DevHelper Dashboard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "minAppVersion": "1.9.0",
   "author": "Didier Piracoca",
   "authorUrl": "https://github.com/DidierPiracocaCampos",
