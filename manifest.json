@@ -6,5 +6,5 @@
   "author": "Didier Piracoca",
   "authorUrl": "https://github.com/DidierPiracocaCampos",
   "isDesktopOnly": false,
-  "description": "Dashboard de proyectos y tareas respaldados por notas Markdown."
+  "description": "Project and task dashboard backed by Markdown notes, with files, encrypted credentials and a monthly calendar."
 }

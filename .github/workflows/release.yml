@@ -24,6 +24,8 @@ jobs:
       - name: Comprobar que el tag coincide con manifest.json
         run: |
           test "$(node -p "require('./manifest.json').version")" = "${GITHUB_REF_NAME}"
+      - name: Empaquetar skills de IA
+        run: cd skills && zip -r ../devhelper-skills.zip . -x '.gitkeep'
       - name: Crear release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,4 +33,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            main.js manifest.json styles.css
+            main.js manifest.json styles.css devhelper-skills.zip

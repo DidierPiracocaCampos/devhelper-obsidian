@@ -1,7 +1,7 @@
 {
   "name": "devhelper-dashboard",
   "version": "0.3.0",
-  "description": "Dashboard de proyectos y tareas respaldados por notas Markdown.",
+  "description": "Project and task dashboard backed by Markdown notes, with files, encrypted credentials and a monthly calendar.",
   "main": "main.js",
   "engines": {
     "node": ">=18"
