@@ -461,8 +461,10 @@ Para verificar manualmente:
 4. El plugin siembra automáticamente el proyecto sombra `Projects/General/` al primer
    uso (Archivos globales y credenciales compartidas viven ahí).
 
-El theme vive en `D:\vault\.obsidian\themes\DevHelper\` (copiar `theme/manifest.json`
-y `theme/theme.css` tras cambiarlo). Es un vault con datos reales: no borrarlo
+El theme se desarrolla en su propio repo
+(`D:\proyects\obsidian-devhelper-theme`, público en
+`DidierPiracocaCampos/obsidian-devhelper-theme`) y se instala en
+`D:\vault\.obsidian\themes\DevHelper\` (copiar `manifest.json` y `theme.css`). Es un vault con datos reales: no borrarlo
 ni commitearlo al repo.
 
 ## Documentos de diseño
