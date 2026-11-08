@@ -72,13 +72,13 @@ Objetivo: dos repos públicos listos para la tienda comunitaria de Obsidian:
 > desde `community.obsidian.md` (workflow `mirror-community-json.yml`). El envío
 > se hace en el directorio web y la revisión es automática.
 
-- [ ] Entrar en https://community.obsidian.md con la cuenta de Obsidian.
-- [ ] Vincular la cuenta de GitHub `DidierPiracocaCampos` al perfil (verifica la propiedad de los repos).
-- [ ] «Add your plugin» → `DidierPiracocaCampos/devhelper-obsidian` (lee `manifest.json`
+- [x] Entrar en https://community.obsidian.md con la cuenta de Obsidian.
+- [x] Vincular la cuenta de GitHub `DidierPiracocaCampos` al perfil (verifica la propiedad de los repos).
+- [x] «Add your plugin» → `DidierPiracocaCampos/devhelper-obsidian` (lee `manifest.json`
       del HEAD de `master` y los assets de la release `0.3.0`).
-- [ ] «Add your theme» → `DidierPiracocaCampos/obsidian-devhelper-theme` (release `1.0.0`,
+- [x] «Add your theme» → `DidierPiracocaCampos/obsidian-devhelper-theme` (release `1.0.0`,
       `screenshot.png` en la raíz).
-- [ ] Atender la revisión automática: corregir en el repo, `npm version patch` y push del
+- [x] Atender la revisión automática: corregir en el repo, `npm version patch` y push del
       tag (el plugin no se puede instalar hasta resolver los errores).
 
 ## Fase 5 — Después de publicar
@@ -103,4 +103,5 @@ Objetivo: dos repos públicos listos para la tienda comunitaria de Obsidian:
 - Decisiones: README bilingüe; skills como zip en la release; repo del theme
   `obsidian-devhelper-theme`; no se reescribe el historial de autores.
 - `devhelper-dashboard` y «DevHelper» están libres en obsidian-releases.
-- Pendiente: probar con BRAT y enviar ambos en community.obsidian.md (ya no hay PRs).
+- Fase 4: plugin (0.3.1, tras corregir la revisión automática) y theme (1.0.0) publicados en community.obsidian.md el 2026-11-08.
+- Avisos aceptados: js-yaml (ban-dependencies), getSettingDefinitions (exige 1.13) y text-decoration-color en el theme (falso positivo).
