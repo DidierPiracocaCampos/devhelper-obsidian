@@ -67,14 +67,19 @@ Objetivo: dos repos públicos listos para la tienda comunitaria de Obsidian:
 
 ## Fase 4 — Envío a la tienda comunitaria de Obsidian
 
-- [ ] Fork de `obsidianmd/obsidian-releases`.
-- [ ] Plugin: añadir entrada al final de `community-plugins.json`
-      (`id: devhelper-dashboard`, `name`, `author`, `description`, `repo`) y abrir PR con la plantilla.
-- [ ] Theme: añadir entrada a `community-css-themes.json`
-      (`name: DevHelper`, `author`, `repo`, `screenshot: screenshot.png`, `modes: ["dark"]`) en PR separado.
-- [ ] Atender el bot de validación y la revisión manual (suele pedir: no usar `innerHTML`,
-      no `console.log` en producción, usar `normalizePath`, no hardcodear `.obsidian`
-      → `app.vault.configDir`, limpiar listeners en `onunload`).
+> **Cambio de proceso (verificado 2026-11-08):** Obsidian ya no acepta PRs a
+> `obsidianmd/obsidian-releases`. Los JSON de ese repo se sobrescriben cada hora
+> desde `community.obsidian.md` (workflow `mirror-community-json.yml`). El envío
+> se hace en el directorio web y la revisión es automática.
+
+- [ ] Entrar en https://community.obsidian.md con la cuenta de Obsidian.
+- [ ] Vincular la cuenta de GitHub `DidierPiracocaCampos` al perfil (verifica la propiedad de los repos).
+- [ ] «Add your plugin» → `DidierPiracocaCampos/devhelper-obsidian` (lee `manifest.json`
+      del HEAD de `master` y los assets de la release `0.3.0`).
+- [ ] «Add your theme» → `DidierPiracocaCampos/obsidian-devhelper-theme` (release `1.0.0`,
+      `screenshot.png` en la raíz).
+- [ ] Atender la revisión automática: corregir en el repo, `npm version patch` y push del
+      tag (el plugin no se puede instalar hasta resolver los errores).
 
 ## Fase 5 — Después de publicar
 
@@ -98,4 +103,4 @@ Objetivo: dos repos públicos listos para la tienda comunitaria de Obsidian:
 - Decisiones: README bilingüe; skills como zip en la release; repo del theme
   `obsidian-devhelper-theme`; no se reescribe el historial de autores.
 - `devhelper-dashboard` y «DevHelper» están libres en obsidian-releases.
-- Pendiente: probar con BRAT y enviar los PRs de la Fase 4.
+- Pendiente: probar con BRAT y enviar ambos en community.obsidian.md (ya no hay PRs).
