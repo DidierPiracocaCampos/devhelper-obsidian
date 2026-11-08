@@ -436,16 +436,16 @@ estos archivos en `files`.
 - `subagent-driven-development` — flujo de implementación por tareas con revisión por
   revisor. Usado para entregar la V1; el estado del plan vive en git (8 commits).
 
-## Vault de prueba
+## Vault de trabajo
 
-`D:\proyects\devhelper-test-vault\` está creado y tiene el plugin ya copiado en
+`D:\vault\` es el vault personal (proyectos de `D:\proyects`) y tiene el plugin copiado en
 `.obsidian/plugins/devhelper-dashboard/`. Para actualizarlo tras un cambio
 usa `npm run update:test-vault` (hace build + copia `main.js`,
 `manifest.json` y `styles.css` al vault e intenta recargar el plugin).
 Para verificar manualmente:
 
 1. Abrir Obsidian apuntando a ese vault
-   (`obsidian://open?path=D:\proyects\devhelper-test-vault` o desde el selector de
+   (`obsidian://open?path=D:\vault` o desde el selector de
    vaults).
 2. Activar el plugin **DevHelper Dashboard** en Settings → Community plugins.
 3. Ejecutar el comando **Abrir el dashboard de proyectos y tareas** (o pulsar el
@@ -453,8 +453,9 @@ Para verificar manualmente:
 4. El plugin siembra automáticamente el proyecto sombra `Projects/General/` al primer
    uso (Archivos globales y credenciales compartidas viven ahí).
 
-Limpieza: borrar la carpeta `D:\proyects\devhelper-test-vault\` cuando ya no haga
-falta; no se commitea al repo.
+El theme vive en `D:\vault\.obsidian\themes\DevHelper\` (copiar `theme/manifest.json`
+y `theme/theme.css` tras cambiarlo). Es un vault con datos reales: no borrarlo
+ni commitearlo al repo.
 
 ## Documentos de diseño
 

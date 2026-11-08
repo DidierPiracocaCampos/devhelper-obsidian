@@ -25,3 +25,6 @@ Thumbs.db
 
 # Local worktrees (created by agents implementing plans)
 .worktrees/
+
+# Config local de agentes
+.claude/

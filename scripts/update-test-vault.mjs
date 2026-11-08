@@ -11,7 +11,7 @@
  *   node scripts/update-test-vault.mjs [ruta-al-vault]
  *   npm run update:test-vault -- [ruta-al-vault]
  *
- * La ruta por defecto es `D:\proyects\devhelper-test-vault` o el valor de
+ * La ruta por defecto es `D:\vault` o el valor de
  * la variable de entorno `DEVHELPER_TEST_VAULT`.
  */
 import { execSync } from "node:child_process";
@@ -23,7 +23,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const testVault =
   process.argv[2] ??
   process.env.DEVHELPER_TEST_VAULT ??
-  "D:\\proyects\\devhelper-test-vault";
+  "D:\\vault";
 const pluginDir = resolve(
   testVault,
   ".obsidian/plugins/devhelper-dashboard",
