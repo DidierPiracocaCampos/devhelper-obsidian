@@ -928,7 +928,7 @@ export class ProjectTaskRepository {
     // that the form does not manage: they survive untouched, encrypted
     // blobs included (same vault key still decrypts them).
     const preserved: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(current[index]!)) {
+    for (const [k, v] of Object.entries(current[index])) {
       if (!["service", "user", "password", "url", "notes"].includes(k)) {
         preserved[k] = v;
       }
@@ -1612,7 +1612,7 @@ export function sanitizeFilename(title: string): string {
   const replaced = title
     .replace(/[\\/:*?"<>|#]/g, "-")
     .replace(/-+/g, "-")
-    .replace(/^[\s.\-]+|[\s.\-]+$/g, "");
+    .replace(/^[\s.-]+|[\s.-]+$/g, "");
   if (replaced.length === 0) return "Untitled";
   return replaced;
 }

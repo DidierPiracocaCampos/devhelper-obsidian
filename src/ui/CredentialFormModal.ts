@@ -5,7 +5,7 @@ import type { CredentialInput } from "../data/ProjectTaskRepository";
 /**
  * Payload returned by `CredentialFormModal.onSubmit`.
  */
-export interface CredentialFormPayload extends CredentialInput {}
+export type CredentialFormPayload = CredentialInput;
 
 /**
  * Modal that prompts for one credential entry.
@@ -59,7 +59,7 @@ export class CredentialFormModal extends Modal {
       this.mode === "create" ? "Nueva credencial" : "Editar credencial",
     );
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
 
     new Setting(form)
       .setName("Servicio")
@@ -115,7 +115,7 @@ export class CredentialFormModal extends Modal {
     });
     this.errorEl.hide();
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) =>
         btn.setButtonText("Cancelar").onClick(() => this.close()),
@@ -222,7 +222,7 @@ export class MasterPasswordModal extends Modal {
         : "Desbloquear credenciales",
     );
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
     form.createEl("p", {
       text:
         this.mode === "create"
@@ -262,7 +262,7 @@ export class MasterPasswordModal extends Modal {
     });
     this.errorEl.hide();
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) =>
         btn.setButtonText("Cancelar").onClick(() => this.close()),
@@ -346,7 +346,7 @@ export class CredentialDetailModal extends Modal {
     contentEl.empty();
     titleEl.setText(`Credencial: ${this.service}`);
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
     const display = this.display;
 
     this.addCopyRow(form, "Servicio", this.service);
@@ -363,7 +363,7 @@ export class CredentialDetailModal extends Modal {
       this.addCopyRow(form, "Notas", display.notes);
     }
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) => btn.setButtonText("Cerrar").onClick(() => this.close()));
   }
@@ -373,8 +373,8 @@ export class CredentialDetailModal extends Modal {
   }
 
   private addCopyRow(form: HTMLElement, label: string, value: string): void {
-    const row = form.createEl("div", { cls: "devhelper-detail-row" });
-    row.createEl("span", {
+    const row = form.createDiv({ cls: "devhelper-detail-row" });
+    row.createSpan({
       text: label,
       cls: "devhelper-detail-label",
     });
@@ -402,8 +402,8 @@ export class CredentialDetailModal extends Modal {
   }
 
   private addPasswordRow(form: HTMLElement, password: string): void {
-    const row = form.createEl("div", { cls: "devhelper-detail-row" });
-    row.createEl("span", {
+    const row = form.createDiv({ cls: "devhelper-detail-row" });
+    row.createSpan({
       text: "Contraseña",
       cls: "devhelper-detail-label",
     });
@@ -457,10 +457,10 @@ export class ConfirmModal extends Modal {
     contentEl.empty();
     titleEl.setText(this.title);
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
     form.createEl("p", { text: this.message });
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) =>
         btn.setButtonText("Cancelar").onClick(() => this.close()),

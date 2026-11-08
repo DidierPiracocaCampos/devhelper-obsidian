@@ -206,7 +206,7 @@ export function parseCredentialsNote(note: NoteSnapshot): ParsedNote {
   const entries: CredentialEntry[] = [];
   const entryIssues: DashboardIssue[] = [];
   for (let i = 0; i < raw.length; i++) {
-    const entry = raw[i];
+    const entry: unknown = raw[i];
     const validation = validateCredentialEntry(entry, i);
     if (validation !== null) {
       entryIssues.push({ path: note.path, message: validation });

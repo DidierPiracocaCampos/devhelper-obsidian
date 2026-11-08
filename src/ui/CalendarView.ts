@@ -1,14 +1,12 @@
 import { ItemView, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import {
   presentCalendar,
-  type CalendarOccurrence,
   type CalendarPresentation,
 } from "../domain/calendar";
 import type {
   CalendarEventRecord,
   CalendarKind,
   DashboardData,
-  ProjectRecord,
 } from "../domain/types";
 import type {
   CalendarEventInput,
@@ -227,7 +225,7 @@ export class CalendarView extends ItemView {
   private renderEmpty(): void {
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-calendar-root");
-    const panel = this.contentEl.createEl("div", {
+    const panel = this.contentEl.createDiv({
       cls: "devhelper-day-panel",
     });
     this.appendEmptyState(panel, "loader-circle", "Cargando calendario…");
@@ -247,14 +245,14 @@ export class CalendarView extends ItemView {
   }
 
   private renderTopBar(presentation: CalendarPresentation): void {
-    const topbar = this.contentEl.createEl("div", {
+    const topbar = this.contentEl.createDiv({
       cls: "devhelper-calendar-topbar",
     });
 
     // Grupo izquierdo: «‹ [Hoy] › Mes Año» en una sola línea a la
     // izquierda. La flecha anterior abre, luego la píldora «Hoy», luego
     // la flecha siguiente, y por último la etiqueta «Mes Año».
-    const nav = topbar.createEl("div", {
+    const nav = topbar.createDiv({
       cls: "devhelper-calendar-nav",
     });
 
@@ -285,7 +283,7 @@ export class CalendarView extends ItemView {
     });
 
     // Grupo derecho: solo «+ Nuevo», pegado al borde.
-    const actions = topbar.createEl("div", {
+    const actions = topbar.createDiv({
       cls: "devhelper-calendar-actions",
     });
 
@@ -299,7 +297,7 @@ export class CalendarView extends ItemView {
       },
     });
     setIcon(addBtn, "plus");
-    addBtn.createEl("span", { text: "Nuevo" });
+    addBtn.createSpan({ text: "Nuevo" });
     addBtn.addEventListener("click", () => this.openCreateEvent());
   }
 
@@ -308,7 +306,7 @@ export class CalendarView extends ItemView {
     presentation: CalendarPresentation,
     data: DashboardData,
   ): void {
-    const card = this.contentEl.createEl("div", {
+    const card = this.contentEl.createDiv({
       cls: "devhelper-calendar-month-card",
     });
     this.renderWeekdays(card);
@@ -316,11 +314,11 @@ export class CalendarView extends ItemView {
   }
 
   private renderWeekdays(parent: HTMLElement): void {
-    const row = parent.createEl("div", {
+    const row = parent.createDiv({
       cls: "devhelper-calendar-weekdays",
     });
     for (const letter of WEEKDAY_LETTERS) {
-      row.createEl("span", { text: letter });
+      row.createSpan({ text: letter });
     }
   }
 
@@ -329,7 +327,7 @@ export class CalendarView extends ItemView {
     presentation: CalendarPresentation,
     data: DashboardData,
   ): void {
-    const grid = parent.createEl("div", {
+    const grid = parent.createDiv({
       cls: "devhelper-calendar-grid",
     });
 
@@ -351,14 +349,14 @@ export class CalendarView extends ItemView {
           cellEl.addClass("is-selected");
         }
 
-        cellEl.createEl("span", {
+        cellEl.createSpan({
           cls: "devhelper-calendar-cell-day",
           text: String(cell.day),
         });
 
         const occurrences = presentation.byDate.get(cell.isoDate) ?? [];
         if (occurrences.length > 0) {
-          const dots = cellEl.createEl("div", {
+          const dots = cellEl.createDiv({
             cls: "devhelper-calendar-dots",
           });
           const seenKinds = new Set<CalendarKind>();
@@ -366,7 +364,7 @@ export class CalendarView extends ItemView {
             const kind = occurrence.event.kind;
             if (seenKinds.has(kind)) continue;
             seenKinds.add(kind);
-            dots.createEl("span", {
+            dots.createSpan({
               cls: `devhelper-calendar-dot devhelper-dot--${kind}`,
             });
           }
@@ -412,12 +410,12 @@ export class CalendarView extends ItemView {
       ".devhelper-day-panel",
     );
     if (panel === null) {
-      panel = this.contentEl.createEl("div", { cls: "devhelper-day-panel" });
+      panel = this.contentEl.createDiv({ cls: "devhelper-day-panel" });
     } else {
       panel.empty();
     }
 
-    const header = panel.createEl("div", {
+    const header = panel.createDiv({
       cls: "devhelper-day-panel-header",
     });
     header.createEl("h3", {
@@ -469,12 +467,12 @@ export class CalendarView extends ItemView {
     if (event.status === "done") card.addClass("is-done");
     card.dataset["title"] = event.title;
 
-    const main = card.createEl("div", { cls: "devhelper-task-main" });
+    const main = card.createDiv({ cls: "devhelper-task-main" });
 
-    const titleRow = main.createEl("div", {
+    const titleRow = main.createDiv({
       cls: "devhelper-task-title-row",
     });
-    titleRow.createEl("span", {
+    titleRow.createSpan({
       cls: "devhelper-event-time",
       text: event.allDay ? "Todo el día" : (event.time ?? "—"),
     });
@@ -484,21 +482,21 @@ export class CalendarView extends ItemView {
     });
     titleEl.addEventListener("click", () => this.openNote(event.path));
 
-    const badges = main.createEl("div", {
+    const badges = main.createDiv({
       cls: "devhelper-event-badges",
     });
-    badges.createEl("span", {
+    badges.createSpan({
       cls: `devhelper-event-kind-badge devhelper-event-kind-badge--${event.kind}`,
       text: KIND_LABELS[event.kind],
     });
     if (event.projectPath) {
-      badges.createEl("span", {
+      badges.createSpan({
         cls: "devhelper-task-project-badge",
         text: titleByPath.get(event.projectPath) ?? event.projectPath,
       });
     }
 
-    const actions = card.createEl("div", { cls: "devhelper-task-actions" });
+    const actions = card.createDiv({ cls: "devhelper-task-actions" });
 
     const editBtn = actions.createEl("button", {
       cls: "devhelper-icon-button devhelper-task-icon",
@@ -526,8 +524,8 @@ export class CalendarView extends ItemView {
     icon: string,
     text: string,
   ): HTMLElement {
-    const box = parent.createEl("div", { cls: "devhelper-empty-state" });
-    const iconEl = box.createEl("span", {
+    const box = parent.createDiv({ cls: "devhelper-empty-state" });
+    const iconEl = box.createSpan({
       cls: "devhelper-empty-state-icon",
       attr: { "aria-hidden": "true" },
     });

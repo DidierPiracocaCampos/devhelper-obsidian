@@ -28,7 +28,7 @@ export class ConfirmDeleteModal extends Modal {
     contentEl.createEl("p", {
       text: `¿Mover «${this.options.taskTitle}» a la papelera? Se puede recuperar desde la papelera de Obsidian.`,
     });
-    const actions = contentEl.createEl("div", {
+    const actions = contentEl.createDiv({
       cls: "devhelper-form-actions",
     });
     const cancel = actions.createEl("button", {

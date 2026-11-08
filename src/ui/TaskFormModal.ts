@@ -28,7 +28,7 @@ export class TaskFormModal extends Modal {
   private readonly initial: TaskFormPayload;
   private readonly projects: ProjectRecord[];
   private readonly defaultProjectPath: string | null;
-  private readonly onSubmit: (payload: TaskFormPayload) => void;
+  private readonly onSubmit: (payload: TaskFormPayload) => void | Promise<void>;
 
   private titleInput!: HTMLInputElement;
   private projectSelect!: HTMLSelectElement;
@@ -41,7 +41,7 @@ export class TaskFormModal extends Modal {
       initial?: TaskFormPayload;
       projects: ProjectRecord[];
       defaultProjectPath: string | null;
-      onSubmit: (payload: TaskFormPayload) => void;
+      onSubmit: (payload: TaskFormPayload) => void | Promise<void>;
     },
   ) {
     super(app);
@@ -57,7 +57,7 @@ export class TaskFormModal extends Modal {
     } else {
       const fallbackProject =
         options.defaultProjectPath ??
-        (options.projects.length > 0 ? options.projects[0]!.path : "");
+        (options.projects.length > 0 ? options.projects[0].path : "");
       this.initial = { title: "", projectPath: fallbackProject };
     }
   }
@@ -67,7 +67,7 @@ export class TaskFormModal extends Modal {
     contentEl.empty();
     titleEl.setText(this.mode === "create" ? "Nueva tarea" : "Editar tarea");
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
 
     new Setting(form)
       .setName("Título")
@@ -108,7 +108,7 @@ export class TaskFormModal extends Modal {
     });
     this.errorEl.hide();
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) =>
         btn.setButtonText("Cancelar").onClick(() => this.close()),
@@ -144,7 +144,7 @@ export class TaskFormModal extends Modal {
         ? { path: this.initial.path }
         : {}),
     };
-    this.onSubmit(payload);
+    void this.onSubmit(payload);
     this.close();
   }
 

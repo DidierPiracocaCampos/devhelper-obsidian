@@ -12,7 +12,7 @@ import { checkVerifier, deriveKey } from "../domain/credentialsCrypto";
 export class CredentialSession {
   private key: CryptoKey | null = null;
   private timeoutMinutes: number;
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private timer: number | null = null;
   private expiresAt = 0;
   private onExpire: (() => void) | null = null;
 
@@ -89,19 +89,15 @@ export class CredentialSession {
   private scheduleLock(): void {
     this.clearTimer();
     this.expiresAt = Date.now() + this.timeoutMinutes * 60_000;
-    this.timer = setTimeout(() => {
+    this.timer = window.setTimeout(() => {
       this.lock();
       this.onExpire?.();
     }, this.timeoutMinutes * 60_000);
-    // Never keep the process alive for a forgotten dashboard session.
-    if (typeof this.timer === "object" && "unref" in this.timer) {
-      (this.timer as { unref(): void }).unref();
-    }
   }
 
   private clearTimer(): void {
     if (this.timer !== null) {
-      clearTimeout(this.timer);
+      window.clearTimeout(this.timer);
       this.timer = null;
     }
   }

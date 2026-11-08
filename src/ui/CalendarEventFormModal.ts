@@ -126,7 +126,7 @@ export class CalendarEventFormModal extends Modal {
       titleEl.setText(`Editar evento: ${this.initial.title ?? ""}`);
     }
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
 
     if (this.mode === "create") {
       new Setting(form)
@@ -168,7 +168,7 @@ export class CalendarEventFormModal extends Modal {
       .setClass("devhelper-form-row");
 
     // Fila: checkbox "varios días" + fecha fin.
-    const multiDayRow = form.createEl("div", {
+    const multiDayRow = form.createDiv({
       cls: "devhelper-form-row devhelper-form-inline",
     });
     const multiDayLabel = multiDayRow.createEl("label", {
@@ -200,7 +200,7 @@ export class CalendarEventFormModal extends Modal {
     });
 
     // Fila: checkbox "todo el día" + hora.
-    const allDayRow = form.createEl("div", {
+    const allDayRow = form.createDiv({
       cls: "devhelper-form-row devhelper-form-inline",
     });
     const allDayLabel = allDayRow.createEl("label", {
@@ -274,7 +274,7 @@ export class CalendarEventFormModal extends Modal {
     });
     this.errorEl.hide();
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) => btn.setButtonText("Cancelar").onClick(() => this.close()))
       .addButton((btn) =>

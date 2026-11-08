@@ -203,8 +203,8 @@ export class DashboardView extends ItemView {
     icon: string,
     text: string,
   ): HTMLElement {
-    const box = parent.createEl("div", { cls: "devhelper-empty-state" });
-    const iconEl = box.createEl("span", {
+    const box = parent.createDiv({ cls: "devhelper-empty-state" });
+    const iconEl = box.createSpan({
       cls: "devhelper-empty-state-icon",
       attr: { "aria-hidden": "true" },
     });
@@ -216,7 +216,7 @@ export class DashboardView extends ItemView {
   private renderEmpty(): void {
     this.contentEl.empty();
     this.contentEl.addClass("devhelper-dashboard-root");
-    const main = this.contentEl.createEl("div", { cls: "devhelper-main" });
+    const main = this.contentEl.createDiv({ cls: "devhelper-main" });
     main.createEl("h2", { text: "Dashboard DevHelper" });
     this.appendEmptyState(main, "loader-circle", "Cargando proyectos y tareas…");
   }
@@ -267,13 +267,13 @@ export class DashboardView extends ItemView {
     data: DashboardData,
     presentation: DashboardPresentation,
   ): void {
-    const topbar = this.contentEl.createEl("div", {
+    const topbar = this.contentEl.createDiv({
       cls: "devhelper-topbar",
     });
 
     this.renderProjectChips(presentation, data);
 
-    const controls = topbar.createEl("div", {
+    const controls = topbar.createDiv({
       cls: "devhelper-topbar-controls",
     });
 
@@ -287,10 +287,10 @@ export class DashboardView extends ItemView {
     // (`global-search:open`, which reveals the native Search view and
     // focuses its input). The field is `readOnly` (not `disabled`) so
     // it stays clickable without popping the on-screen keyboard.
-    const searchWrap = controls.createEl("div", {
+    const searchWrap = controls.createDiv({
       cls: "devhelper-search-wrap",
     });
-    const searchIcon = searchWrap.createEl("span", {
+    const searchIcon = searchWrap.createSpan({
       cls: "devhelper-search-icon",
       attr: { "aria-hidden": "true" },
     });
@@ -303,7 +303,7 @@ export class DashboardView extends ItemView {
     });
     search.readOnly = true;
     searchWrap.addEventListener("click", () => this.openVaultSearch());
-    searchWrap.createEl("span", {
+    searchWrap.createSpan({
       cls: "devhelper-search-hint",
       text: "Ctrl+K",
     });
@@ -334,7 +334,7 @@ export class DashboardView extends ItemView {
       ".devhelper-topbar",
     );
     if (topbar === null) return;
-    const chipList = topbar.createEl("div", { cls: "devhelper-chip-list" });
+    const chipList = topbar.createDiv({ cls: "devhelper-chip-list" });
 
     // 1. "Todos" chip.
     const allChip = chipList.createEl("button", {
@@ -439,15 +439,15 @@ export class DashboardView extends ItemView {
 
     // Header row: fixed «Tareas y notas» title on the left and the current
     // buttons (filter + new task + new note) inline on the right edge.
-    const panelHeader = main.createEl("div", {
+    const panelHeader = main.createDiv({
       cls: "devhelper-tasks-panel-header",
     });
-    const projectHeader = panelHeader.createEl("div", {
+    const projectHeader = panelHeader.createDiv({
       cls: "devhelper-project-header",
     });
     projectHeader.createEl("h3", { text: "Tareas y notas" });
 
-    const fabs = panelHeader.createEl("div", {
+    const fabs = panelHeader.createDiv({
       cls: "devhelper-panel-fabs",
     });
 
@@ -570,7 +570,7 @@ export class DashboardView extends ItemView {
    * and the input always reflect the in-memory filter state.
    */
   private renderTaskFilters(main: HTMLElement): void {
-    const filters = main.createEl("div", {
+    const filters = main.createDiv({
       cls: "devhelper-task-filters",
     });
 
@@ -659,9 +659,9 @@ export class DashboardView extends ItemView {
     }
     if (query === "") {
       for (const child of Array.from(list.children)) {
-        if (child !== noResults) (child as HTMLElement).style.display = "";
+        if (child !== noResults) (child as HTMLElement).toggle(true);
       }
-      noResults.style.display = "none";
+      noResults.toggle(false);
       return;
     }
     let visible = 0;
@@ -670,10 +670,10 @@ export class DashboardView extends ItemView {
       const el = child as HTMLElement;
       const title = (el.dataset["title"] ?? "").toLocaleLowerCase();
       const match = title.includes(query);
-      el.style.display = match ? "" : "none";
+      el.toggle(match);
       if (match) visible++;
     }
-    noResults.style.display = visible === 0 ? "" : "none";
+    noResults.toggle(visible === 0);
   }
 
   /**
@@ -701,12 +701,12 @@ export class DashboardView extends ItemView {
 
     // Left: title + subtitle stacked. Right (`actions`) stays inline
     // so the card reads as a single horizontal row like the design ref.
-    const main = card.createEl("div", { cls: "devhelper-task-main" });
+    const main = card.createDiv({ cls: "devhelper-task-main" });
 
     // Title row: clickable title plus the optional project badge in
     // `showAll` mode (omitted in project mode where it would repeat
     // the panel context).
-    const titleRow = main.createEl("div", {
+    const titleRow = main.createDiv({
       cls: "devhelper-task-title-row",
     });
     const titleEl = titleRow.createEl("h4", {
@@ -716,7 +716,7 @@ export class DashboardView extends ItemView {
     titleEl.addEventListener("click", () => this.openNote(task.path));
 
     if (projectTitle !== undefined) {
-      titleRow.createEl("span", {
+      titleRow.createSpan({
         cls: "devhelper-task-project-badge",
         text: projectTitle,
       });
@@ -729,7 +729,7 @@ export class DashboardView extends ItemView {
       text: "Sin descripción",
     });
 
-    const actions = card.createEl("div", { cls: "devhelper-task-actions" });
+    const actions = card.createDiv({ cls: "devhelper-task-actions" });
 
     // Delete goes to Obsidian's trash (recoverable) after an explicit
     // confirmation.
@@ -777,9 +777,9 @@ export class DashboardView extends ItemView {
     card.dataset["title"] = note.title;
     card.dataset["kind"] = "note";
 
-    const main = card.createEl("div", { cls: "devhelper-task-main" });
+    const main = card.createDiv({ cls: "devhelper-task-main" });
 
-    const titleRow = main.createEl("div", {
+    const titleRow = main.createDiv({
       cls: "devhelper-task-title-row",
     });
     const titleEl = titleRow.createEl("h4", {
@@ -788,12 +788,12 @@ export class DashboardView extends ItemView {
     });
     titleEl.addEventListener("click", () => this.openNote(note.path));
 
-    titleRow.createEl("span", {
+    titleRow.createSpan({
       cls: "devhelper-task-project-badge devhelper-note-badge",
       text: "Nota",
     });
     if (projectTitle !== undefined) {
-      titleRow.createEl("span", {
+      titleRow.createSpan({
         cls: "devhelper-task-project-badge",
         text: projectTitle,
       });
@@ -804,7 +804,7 @@ export class DashboardView extends ItemView {
       text: "Nota simple",
     });
 
-    const actions = card.createEl("div", { cls: "devhelper-task-actions" });
+    const actions = card.createDiv({ cls: "devhelper-task-actions" });
 
     const deleteBtn = actions.createEl("button", {
       cls: "devhelper-icon-button devhelper-task-icon",
@@ -853,7 +853,7 @@ export class DashboardView extends ItemView {
    * abre la pestaña de ajustes del plugin.
    */
   private renderToolbarRail(): void {
-    const rail = this.contentEl.createEl("div", {
+    const rail = this.contentEl.createDiv({
       cls: "devhelper-toolbar-rail",
     });
 
@@ -909,7 +909,7 @@ export class DashboardView extends ItemView {
    * al pulsar `+` o un día concreto. No muta el repositorio.
    */
   private renderSideColumn(data: DashboardData): void {
-    const column = this.contentEl.createEl("div", {
+    const column = this.contentEl.createDiv({
       cls: "devhelper-side-column",
     });
 
@@ -922,7 +922,7 @@ export class DashboardView extends ItemView {
       cls: "devhelper-calendar",
     });
 
-    const header = calendar.createEl("div", {
+    const header = calendar.createDiv({
       cls: "devhelper-calendar-header",
     });
     header.createEl("strong", {
@@ -982,14 +982,14 @@ export class DashboardView extends ItemView {
     const baseIso = this.toIsoDate(base);
     addBtn.addEventListener("click", () => this.openCalendar(baseIso));
 
-    const weekdays = calendar.createEl("div", {
+    const weekdays = calendar.createDiv({
       cls: "devhelper-calendar-weekdays",
     });
     for (const letter of ["L", "M", "X", "J", "V", "S", "D"]) {
-      weekdays.createEl("span", { text: letter });
+      weekdays.createSpan({ text: letter });
     }
 
-    const days = calendar.createEl("div", { cls: "devhelper-calendar-days" });
+    const days = calendar.createDiv({ cls: "devhelper-calendar-days" });
     const events = data.calendarEvents ?? [];
     const monthCache = new Map<string, Map<string, CalendarOccurrence[]>>();
 
@@ -1007,14 +1007,12 @@ export class DashboardView extends ItemView {
         cls: "devhelper-calendar-day",
         attr: { type: "button", "aria-label": iso },
       });
-      cell.style.flexDirection = "column";
-      cell.style.gap = "1px";
-      cell.createEl("span", { text: String(date.getDate()) });
+      cell.createSpan({ text: String(date.getDate()) });
       if (iso === todayIso) cell.addClass("is-today");
 
       const occurrences = this.getDayOccurrences(events, date, monthCache);
       if (occurrences.length > 0) {
-        const dots = cell.createEl("div", {
+        const dots = cell.createDiv({
           cls: "devhelper-calendar-dots",
         });
         const seen = new Set<CalendarKind>();
@@ -1022,7 +1020,7 @@ export class DashboardView extends ItemView {
           const kind = occurrence.event.kind;
           if (seen.has(kind)) continue;
           seen.add(kind);
-          dots.createEl("span", {
+          dots.createSpan({
             cls: `devhelper-calendar-dot devhelper-dot--${kind}`,
           });
         }
@@ -1057,7 +1055,7 @@ export class DashboardView extends ItemView {
     presentation: DashboardPresentation,
     decrypted: Map<string, CredentialDisplay[]>,
   ): void {
-    const row = this.contentEl.createEl("div", {
+    const row = this.contentEl.createDiv({
       cls: "devhelper-bottom-sections",
     });
 
@@ -1073,12 +1071,12 @@ export class DashboardView extends ItemView {
     const section = row.createEl("section", {
       cls: "devhelper-section devhelper-section--files",
     });
-    const header = section.createEl("div", {
+    const header = section.createDiv({
       cls: "devhelper-section-header",
     });
     header.createEl("h3", { text: "Archivos" });
 
-    const fabs = header.createEl("div", { cls: "devhelper-panel-fabs" });
+    const fabs = header.createDiv({ cls: "devhelper-panel-fabs" });
 
     const filterButton = fabs.createEl("button", {
       cls: "devhelper-icon-button",
@@ -1135,7 +1133,7 @@ export class DashboardView extends ItemView {
    * Filtra en memoria sin `refresh()` para no robar el foco al teclear.
    */
   private renderFileFilters(section: HTMLElement): void {
-    const filters = section.createEl("div", {
+    const filters = section.createDiv({
       cls: "devhelper-task-filters",
     });
     const search = filters.createEl("input", {
@@ -1170,9 +1168,9 @@ export class DashboardView extends ItemView {
     }
     if (query === "") {
       for (const child of Array.from(list.children)) {
-        if (child !== noResults) (child as HTMLElement).style.display = "";
+        if (child !== noResults) (child as HTMLElement).toggle(true);
       }
-      noResults.style.display = "none";
+      noResults.toggle(false);
       return;
     }
     let visible = 0;
@@ -1181,10 +1179,10 @@ export class DashboardView extends ItemView {
       const el = child as HTMLElement;
       const name = (el.dataset["title"] ?? "").toLocaleLowerCase();
       const match = name.includes(query);
-      el.style.display = match ? "" : "none";
+      el.toggle(match);
       if (match) visible++;
     }
-    noResults.style.display = visible === 0 ? "" : "none";
+    noResults.toggle(visible === 0);
   }
 
   /**
@@ -1200,11 +1198,11 @@ export class DashboardView extends ItemView {
     // Clave del filtro en memoria (`applyFileQueryFilter`).
     card.dataset["title"] = file.name;
 
-    const main = card.createEl("div", { cls: "devhelper-task-main" });
-    const titleRow = main.createEl("div", {
+    const main = card.createDiv({ cls: "devhelper-task-main" });
+    const titleRow = main.createDiv({
       cls: "devhelper-task-title-row",
     });
-    const iconEl = titleRow.createEl("span", {
+    const iconEl = titleRow.createSpan({
       cls: "devhelper-file-icon",
       attr: { "aria-hidden": "true" },
     });
@@ -1216,7 +1214,7 @@ export class DashboardView extends ItemView {
     });
     titleEl.addEventListener("click", () => this.openFile(file.path));
 
-    const actions = card.createEl("div", { cls: "devhelper-task-actions" });
+    const actions = card.createDiv({ cls: "devhelper-task-actions" });
 
     // Mostrar en el explorador de archivos (revela el fichero).
     const revealBtn = actions.createEl("button", {
@@ -1305,7 +1303,7 @@ export class DashboardView extends ItemView {
     const section = row.createEl("section", {
       cls: "devhelper-section devhelper-section--credentials",
     });
-    const header = section.createEl("div", {
+    const header = section.createDiv({
       cls: "devhelper-section-header",
     });
     header.createEl("h3", { text: "Contraseña" });
@@ -1352,7 +1350,7 @@ export class DashboardView extends ItemView {
     // Cabecera: acción de sesión en una píldora con texto
     // («Desbloquear» / «Bloquear») y, sólo con la sesión abierta, el [+].
     const isLocked = !this.credentialsDeps.session.isUnlocked();
-    const fabs = header.createEl("div", { cls: "devhelper-panel-fabs" });
+    const fabs = header.createDiv({ cls: "devhelper-panel-fabs" });
     if (!isLocked) {
       const addBtn = fabs.createEl("button", {
         cls: "devhelper-fab",
@@ -1377,12 +1375,12 @@ export class DashboardView extends ItemView {
         type: "button",
       },
     });
-    const lockIcon = lockBtn.createEl("span", {
+    const lockIcon = lockBtn.createSpan({
       cls: "devhelper-pill-button-icon",
       attr: { "aria-hidden": "true" },
     });
     setIcon(lockIcon, isLocked ? "lock-open" : "lock");
-    lockBtn.createEl("span", { text: isLocked ? "Desbloquear" : "Bloquear" });
+    lockBtn.createSpan({ text: isLocked ? "Desbloquear" : "Bloquear" });
     if (isLocked) {
       lockBtn.addEventListener("click", () => this.openUnlockMasterPassword());
     } else {
@@ -1420,7 +1418,7 @@ export class DashboardView extends ItemView {
           cls: "devhelper-task-card devhelper-credential-locked",
           attr: { title: "Pulsa para desbloquear" },
         });
-        const icon = item.createEl("span", {
+        const icon = item.createSpan({
           cls: "devhelper-credential-lock-icon",
           attr: { "aria-hidden": "true" },
         });
@@ -1432,7 +1430,7 @@ export class DashboardView extends ItemView {
         item.addEventListener("click", () => this.openUnlockMasterPassword());
       }
     }
-    const actions = section.createEl("div", {
+    const actions = section.createDiv({
       cls: "devhelper-form-actions",
     });
     const forgotBtn = actions.createEl("button", {
@@ -1451,11 +1449,11 @@ export class DashboardView extends ItemView {
   ): void {
     const session = this.credentialsDeps.session;
     const mins = Math.ceil(session.msUntilLock() / 60000);
-    const status = section.createEl("div", {
+    const status = section.createDiv({
       cls: "devhelper-credential-status",
     });
-    status.createEl("span", { cls: "devhelper-credential-status-dot" });
-    status.createEl("span", {
+    status.createSpan({ cls: "devhelper-credential-status-dot" });
+    status.createSpan({
       text: `Desbloqueado · se bloquea en ${mins <= 1 ? "menos de un minuto" : `~${mins} min`}`,
     });
 
@@ -1465,10 +1463,10 @@ export class DashboardView extends ItemView {
         (e) =>
           typeof e.password === "string" && !isEncryptedValue(e.password),
       ).length;
-      const banner = section.createEl("div", {
+      const banner = section.createDiv({
         cls: "devhelper-migration-banner",
       });
-      banner.createEl("span", {
+      banner.createSpan({
         text: `Tienes ${count} credencial${count === 1 ? "" : "es"} sin cifrar.`,
       });
       const migrateBtn = banner.createEl("button", {
@@ -1525,9 +1523,9 @@ export class DashboardView extends ItemView {
     display: CredentialDisplay,
   ): HTMLElement {
     const item = createEl("li", { cls: "devhelper-task-card" });
-    const main = item.createEl("div", { cls: "devhelper-task-main" });
+    const main = item.createDiv({ cls: "devhelper-task-main" });
 
-    const titleRow = main.createEl("div", {
+    const titleRow = main.createDiv({
       cls: "devhelper-task-title-row",
     });
     const titleEl = titleRow.createEl("h4", {
@@ -1552,7 +1550,7 @@ export class DashboardView extends ItemView {
       });
     }
 
-    const actions = item.createEl("div", {
+    const actions = item.createDiv({
       cls: "devhelper-task-actions",
     });
     if (!display.corrupt) {
@@ -1627,7 +1625,7 @@ export class DashboardView extends ItemView {
    * undecryptable (they surface as corrupt rows the user can delete).
    */
   private renderCredentialReset(section: HTMLElement): void {
-    const warn = section.createEl("div", { cls: "devhelper-danger-zone" });
+    const warn = section.createDiv({ cls: "devhelper-danger-zone" });
     warn.createEl("p", {
       text: "Sin la contraseña maestra no hay recuperación posible: las credenciales cifradas quedarán ilegibles. Solo sigue si asumes esa pérdida.",
     });
@@ -2057,10 +2055,10 @@ export class DashboardView extends ItemView {
    * filas nuevas sin recarga manual.
    */
   private openAddFiles(scopePath: string): void {
-    const input = document.createElement("input");
+    const input = createEl("input");
     input.type = "file";
     input.multiple = true;
-    input.style.display = "none";
+    input.toggle(false);
     const cleanup = (): void => {
       input.remove();
     };
@@ -2087,7 +2085,7 @@ export class DashboardView extends ItemView {
     });
     // El diálogo puede cancelarse sin `change`: retirar el nodo huérfano.
     input.addEventListener("cancel", cleanup);
-    document.body.appendChild(input);
+    activeDocument.body.appendChild(input);
     input.click();
   }
 

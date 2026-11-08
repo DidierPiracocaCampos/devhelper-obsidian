@@ -133,7 +133,7 @@ export async function decryptField(
     const plain = await getCrypto().subtle.decrypt(
       { name: "AES-GCM", iv: iv as BufferSource },
       key,
-      cipher as BufferSource,
+      cipher,
     );
     return new TextDecoder().decode(plain);
   } catch {
@@ -180,7 +180,7 @@ export async function decryptEntryForDisplay(
     return display;
   }
   const fields = ["user", "password", "url", "notes"] as const;
-  const raw: Record<string, unknown> = entry as Record<string, unknown>;
+  const raw: Record<string, unknown> = entry;
   for (const field of fields) {
     const value = raw[field];
     if (value === undefined || value === null) {
@@ -208,7 +208,7 @@ export async function decryptEntryForDisplay(
 }
 
 function getCrypto(): Crypto {
-  const crypto = globalThis.crypto;
+  const crypto = window.crypto;
   if (!crypto?.subtle) {
     throw new Error("WebCrypto no está disponible en este entorno.");
   }

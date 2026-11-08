@@ -12,7 +12,7 @@ export class NoteFormModal extends Modal {
   private readonly initial: NoteFormPayload;
   private readonly projects: ProjectRecord[];
   private readonly defaultProjectPath: string | null;
-  private readonly onSubmit: (payload: NoteFormPayload) => void;
+  private readonly onSubmit: (payload: NoteFormPayload) => void | Promise<void>;
 
   private titleInput!: HTMLInputElement;
   private projectSelect!: HTMLSelectElement;
@@ -25,7 +25,7 @@ export class NoteFormModal extends Modal {
       initial?: NoteFormPayload;
       projects: ProjectRecord[];
       defaultProjectPath: string | null;
-      onSubmit: (payload: NoteFormPayload) => void;
+      onSubmit: (payload: NoteFormPayload) => void | Promise<void>;
     },
   ) {
     super(app);
@@ -38,7 +38,7 @@ export class NoteFormModal extends Modal {
     } else {
       const fallbackProject =
         options.defaultProjectPath ??
-        (options.projects.length > 0 ? options.projects[0]!.path : "");
+        (options.projects.length > 0 ? options.projects[0].path : "");
       this.initial = { title: "", projectPath: fallbackProject };
     }
   }
@@ -48,7 +48,7 @@ export class NoteFormModal extends Modal {
     contentEl.empty();
     titleEl.setText(this.mode === "create" ? "Nueva nota" : "Editar nota");
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
 
     new Setting(form)
       .setName("Título")
@@ -85,7 +85,7 @@ export class NoteFormModal extends Modal {
     });
     this.errorEl.hide();
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) =>
         btn.setButtonText("Cancelar").onClick(() => this.close()),
@@ -121,7 +121,7 @@ export class NoteFormModal extends Modal {
         ? { path: this.initial.path }
         : {}),
     };
-    this.onSubmit(payload);
+    void this.onSubmit(payload);
     this.close();
   }
 

@@ -25,7 +25,7 @@ export interface ProjectFormPayload {
 export class ProjectFormModal extends Modal {
   private readonly mode: "create" | "edit";
   private readonly initial: ProjectFormPayload;
-  private readonly onSubmit: (payload: ProjectFormPayload) => void;
+  private readonly onSubmit: (payload: ProjectFormPayload) => void | Promise<void>;
 
   private titleInput!: HTMLInputElement;
   private errorEl!: HTMLElement;
@@ -35,7 +35,7 @@ export class ProjectFormModal extends Modal {
     options: {
       mode: "create" | "edit";
       initial?: ProjectFormPayload;
-      onSubmit: (payload: ProjectFormPayload) => void;
+      onSubmit: (payload: ProjectFormPayload) => void | Promise<void>;
     },
   ) {
     super(app);
@@ -51,7 +51,7 @@ export class ProjectFormModal extends Modal {
       this.mode === "create" ? "Nuevo proyecto" : "Editar proyecto",
     );
 
-    const form = contentEl.createEl("div", { cls: "devhelper-form" });
+    const form = contentEl.createDiv({ cls: "devhelper-form" });
 
     const titleField = new Setting(form)
       .setName("Título")
@@ -72,7 +72,7 @@ export class ProjectFormModal extends Modal {
     });
     this.errorEl.hide();
 
-    const buttonRow = form.createEl("div", { cls: "devhelper-form-actions" });
+    const buttonRow = form.createDiv({ cls: "devhelper-form-actions" });
     new Setting(buttonRow)
       .addButton((btn) =>
         btn.setButtonText("Cancelar").onClick(() => this.close()),
@@ -102,7 +102,7 @@ export class ProjectFormModal extends Modal {
         ? { path: this.initial.path }
         : {}),
     };
-    this.onSubmit(payload);
+    void this.onSubmit(payload);
     this.close();
   }
 

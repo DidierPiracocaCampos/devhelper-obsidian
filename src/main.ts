@@ -59,7 +59,7 @@ export default class DevHelperDashboardPlugin extends Plugin {
       void this.refreshDashboard();
     });
 
-    this.addSettingTab(new SettingsTab(this, DEFAULT_SETTINGS));
+    this.addSettingTab(new SettingsTab(this, this, DEFAULT_SETTINGS));
 
     this.registerView(
       VIEW_TYPE_DEVHELPER_DASHBOARD,
@@ -67,7 +67,7 @@ export default class DevHelperDashboardPlugin extends Plugin {
         new DashboardView(
           leaf,
           this.repository,
-          this.settings!,
+          this.settings,
           {
             session: this.credentialSession,
             getSaltB64: () => this.settings.credSaltB64,
@@ -84,13 +84,15 @@ export default class DevHelperDashboardPlugin extends Plugin {
               await this.saveData(this.settings);
             },
           },
-          this.activateCalendarView.bind(this),
+          (isoDate?: string) => {
+            void this.activateCalendarView(isoDate);
+          },
         ),
     );
 
     this.registerView(
       VIEW_TYPE_DEVHELPER_CALENDAR,
-      (leaf) => new CalendarView(leaf, this.repository, this.settings!),
+      (leaf) => new CalendarView(leaf, this.repository, this.settings),
     );
 
     this.addCommand({
@@ -155,7 +157,7 @@ export default class DevHelperDashboardPlugin extends Plugin {
     );
     if (existing.length > 0) {
       const leaf = existing[0];
-      this.app.workspace.revealLeaf(leaf);
+      void this.app.workspace.revealLeaf(leaf);
       const openView = leaf.view as DashboardView;
       // Ask the view to pull data immediately so the user does not see
       // a loading placeholder on activation.
@@ -193,7 +195,7 @@ export default class DevHelperDashboardPlugin extends Plugin {
     if (existing.length > 0) {
       // Already open: focus it, never mount a second instance.
       const leaf = existing[0];
-      this.app.workspace.revealLeaf(leaf);
+      void this.app.workspace.revealLeaf(leaf);
       view = leaf.view as CalendarView;
     } else {
       const leaf = this.app.workspace.getLeaf("tab");

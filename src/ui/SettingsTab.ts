@@ -10,13 +10,24 @@ import type { CredentialSession } from "../data/CredentialSession";
  * Credential key material (`credSaltB64` / `credVerifier`) is never shown
  * nor edited here — only preserved through `mergePluginSettings`.
  */
+/**
+ * Lo que la pestaña necesita del plugin. Es una interfaz propia (y no
+ * `Plugin`) porque `Plugin.settings` solo existe desde Obsidian 1.13 y el
+ * plugin declara `minAppVersion` 1.9.0.
+ */
+export interface SettingsHost {
+  settings: PluginSettings;
+  credentialSession?: CredentialSession;
+  saveData(data: unknown): Promise<void>;
+}
+
 export class SettingsTab extends PluginSettingTab {
-  private readonly plugin: Plugin;
+  private readonly host: SettingsHost;
   private readonly defaults: PluginSettings;
 
-  constructor(plugin: Plugin, defaults: PluginSettings) {
+  constructor(plugin: Plugin, host: SettingsHost, defaults: PluginSettings) {
     super(plugin.app, plugin);
-    this.plugin = plugin;
+    this.host = host;
     this.defaults = defaults;
   }
 
@@ -102,25 +113,17 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   private readSettings(): PluginSettings {
-    // The main plugin declares a `settings` field on itself; cast to read it.
     // `mergePluginSettings` keeps the credential timeout + key material
     // that this tab never edits, so a later `saveData` cannot wipe them.
-    const pluginWithSettings = this.plugin as Plugin & {
-      settings?: PluginSettings;
-    };
-    return mergePluginSettings(this.defaults, pluginWithSettings.settings);
+    return mergePluginSettings(this.defaults, this.host.settings);
   }
 
   private async writeSettings(settings: PluginSettings): Promise<void> {
-    await this.plugin.saveData(settings);
-    const pluginWithSettings = this.plugin as Plugin & {
-      settings?: PluginSettings;
-      credentialSession?: CredentialSession;
-    };
-    pluginWithSettings.settings = settings;
+    await this.host.saveData(settings);
+    this.host.settings = settings;
     // A timeout change applies to the running session immediately;
     // key material itself is never touched here.
-    pluginWithSettings.credentialSession?.setTimeoutMinutes(
+    this.host.credentialSession?.setTimeoutMinutes(
       settings.credentialLockTimeoutMinutes,
     );
   }

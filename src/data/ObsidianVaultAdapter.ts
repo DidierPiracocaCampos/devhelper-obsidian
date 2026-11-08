@@ -177,9 +177,9 @@ export class ObsidianVaultAdapter implements VaultAdapter {
 
   async trash(note: VaultNoteRef): Promise<void> {
     const file = this.requireFile(note);
-    // `system: false` moves the note to Obsidian's own trash, so the
-    // delete stays recoverable instead of destroying the file.
-    await this.app.vault.trash(file, false);
+    // `trashFile` respeta la preferencia del usuario (papelera del sistema,
+    // `.trash` de Obsidian o borrado), como pide la revisión de Obsidian.
+    await this.app.fileManager.trashFile(file);
   }
 
   /**
