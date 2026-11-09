@@ -5,7 +5,7 @@ import { CredentialSession } from "./data/CredentialSession";
 import { ProjectTaskRepository } from "./data/ProjectTaskRepository";
 import { ObsidianVaultAdapter } from "./data/ObsidianVaultAdapter";
 import { ToolbarButtonRepository } from "./data/ToolbarButtonRepository";
-import { createShellExec } from "./ui/buttons/shellExec";
+import { createShellExec, type ExecFn } from "./ui/buttons/shellExec";
 import {
   DashboardView,
   VIEW_TYPE_DEVHELPER_DASHBOARD,
@@ -64,6 +64,10 @@ export default class DevHelperDashboardPlugin extends Plugin {
         Platform.isDesktopApp && vaultAdapter instanceof FileSystemAdapter
           ? vaultAdapter.getBasePath()
           : null,
+      execImpl: Platform.isDesktopApp
+        ? // eslint-disable-next-line @typescript-eslint/no-require-imports -- child_process sólo existe en escritorio: se carga detrás de Platform.isDesktopApp y nunca en móvil.
+          (require("child_process") as { exec: ExecFn }).exec
+        : undefined,
     });
 
     this.credentialSession = new CredentialSession(

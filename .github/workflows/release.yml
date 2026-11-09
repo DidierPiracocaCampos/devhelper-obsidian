@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -24,6 +26,13 @@ jobs:
       - name: Comprobar que el tag coincide con manifest.json
         run: |
           test "$(node -p "require('./manifest.json').version")" = "${GITHUB_REF_NAME}"
+      - name: Atestar procedencia de los assets
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
       - name: Empaquetar skills de IA
         run: cd skills && zip -r ../devhelper-skills.zip . -x '.gitkeep'
       - name: Crear release

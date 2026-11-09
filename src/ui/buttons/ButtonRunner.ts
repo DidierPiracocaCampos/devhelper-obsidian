@@ -47,9 +47,11 @@ export type RunResult =
   | { kind: "busy" } // ya se está ejecutando esa misma clave
   | { kind: "error"; message: string };
 
-const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
-  ...args: string[]
-) => (...args: unknown[]) => Promise<unknown>;
+type AsyncFunctionCtor = new (...args: string[]) => (...args: unknown[]) => Promise<unknown>;
+
+const AsyncFunction = (
+  Object.getPrototypeOf(async function () {}) as { constructor: AsyncFunctionCtor }
+).constructor;
 
 export function runKey(button: ToolbarButtonRecord, option: ToolbarButtonOption | null): string {
   return option ? `${button.path}#${option.label}` : button.path;

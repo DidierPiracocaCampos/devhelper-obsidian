@@ -87,7 +87,7 @@ function stripInline(text: string): string {
       .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
       .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, "$2")
       .replace(/\[\[([^\]]*)\]\]/g, (_m, target: string) =>
-        target.split("#")[0]!.split("/").pop()!,
+        target.split("#")[0].split("/").pop() ?? target,
       )
       .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
       // Comentarios, HTML y código inline.

@@ -34,8 +34,31 @@ and your own properties and note bodies are preserved on every edit.
 - Validation issues are listed with an *Open note* button; one broken note
   never breaks the rest of the dashboard.
 - Deletions always go to Obsidian's trash after confirmation.
+- **Toolbar buttons** (opt-in): notes in `Botones/` (`type: toolbar-button`)
+  become buttons in the dashboard toolbar that run your own JavaScript — a
+  direct action, or a popover with one option per `##` heading.
 
 Requires Obsidian **1.9.0** or newer (Bases).
+
+### Security and permissions
+
+- **Code execution is off by default.** Toolbar buttons only run code after you
+  enable *Ajustes → DevHelper Dashboard → Botones de la barra → «Permitir
+  botones con código»*. While it is off, buttons are shown dimmed and nothing is
+  compiled or executed. The code comes only from notes in your own vault; enable
+  it only if you trust those notes (synced or AI-written notes included).
+- **Shell commands** (`ctx.run`, used by button scripts) go through Node's
+  `child_process`. It is loaded only on desktop, behind
+  `Platform.isDesktopApp`, never on mobile, and only runs when a button you
+  enabled calls it. The plugin itself never runs shell commands.
+- **Vault enumeration**: the plugin lists the files in its configured folders
+  (`Projects`, `Calendario`, `Botones`, templates) to build the dashboard, and
+  the dashboard search box lists note paths to open the one you pick. File
+  contents are only read inside those folders.
+- **Clipboard**: written only when you press *copy* on a credential field; the
+  plugin never reads the clipboard.
+- No network access, no telemetry. Credential secrets are encrypted at rest and
+  the derived key never touches disk.
 
 ### Installation
 
@@ -47,7 +70,7 @@ Requires Obsidian **1.9.0** or newer (Bases).
 
 ### AI skills (optional)
 
-Each release ships `devhelper-skills.zip`: nine `SKILL.md` files (Spanish) that
+Each release ships `devhelper-skills.zip`: ten `SKILL.md` files (Spanish) that
 teach AI agents (Claude Code, OpenCode…) the plugin's data model. Unzip them into
 `<vault>/.claude/skills/` or wherever your agent loads skills from.
 
@@ -86,8 +109,32 @@ paralelo y conserva tus Properties y el cuerpo de las notas en cada edición.
 - Avisos de validación con botón *Abrir nota*; una nota inválida no rompe el
   resto.
 - El borrado siempre va a la papelera de Obsidian, con confirmación.
+- **Botones de la barra** (opcionales): las notas de `Botones/`
+  (`type: toolbar-button`) se convierten en botones de la barra del dashboard
+  que ejecutan tu propio JavaScript, como acción directa o como popover con una
+  opción por cada encabezado `##`.
 
 Requiere Obsidian **1.9.0** o superior (Bases).
+
+### Seguridad y permisos
+
+- **La ejecución de código viene apagada.** Los botones sólo ejecutan código si
+  activas *Ajustes → DevHelper Dashboard → Botones de la barra → «Permitir
+  botones con código»*. Mientras esté apagado se ven atenuados y no se compila
+  ni ejecuta nada. El código sale sólo de notas de tu vault: actívalo sólo si
+  confías en ellas (incluidas las sincronizadas o escritas por una IA).
+- **Comandos de shell** (`ctx.run`, para los scripts de botón) usan
+  `child_process` de Node. Se carga sólo en escritorio, detrás de
+  `Platform.isDesktopApp`, nunca en móvil, y sólo se usa cuando un botón que tú
+  activaste lo llama. El plugin por sí mismo no ejecuta comandos.
+- **Listado del vault**: el plugin lista los archivos de sus carpetas
+  configuradas (`Projects`, `Calendario`, `Botones`, plantillas) para montar el
+  dashboard, y la caja de búsqueda del dashboard lista las rutas de las notas
+  para abrir la que elijas. El contenido sólo se lee dentro de esas carpetas.
+- **Portapapeles**: sólo se escribe al pulsar *copiar* en un campo de
+  credencial; el plugin nunca lo lee.
+- Sin red ni telemetría. Los secretos de las credenciales se guardan cifrados y
+  la clave derivada nunca toca el disco.
 
 ### Instalación
 
@@ -97,12 +144,12 @@ Requiere Obsidian **1.9.0** o superior (Bases).
   [última release](https://github.com/DidierPiracocaCampos/devhelper-obsidian/releases/latest)
   en `<vault>/.obsidian/plugins/devhelper-dashboard/` y activa el plugin.
 
-Las carpetas (`Projects`, `Plantillas`, `Calendario`, `Plantillas/Calendario`)
+Las carpetas (`Projects`, `Plantillas`, `Calendario`, `Plantillas/Calendario`, `Botones`)
 y el tiempo de bloqueo se cambian en **Ajustes → DevHelper Dashboard**.
 
 ### Skills de IA (opcional)
 
-Cada release incluye `devhelper-skills.zip` con nueve `SKILL.md` que enseñan el
+Cada release incluye `devhelper-skills.zip` con diez `SKILL.md` que enseñan el
 modelo de datos del plugin a agentes de IA. Descomprímelo en
 `<vault>/.claude/skills/` o donde tu agente cargue skills.
 

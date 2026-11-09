@@ -29,28 +29,19 @@ export type ExecFn = (
 export function createShellExec(opts: {
   isDesktop: boolean;
   defaultCwd: string | null;
-  /** Sólo para pruebas: sustituye a child_process.exec. */
+  /**
+   * `child_process.exec`. Lo inyecta `main.ts` sólo en escritorio (detrás de
+   * `Platform.isDesktopApp`); este módulo nunca importa módulos de Node.
+   */
   execImpl?: ExecFn;
 }): ShellExec {
   return (cmd, options = {}) => {
-    if (!opts.isDesktop) {
+    const exec = opts.execImpl;
+    if (!opts.isDesktop || !exec) {
       return Promise.reject(new Error("ctx.run sólo está disponible en escritorio"));
     }
     return new Promise<ShellResult>((resolve, reject) => {
       const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-      let exec: ExecFn;
-      try {
-        if (opts.execImpl) {
-          exec = opts.execImpl;
-        } else {
-        // Carga perezosa: esbuild deja `child_process` externo y en móvil nunca se evalúa.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-          exec = (require("child_process") as { exec: ExecFn }).exec;
-        }
-      } catch (e) {
-        reject(new Error(`No se pudo ejecutar el comando: ${(e as Error).message}`));
-        return;
-      }
       const cwd = options.cwd ?? opts.defaultCwd ?? undefined;
       exec(
         cmd,
