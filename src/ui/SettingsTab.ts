@@ -1,7 +1,8 @@
-import { Plugin, PluginSettingTab, Setting } from "obsidian";
+import { Plugin, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type { PluginSettings } from "../settings";
 import { mergePluginSettings, normalizeVaultFolderPath } from "../settings";
 import type { CredentialSession } from "../data/CredentialSession";
+import type { ToolbarButtonRepository } from "../data/ToolbarButtonRepository";
 
 /**
  * Settings tab that exposes the vault folder paths the plugin reads
@@ -19,6 +20,9 @@ export interface SettingsHost {
   settings: PluginSettings;
   credentialSession?: CredentialSession;
   saveData(data: unknown): Promise<void>;
+  buttonRepository: ToolbarButtonRepository;
+  openNote(path: string): void;
+  refreshViews(): void;
 }
 
 export class SettingsTab extends PluginSettingTab {
@@ -110,6 +114,89 @@ export class SettingsTab extends PluginSettingTab {
           await this.writeSettings(settings);
         });
       });
+
+    this.renderButtonsSection(containerEl, settings);
+  }
+
+  private renderButtonsSection(
+    containerEl: HTMLElement,
+    settings: PluginSettings,
+  ): void {
+    new Setting(containerEl).setName("Botones de la barra").setHeading();
+
+    new Setting(containerEl)
+      .setName("Carpeta de botones")
+      .setDesc("Carpeta del vault con las notas de botón. Por defecto «Botones».")
+      .addText((text) => {
+        text.setValue(settings.buttonsFolder).onChange(async (value) => {
+          settings.buttonsFolder = value;
+          await this.writeSettings(settings);
+          // writeSettings normaliza; la lista debe leer la carpeta nueva.
+          settings.buttonsFolder = this.host.settings.buttonsFolder;
+          void this.renderButtonList(listEl);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Permitir botones con código")
+      .setDesc(
+        "Ejecuta el JavaScript de las notas de botón con acceso completo al vault y, en escritorio, al sistema. Actívalo sólo si confías en esas notas.",
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(settings.allowButtonScripts).onChange(async (value) => {
+          settings.allowButtonScripts = value;
+          await this.writeSettings(settings);
+        });
+      });
+
+    const listEl = containerEl.createDiv({ cls: "devhelper-settings-buttons" });
+    void this.renderButtonList(listEl);
+
+    new Setting(containerEl).addButton((button) => {
+      button
+        .setButtonText("Crear botón")
+        .setCta()
+        .onClick(async () => {
+          const path = await this.host.buttonRepository.createButton("Nuevo botón");
+          this.host.openNote(path);
+          await this.renderButtonList(listEl);
+        });
+    });
+  }
+
+  private async renderButtonList(listEl: HTMLElement): Promise<void> {
+    const { buttons } = await this.host.buttonRepository.load();
+    listEl.empty();
+    if (buttons.length === 0) {
+      listEl.createEl("p", {
+        text: "No hay botones. Crea uno o pide a tu IA que lo haga (skill devhelper-buttons).",
+        cls: "setting-item-description",
+      });
+      return;
+    }
+    for (const record of buttons) {
+      const setting = new Setting(listEl).setDesc(
+        record.action.kind === "menu"
+          ? `${record.action.options.length} opciones`
+          : "Acción directa",
+      );
+      const iconEl = setting.nameEl.createSpan({
+        cls: "devhelper-settings-button-icon",
+      });
+      setIcon(iconEl, record.icon);
+      setting.nameEl.createSpan({ text: ` ${record.label}` });
+      setting.addToggle((toggle) => {
+        toggle.setValue(record.enabled).onChange(async (value) => {
+          await this.host.buttonRepository.setButtonEnabled(record.path, value);
+          this.host.refreshViews();
+        });
+      });
+      setting.addButton((button) => {
+        button.setButtonText("Abrir").onClick(() => {
+          this.host.openNote(record.path);
+        });
+      });
+    }
   }
 
   private readSettings(): PluginSettings {
@@ -118,9 +205,12 @@ export class SettingsTab extends PluginSettingTab {
     return mergePluginSettings(this.defaults, this.host.settings);
   }
 
-  private async writeSettings(settings: PluginSettings): Promise<void> {
+  private async writeSettings(edited: PluginSettings): Promise<void> {
+    // Normaliza (carpeta de botones, booleano estricto) antes de guardar.
+    const settings = mergePluginSettings(this.defaults, edited);
     await this.host.saveData(settings);
     this.host.settings = settings;
+    this.host.refreshViews();
     // A timeout change applies to the running session immediately;
     // key material itself is never touched here.
     this.host.credentialSession?.setTimeoutMinutes(

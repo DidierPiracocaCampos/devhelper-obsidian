@@ -244,6 +244,16 @@ export default class DevHelperDashboardPlugin extends Plugin {
    * `DEBOUNCE_MS` collapse into a single refresh so a flurry of vault
    * writes produces one re-render rather than one per event.
    */
+  /** Abre una nota del vault por ruta (usado por la pestaña de ajustes). */
+  openNote(path: string): void {
+    void this.app.workspace.openLinkText(path, "", false);
+  }
+
+  /** Repinta las vistas abiertas (p. ej. tras cambiar ajustes). */
+  refreshViews(): void {
+    this.scheduleDashboardRefresh();
+  }
+
   private scheduleDashboardRefresh(): void {
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
