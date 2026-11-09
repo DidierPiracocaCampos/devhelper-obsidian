@@ -15,6 +15,7 @@ import type {
 } from "../data/ProjectTaskRepository";
 import type { PluginSettings } from "../settings";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import { isCompactWidth } from "./responsive";
 import {
   CalendarEventFormModal,
   calendarEventToFormPayload,
@@ -374,6 +375,14 @@ export class CalendarView extends ItemView {
           this.selectedIsoDate = cell.isoDate;
           this.updateGridSelection();
           this.renderDayPanel(presentation, data);
+          // En el teléfono el panel de día queda bajo la rejilla, a menudo
+          // fuera de la pantalla: se acerca lo justo (`nearest`). En ancho
+          // no se mueve nada.
+          if (isCompactWidth(this.contentEl.clientWidth)) {
+            this.contentEl
+              .querySelector<HTMLElement>(".devhelper-day-panel")
+              ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
         });
       }
     }

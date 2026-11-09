@@ -105,3 +105,18 @@ describe("calendario: topbar adaptable", () => {
     );
   });
 });
+
+describe("calendario: panel de día compacto", () => {
+  test("panel de día compacto", () => {
+    const panel = in640(".devhelper-day-panel");
+    expect(panel).toContain("padding: 14px 14px");
+    expect(panel).toContain("border-radius: 16px");
+    expect(in640(".devhelper-day-panel-header h3")).toContain("font-size: 1.1em");
+  });
+
+  test("tarjeta de evento con badges que envuelven", () => {
+    expect(in640(".devhelper-event-card .devhelper-event-badges")).toContain(
+      "flex-wrap: wrap",
+    );
+  });
+});

@@ -2108,6 +2108,21 @@
      muestra sólo el estado vacío, no un bloque grande. */
   .devhelper-day-panel {
     min-height: 0;
+    padding: 14px 14px;
+    border-radius: 16px;
+  }
+
+  .devhelper-day-panel-header h3 {
+    font-size: 1.1em;
+  }
+
+  .devhelper-event-card.devhelper-task-card {
+    padding: 12px 14px;
+  }
+
+  /* Tipo + proyecto bajan de línea antes de empujar las acciones fuera. */
+  .devhelper-event-card .devhelper-event-badges {
+    flex-wrap: wrap;
   }
 }
 
