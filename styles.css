@@ -1466,8 +1466,34 @@
   display: none;
 }
 
+/* 16px es el mínimo con el que iOS no hace zoom al enfocar un input. */
+.is-mobile .devhelper-task-filters .devhelper-task-search {
+  font-size: 16px;
+  height: 40px;
+}
+
 .is-mobile .devhelper-search-wrap .devhelper-search {
+  font-size: 16px;
   padding-right: 12px;
+}
+
+/* --- Touch targets -----------------------------------------------------------
+   Con puntero grueso (dedo) los objetivos crecen a 40px como mínimo; el
+   glifo no cambia, sólo el área pulsable. Los días del rail sólo ganan alto:
+   7 × 40px no caben en la tarjeta a 360px, el ancho lo reparte el flex. */
+@media (pointer: coarse) {
+  .devhelper-task-actions .devhelper-icon-button,
+  .devhelper-chip-list .devhelper-chip-add,
+  .devhelper-calendar .devhelper-calendar-header .devhelper-icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .devhelper-calendar .devhelper-calendar-day {
+    min-height: 40px;
+  }
+  .devhelper-calendar .devhelper-calendar-header .devhelper-calendar-nav-today {
+    min-height: 40px;
+  }
 }
 
 @container devhelper-dashboard (max-width: 380px) {

@@ -5,6 +5,7 @@ import {
   onlyAtRule,
   readStyles,
   ruleBody,
+  ruleBodyContaining,
   splitSections,
   stripComments,
 } from "./helpers/cssBlocks";
@@ -130,5 +131,45 @@ describe("dashboard: escalón compacto (≤640px)", () => {
     expect(decls(ruleBody(dashboard, ".is-mobile .devhelper-search-hint"))).toContain(
       "display: none",
     );
+  });
+});
+
+describe("dashboard: táctil y móvil", () => {
+  test("objetivos táctiles ≥ 40px", () => {
+    const coarse = onlyAtRule(dashboard, /^@media \(pointer: coarse\)$/);
+    for (const selector of [
+      ".devhelper-task-actions .devhelper-icon-button",
+      ".devhelper-chip-list .devhelper-chip-add",
+      ".devhelper-calendar .devhelper-calendar-header .devhelper-icon-button",
+    ]) {
+      const d = decls(ruleBodyContaining(coarse, selector));
+      expect(d, selector).toContain("min-width: 40px");
+      expect(d, selector).toContain("min-height: 40px");
+    }
+  });
+
+  // 7 × 40px + huecos no caben en la tarjeta del rail a 360px: el día sólo
+  // gana alto y el ancho lo reparte el flex del escalón medio.
+  test("días del mini-calendario: alto táctil, ancho repartido", () => {
+    const coarse = onlyAtRule(dashboard, /^@media \(pointer: coarse\)$/);
+    const d = decls(
+      ruleBodyContaining(coarse, ".devhelper-calendar .devhelper-calendar-day"),
+    );
+    expect(d).toContain("min-height: 40px");
+    expect(d).not.toContain("min-width: 40px");
+  });
+
+  test("inputs a 16px en móvil", () => {
+    for (const selector of [
+      ".is-mobile .devhelper-task-filters .devhelper-task-search",
+      ".is-mobile .devhelper-search-wrap .devhelper-search",
+    ]) {
+      expect(decls(ruleBodyContaining(dashboard, selector)), selector).toContain(
+        "font-size: 16px",
+      );
+    }
+    expect(
+      decls(ruleBodyContaining(dashboard, ".is-mobile .devhelper-task-filters .devhelper-task-search")),
+    ).toContain("height: 40px");
   });
 });
