@@ -85,3 +85,50 @@ describe("dashboard: escalón medio (≤900px)", () => {
     );
   });
 });
+
+describe("dashboard: escalón compacto (≤640px)", () => {
+  const body = () => onlyAtRule(dashboard, C640);
+
+  test("chips en una fila desplazable en compacto", () => {
+    const list = decls(ruleBody(body(), ".devhelper-chip-list"));
+    expect(list).toContain("flex-wrap: nowrap");
+    expect(list).toContain("overflow-x: auto");
+    expect(list).toContain("scrollbar-width: none");
+    expect(decls(ruleBody(body(), ".devhelper-chip-list .devhelper-chip"))).toContain(
+      "flex: 0 0 auto",
+    );
+  });
+
+  test("la raíz compacta no desborda en horizontal", () => {
+    const root = decls(ruleBody(body(), ".devhelper-dashboard-root"));
+    expect(root).toContain(
+      "padding: 8px 12px calc(16px + env(safe-area-inset-bottom))",
+    );
+    expect(root).toContain("min-width: 0");
+    expect(decls(ruleBody(body(), ".devhelper-task-main"))).toContain("min-width: 0");
+  });
+
+  test("el buscador ocupa la fila", () => {
+    const search = decls(
+      ruleBody(body(), ".devhelper-topbar-controls .devhelper-search-wrap"),
+    );
+    expect(search).toContain("width: 100%");
+    expect(search).toContain("height: 44px");
+  });
+
+  test("paneles más compactos", () => {
+    const tasks = decls(ruleBody(body(), ".devhelper-tasks-panel"));
+    expect(tasks).toContain("padding: 12px 14px");
+    expect(tasks).toContain("border-radius: 16px");
+    expect(decls(ruleBody(body(), ".devhelper-section"))).toContain(
+      "padding: 12px 14px",
+    );
+  });
+
+  test("sin pista Ctrl+K en compacto ni en móvil", () => {
+    expect(decls(ruleBody(body(), ".devhelper-search-hint"))).toContain("display: none");
+    expect(decls(ruleBody(dashboard, ".is-mobile .devhelper-search-hint"))).toContain(
+      "display: none",
+    );
+  });
+});

@@ -1364,6 +1364,54 @@
     flex-direction: column;
     gap: 8px;
     height: auto;
+    min-width: 0;
+    /* Laterales más estrechos que en escritorio y un colchón inferior que
+       respeta la zona segura (barra de gestos de iOS/Android). */
+    padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+  }
+  /* Favoritos en una sola fila desplazable: con muchos chips, envolver
+     comería media pantalla antes de llegar a las tareas. */
+  .devhelper-chip-list {
+    flex: 1 1 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .devhelper-chip-list::-webkit-scrollbar {
+    display: none;
+  }
+  .devhelper-chip-list .devhelper-chip {
+    flex: 0 0 auto;
+    padding: 4px 16px;
+  }
+  .devhelper-task-main {
+    min-width: 0;
+  }
+  .devhelper-tasks-panel {
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+  .devhelper-section {
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+  /* Archivos va sin panel: conserva su padding mínimo propio. */
+  .devhelper-section.devhelper-section--files {
+    padding: 0 2px;
+  }
+  .devhelper-project-header h3,
+  .devhelper-section h3 {
+    font-size: 1.25em;
+  }
+  /* La pista de teclado no tiene sentido en estrecho; el input recupera
+     el hueco que le reservaba. */
+  .devhelper-search-hint {
+    display: none;
+  }
+  .devhelper-search-wrap .devhelper-search {
+    padding-right: 12px;
   }
   .devhelper-topbar {
     order: 1;
@@ -1408,8 +1456,18 @@
   }
   .devhelper-topbar-controls .devhelper-search-wrap {
     flex: 1 1 auto;
-    width: auto;
+    width: 100%;
+    height: 44px;
   }
+}
+
+/* Obsidian móvil (teléfono y tablet): sin teclado físico no hay Ctrl+K. */
+.is-mobile .devhelper-search-hint {
+  display: none;
+}
+
+.is-mobile .devhelper-search-wrap .devhelper-search {
+  padding-right: 12px;
 }
 
 @container devhelper-dashboard (max-width: 380px) {
