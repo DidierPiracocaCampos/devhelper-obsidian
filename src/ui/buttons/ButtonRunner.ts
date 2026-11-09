@@ -58,7 +58,30 @@ export function runKey(button: ToolbarButtonRecord, option: ToolbarButtonOption 
 export class ButtonRunner {
   private readonly running = new Set<string>();
 
-  constructor(private readonly deps: ButtonRunnerDeps) {}
+  private readonly boundRepo: ButtonRepoApi;
+
+  constructor(private readonly deps: ButtonRunnerDeps) {
+    const r = deps.repo;
+    this.boundRepo = {
+      load: r.load.bind(r),
+      createTask: r.createTask.bind(r),
+      createNote: r.createNote.bind(r),
+      setTaskStatus: r.setTaskStatus.bind(r),
+      renameTask: r.renameTask.bind(r),
+      reassignTask: r.reassignTask.bind(r),
+      createCalendarEvent: r.createCalendarEvent.bind(r),
+      updateCalendarEvent: r.updateCalendarEvent.bind(r),
+      setCalendarEventStatus: r.setCalendarEventStatus.bind(r),
+    };
+  }
+
+  private safely(fn: () => void): void {
+    try {
+      fn();
+    } catch {
+      // un fallo al avisar o registrar nunca debe hacer rechazar run
+    }
+  }
 
   isRunning(key: string): boolean {
     return this.running.has(key);
@@ -69,6 +92,11 @@ export class ButtonRunner {
     if (!d.isAllowed()) {
       d.notice(DISABLED_SCRIPTS_MESSAGE);
       return { kind: "blocked" };
+    }
+    if (!option && button.action.kind === "menu") {
+      const message = `El botón «${button.label}» es un menú: elige una opción`;
+      this.safely(() => d.notice(message));
+      return { kind: "error", message };
     }
     const key = runKey(button, option);
     if (this.running.has(key)) return { kind: "busy" };
@@ -84,7 +112,7 @@ export class ButtonRunner {
     try {
       const ctx: ButtonContext = {
         project: d.getProject(),
-        repo: d.repo,
+        repo: this.boundRepo,
         run: (cmd, options) => d.exec(cmd, options),
         notice: (msg, ms) => d.notice(msg, ms),
         refresh: () => d.refresh(),
@@ -96,8 +124,8 @@ export class ButtonRunner {
       return { kind: "ok" };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      d.notice(`Error en «${name}»: ${message}`);
-      d.logError(`Error en el botón «${name}»`, err, code);
+      this.safely(() => d.notice(`Error en «${name}»: ${message}`));
+      this.safely(() => d.logError(`Error en el botón «${name}»`, err, code));
       return { kind: "error", message };
     } finally {
       this.running.delete(key);

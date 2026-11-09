@@ -28,7 +28,12 @@ function makeDeps(over: Partial<ButtonRunnerDeps> = {}) {
     isAllowed: () => true,
     notice: (m: string) => void notices.push(m),
     getProject: () => ({ path: "P/P.md", title: "P" }),
-    repo: { load: async () => { calls.push("load"); return {}; } },
+    repo: {
+      load: async () => { calls.push("load"); return {}; },
+      createTask: async () => {}, createNote: async () => {}, setTaskStatus: async () => {},
+      renameTask: async () => {}, reassignTask: async () => {}, createCalendarEvent: async () => "",
+      updateCalendarEvent: async () => {}, setCalendarEventStatus: async () => {},
+    },
     exec: async (c: string) => { calls.push("exec:" + c); return { code: 0, stdout: "", stderr: "" }; },
     refresh: () => void calls.push("refresh"),
     openCalendar: (d?: string) => void calls.push("cal:" + d),
@@ -83,11 +88,11 @@ describe("ButtonRunner", () => {
   });
 
   it("busy mientras corre y libera tras error", async () => {
-    const { deps } = makeDeps();
     let release!: () => void;
-    (globalThis as any).__gate = new Promise<void>((res) => (release = res));
+    const gate = new Promise<void>((res) => (release = res));
+    const { deps } = makeDeps({ app: { gate } });
     const runner = new ButtonRunner(deps);
-    const b = direct("await globalThis.__gate; throw new Error('x')");
+    const b = direct("await app.gate; throw new Error('x')");
     const key = runKey(b, null);
     const first = runner.run(b, null);
     expect(runner.isRunning(key)).toBe(true);
@@ -95,7 +100,34 @@ describe("ButtonRunner", () => {
     release();
     expect((await first).kind).toBe("error");
     expect(runner.isRunning(key)).toBe(false);
-    delete (globalThis as any).__gate;
+  });
+
+  it("menú sin opción: error sin ejecutar", async () => {
+    const { deps, notices } = makeDeps();
+    const [b] = menu("ctx.notice('no')");
+    const r = await new ButtonRunner(deps).run(b, null);
+    expect(r).toEqual({ kind: "error", message: "El botón «Despliegue» es un menú: elige una opción" });
+    expect(notices).toEqual(["El botón «Despliegue» es un menú: elige una opción"]);
+  });
+
+  it("ctx.repo tiene métodos ligados", async () => {
+    class FakeRepo {
+      marker = "M";
+      async load() { return this.marker; }
+      async createTask() {} async createNote() {} async setTaskStatus() {} async renameTask() {}
+      async reassignTask() {} async createCalendarEvent() { return ""; }
+      async updateCalendarEvent() {} async setCalendarEventStatus() {}
+    }
+    const { deps, notices } = makeDeps({ repo: new FakeRepo() as never });
+    const code = "const { load } = ctx.repo; ctx.notice(await load());";
+    expect((await new ButtonRunner(deps).run(direct(code), null)).kind).toBe("ok");
+    expect(notices).toEqual(["M"]);
+  });
+
+  it("run nunca rechaza si notice/logError lanzan", async () => {
+    const boom = () => { throw new Error("x"); };
+    const { deps } = makeDeps({ notice: boom, logError: boom });
+    expect(await new ButtonRunner(deps).run(direct("throw new Error('y')"), null)).toEqual({ kind: "error", message: "y" });
   });
 
   it("runKey", () => {
