@@ -1539,16 +1539,7 @@ export class DashboardView extends ItemView {
         item.addEventListener("click", () => this.openUnlockMasterPassword());
       }
     }
-    const actions = section.createDiv({
-      cls: "devhelper-form-actions",
-    });
-    const forgotBtn = actions.createEl("button", {
-      cls: "devhelper-link-button",
-      text: "Olvidé mi contraseña",
-    });
-    forgotBtn.addEventListener("click", () =>
-      this.renderCredentialReset(section),
-    );
+    // «Olvidé mi contraseña» vive en el modal de desbloqueo.
   }
 
   private renderUnlockedCredentials(
@@ -1848,6 +1839,7 @@ export class DashboardView extends ItemView {
           }
         })();
       },
+      onForgot: () => void this.resetKeyMaterial(),
     });
     modal.open();
   }

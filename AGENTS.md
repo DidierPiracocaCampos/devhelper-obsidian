@@ -241,7 +241,8 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   desbloquear (fijarla la primera vez crea sal + verificador en `data.json`); bloqueada
   muestra sólo `service`; desbloqueada muestra tarjetas mínimas (servicio +
   usuario) con modal de detalle para ver/copiar cada campo, más CRUD completo
-  (editar/borrar desde la tarjeta), con aviso de migración en un clic si hay
+  (editar/borrar desde la tarjeta); «Olvidé mi contraseña» vive en el modal de desbloqueo
+  (`MasterPasswordModal` con `onForgot`: aviso + «Restablecer y empezar de cero»), con aviso de migración en un clic si hay
   entradas en claro. Las credenciales se renderizan como tarjetas oscuras al
   estilo de las tareas. El lápiz de
   la tarjeta abre la nota; la papelera pide confirmación y manda la tarea a la
@@ -335,9 +336,9 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   «hoy» se pinta con `radial-gradient(circle closest-side…)` para seguir redondo);
   `≤640px` una columna (tareas `60vh–75vh` con scroll interno; Archivos/Contraseña `flex: 0 0 auto`, `min-height: 200px`), chips de favoritos en una fila con scroll horizontal,
   buscador a fila completa sin pista `Ctrl+K`, padding inferior con
-  `env(safe-area-inset-bottom)`; `≤380px` tarjetas apiladas. Las pantallas altas
-  (`@media (min-height: 900px)` + `@container (min-width: 901px)`) reparten
-  `auto 2fr 1fr auto`. Calendario: `≤640px` celdas cuadradas (`aspect-ratio: 1` con
+  `env(safe-area-inset-bottom)`; `≤380px` tarjetas apiladas (salvo Archivos y credenciales bloqueadas, que siguen en fila; con badge el título toma su propia línea vía `:has(.devhelper-task-project-badge)`). Escritorio (`@container (min-width: 901px)`) cabe en la hoja sin scroll:
+  `auto minmax(0, 3fr) minmax(0, 2fr) auto` (tareas 60%, Archivos + Contraseña 40%, listas
+  `flex: 1` con scroll interno y sin tope de 260px). Calendario: `≤640px` celdas cuadradas (`aspect-ratio: 1` con
   `width: 100%` y `height: auto` — Obsidian fija `height` en los botones y anularía
   el ratio), número centrado y puntitos de 5px; `≤480px` «Nuevo» queda como «+»
   redondo (`.devhelper-calendar-add-label` oculta); `≤380px` topbar en dos filas.

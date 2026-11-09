@@ -195,6 +195,7 @@ export class CredentialFormModal extends Modal {
 export class MasterPasswordModal extends Modal {
   private readonly mode: "create" | "unlock";
   private readonly onSubmit: (password: string) => void;
+  private readonly onForgot: (() => void) | null;
 
   private passwordInput!: HTMLInputElement;
   private confirmInput!: HTMLInputElement | null;
@@ -205,11 +206,17 @@ export class MasterPasswordModal extends Modal {
     options: {
       mode: "create" | "unlock";
       onSubmit: (password: string) => void;
+      /**
+       * Sólo en `unlock`: muestra «Olvidé mi contraseña», que despliega el
+       * aviso de pérdida y, tras confirmar, cierra el modal y lo invoca.
+       */
+      onForgot?: () => void;
     },
   ) {
     super(app);
     this.mode = options.mode;
     this.onSubmit = options.onSubmit;
+    this.onForgot = options.onForgot ?? null;
     this.confirmInput = null;
   }
 
@@ -273,6 +280,39 @@ export class MasterPasswordModal extends Modal {
           .setCta()
           .onClick(() => this.submit()),
       );
+
+    if (this.mode === "unlock" && this.onForgot !== null) {
+      this.renderForgot(form, this.onForgot);
+    }
+  }
+
+  /**
+   * «Olvidé mi contraseña» en dos pasos: el enlace sólo despliega el aviso
+   * (borrar el material clave es irreversible) y el botón rojo confirma.
+   */
+  private renderForgot(form: HTMLElement, onForgot: () => void): void {
+    const forgot = form.createDiv({ cls: "devhelper-master-forgot" });
+    const link = forgot.createEl("button", {
+      cls: "devhelper-master-forgot-link",
+      text: "Olvidé mi contraseña",
+      attr: { type: "button" },
+    });
+    link.addEventListener("click", () => {
+      link.remove();
+      const warn = forgot.createDiv({ cls: "devhelper-master-forgot-warning" });
+      warn.createEl("p", {
+        text: "Sin la contraseña maestra no hay recuperación posible: las credenciales cifradas quedarán ilegibles. Solo sigue si asumes esa pérdida.",
+      });
+      const confirm = warn.createEl("button", {
+        cls: "mod-warning",
+        text: "Restablecer y empezar de cero",
+        attr: { type: "button" },
+      });
+      confirm.addEventListener("click", () => {
+        this.close();
+        onForgot();
+      });
+    });
   }
 
   onClose(): void {

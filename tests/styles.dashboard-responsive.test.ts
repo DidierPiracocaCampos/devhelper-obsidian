@@ -44,15 +44,17 @@ describe("dashboard: base de container queries", () => {
     );
   });
 
-  test("pantallas altas (>900px) conservan el reparto 2fr/1fr", () => {
-    const tall = onlyAtRule(dashboard, /^@media \(min-height: 900px\)$/);
-    const inner = onlyAtRule(
-      tall,
+  test("escritorio (>900px) cabe en la hoja: tareas 3fr, inferior 2fr", () => {
+    const desktop = onlyAtRule(
+      dashboard,
       /^@container devhelper-dashboard \(min-width: 901px\)$/,
     );
-    expect(decls(ruleBody(inner, ".devhelper-dashboard-root"))).toContain(
-      "grid-template-rows: auto 2fr 1fr auto",
+    expect(decls(ruleBody(desktop, ".devhelper-dashboard-root"))).toContain(
+      "grid-template-rows: auto minmax(0, 3fr) minmax(0, 2fr) auto",
     );
+    expect(
+      decls(ruleBodyContaining(desktop, ".devhelper-credential-list")),
+    ).toContain("max-height: none");
   });
 });
 

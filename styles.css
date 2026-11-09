@@ -1392,6 +1392,52 @@
   text-decoration: underline;
 }
 
+/* «Olvidé mi contraseña» dentro del modal de desbloqueo: los modales usan
+   el tema de Obsidian, así que aquí van variables del tema, no la paleta
+   fija del dashboard. Selector con padre para ganar a
+   `button:not(.clickable-icon)`. */
+.devhelper-master-forgot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.devhelper-master-forgot .devhelper-master-forgot-link {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  height: auto;
+  padding: 4px 2px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.devhelper-master-forgot .devhelper-master-forgot-link:hover {
+  color: var(--text-normal);
+}
+
+.devhelper-master-forgot-warning {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: 1px solid var(--text-error);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+
+.devhelper-master-forgot-warning p {
+  margin: 0;
+}
+
 /* --- Medium layout (≤ 900px) ---------------------------------------------- */
 /* Split vertical, tablet en vertical: tres columnas ahogan las tareas. Se
    quedan tareas + rail arriba y el mini-calendario baja a una fila propia
@@ -1568,8 +1614,7 @@
   .devhelper-section .devhelper-file-list,
   .devhelper-credential-list {
     max-height: min(420px, 55vh);
-  }
-  .devhelper-issues {
+  }  .devhelper-issues {
     order: 6;
   }
   .devhelper-topbar-controls {
@@ -1642,6 +1687,24 @@
     flex-direction: row;
     align-items: center;
   }
+  /* Las etiquetas (Nota, proyecto) dejaban el título en «Pl…»: el título
+     toma su propia línea y las etiquetas bajan a la siguiente. */
+  .devhelper-task-title-row:has(.devhelper-task-project-badge) {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  /* Sólo con etiquetas: en Archivos/Contraseña la fila es icono + nombre
+     y el icono quedaría solo en una línea. */
+  .devhelper-task-title-row:has(.devhelper-task-project-badge) .devhelper-task-title {
+    flex: 1 1 100%;
+  }
+  /* Archivos: dos botones pequeños caben junto al nombre; apilar la
+     tarjeta duplicaba su alto sin ganar espacio para el nombre. */
+  .devhelper-task-card.devhelper-file-card,
+  .devhelper-task-card.devhelper-credential-locked {
+    flex-direction: row;
+    align-items: center;
+  }
   .devhelper-task-actions button {
     /* Allow the 28x28 icon buttons to keep their size rather than
        stretching to panel width. */
@@ -1671,15 +1734,37 @@
   }
 }
 
-/* --- Tall screens -----------------------------------------------------------
-   En pantallas muy altas el espacio libre se reparte: tareas se queda con
-   dos partes y la fila inferior (Archivos + Contraseña) con una, para que
-   tareas no crezca sin límite y los inferiores también respiren. */
-@media (min-height: 900px) {
-  @container devhelper-dashboard (min-width: 901px) {
-    .devhelper-dashboard-root {
-      grid-template-rows: auto 2fr 1fr auto;
-    }
+/* --- Desktop (> 900px) -------------------------------------------------------
+   El dashboard cabe en el alto y el ancho de la hoja, sin scroll de página:
+   tras la topbar, tareas se queda con 3 partes (60%) y la fila inferior
+   (Archivos + Contraseña) con 2 (40%), sea cual sea el alto. Cada bloque
+   hace scroll por dentro; `minmax(0, …)` impide que el contenido estire
+   la fila. */
+@container devhelper-dashboard (min-width: 901px) {
+  .devhelper-dashboard-root {
+    grid-template-rows: auto minmax(0, 3fr) minmax(0, 2fr) auto;
+    align-content: stretch;
+  }
+  /* Muchos botones de usuario no deben estirar la fila de tareas. */
+  .devhelper-toolbar-rail {
+    align-self: stretch;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .devhelper-bottom-sections {
+    min-height: 0;
+  }
+  .devhelper-bottom-sections .devhelper-section {
+    min-height: 0;
+  }
+  /* Las listas rellenan el alto de su sección y hacen scroll; sin el tope
+     fijo de 260px, Archivos y Contraseña terminan a la misma altura. */
+  .devhelper-section .devhelper-file-list,
+  .devhelper-credential-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
   }
 }
 
