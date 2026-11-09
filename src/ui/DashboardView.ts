@@ -27,6 +27,7 @@ import {
   type DashboardPresentation,
   type DashboardSelection,
 } from "../domain/presentDashboard";
+import { attachLongPress } from "./longPress";
 import { expandOccurrences, type CalendarOccurrence } from "../domain/calendar";
 import { getWeekStrip } from "../domain/weekStrip";
 import type {
@@ -362,47 +363,23 @@ export class DashboardView extends ItemView {
         chip.addClass("is-selected");
       }
 
+      // Móvil: pulsación larga = clic derecho (iOS no emite `contextmenu`).
+      // Se engancha ANTES del click para que el click que sigue a la
+      // pulsación se trague y no seleccione el chip. Sin detach explícito:
+      // el chip muere en el próximo `empty()` del render y sus listeners con él.
+      attachLongPress(chip, (point) =>
+        this.openFavoriteMenu(project, (menu) => menu.showAtPosition(point)),
+      );
+
       chip.addEventListener("click", () =>
         this.setSelection({ kind: "project", path: project.path }),
       );
 
-      // Right-click context menu: Abrir nota / Abrir carpeta /
-      // Quitar de mis favoritos. We always `preventDefault()` so the
-      // native browser menu does not also appear. Each item gets a
-      // lucide icon so the options read at a glance (file, folder,
-      // bookmark-x for "remove favorite").
+      // Right-click context menu. We always `preventDefault()` so the
+      // native browser menu does not also appear.
       chip.addEventListener("contextmenu", (evt) => {
         evt.preventDefault();
-        const menu = new Menu();
-        menu.addItem((item) =>
-          item
-            .setTitle("Abrir nota")
-            .setIcon("file")
-            .onClick(() => this.openNote(project.path)),
-        );
-        menu.addItem((item) =>
-          item
-            .setTitle("Abrir carpeta")
-            .setIcon("folder")
-            .onClick(() => this.openProjectFolder(project.folderPath)),
-        );
-        menu.addItem((item) =>
-          item
-            .setTitle("Quitar de mis favoritos")
-            .setIcon("bookmark-x")
-            .onClick(async () => {
-              await this.repository.setProjectFavorite(project.path, false);
-              if (
-                this.selection.kind === "project" &&
-                this.selection.path === project.path
-              ) {
-                this.setSelection({ kind: "all" });
-              } else {
-                await this.refresh();
-              }
-            }),
-        );
-        menu.showAtMouseEvent(evt);
+        this.openFavoriteMenu(project, (menu) => menu.showAtMouseEvent(evt));
       });
     }
 
@@ -416,6 +393,47 @@ export class DashboardView extends ItemView {
     });
     setIcon(addChip, "plus");
     addChip.addEventListener("click", () => void this.openAddFavorite());
+  }
+
+  /**
+   * Menú contextual de un chip de favorito: Abrir nota / Abrir carpeta /
+   * Quitar de mis favoritos. `show` decide dónde se abre (junto al ratón
+   * en clic derecho, en el punto del dedo en pulsación larga).
+   */
+  private openFavoriteMenu(
+    project: ProjectRecord,
+    show: (menu: Menu) => void,
+  ): void {
+    const menu = new Menu();
+    menu.addItem((item) =>
+      item
+        .setTitle("Abrir nota")
+        .setIcon("file")
+        .onClick(() => this.openNote(project.path)),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle("Abrir carpeta")
+        .setIcon("folder")
+        .onClick(() => this.openProjectFolder(project.folderPath)),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle("Quitar de mis favoritos")
+        .setIcon("bookmark-x")
+        .onClick(async () => {
+          await this.repository.setProjectFavorite(project.path, false);
+          if (
+            this.selection.kind === "project" &&
+            this.selection.path === project.path
+          ) {
+            this.setSelection({ kind: "all" });
+          } else {
+            await this.refresh();
+          }
+        }),
+    );
+    show(menu);
   }
 
   private renderEmptyState(): void {
