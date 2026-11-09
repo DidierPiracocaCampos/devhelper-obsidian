@@ -525,7 +525,7 @@ export class DashboardView extends ItemView {
     });
 
     // Header row: fixed «Tareas y notas» title on the left and the current
-    // buttons (filter + new task + new note) inline on the right edge.
+    // buttons (filter + «+» menu: new task / new note) on the right edge.
     const panelHeader = main.createDiv({
       cls: "devhelper-tasks-panel-header",
     });
@@ -549,23 +549,37 @@ export class DashboardView extends ItemView {
       void this.refresh();
     });
 
-    const createTaskButton = fabs.createEl("button", {
+    // Un único «+» con menú: dos FABs casi idénticos («+» y hoja con «+»)
+    // sólo se distinguían por el tooltip.
+    const createButton = fabs.createEl("button", {
       cls: "devhelper-fab",
-      attr: { "aria-label": "Nueva tarea", title: "Nueva tarea", type: "button" },
+      attr: {
+        "aria-label": "Añadir tarea o nota",
+        "aria-haspopup": "menu",
+        title: "Añadir",
+        type: "button",
+      },
     });
-    setIcon(createTaskButton, "plus");
-    createTaskButton.addEventListener("click", () =>
-      void this.openCreateTask(),
-    );
-
-    const createNoteButton = fabs.createEl("button", {
-      cls: "devhelper-fab",
-      attr: { "aria-label": "Nueva nota", title: "Nueva nota", type: "button" },
+    setIcon(createButton, "plus");
+    createButton.addEventListener("click", () => {
+      const menu = new Menu();
+      menu.addItem((item) =>
+        item
+          .setTitle("Nueva tarea")
+          .setIcon("square-check")
+          .onClick(() => void this.openCreateTask()),
+      );
+      menu.addItem((item) =>
+        item
+          .setTitle("Nueva nota")
+          .setIcon("file-text")
+          .onClick(() => void this.openCreateNote()),
+      );
+      // Anclado bajo el botón (no al ratón) para que también funcione
+      // con teclado y en táctil.
+      const rect = createButton.getBoundingClientRect();
+      menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
     });
-    setIcon(createNoteButton, "file-plus");
-    createNoteButton.addEventListener("click", () =>
-      void this.openCreateNote(),
-    );
 
     // Optional second row: status filter + kind filter + search. Shown
     // only when the funnel is toggled. State lives on the view (in-memory).
