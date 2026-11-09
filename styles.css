@@ -759,6 +759,45 @@
   color: #fafafa;
 }
 
+/* Botones de usuario (notas de `buttonsFolder`). Selectores con padre
+   repetido para ganar a `button:not(.clickable-icon)` de Obsidian. */
+.devhelper-toolbar-rail .devhelper-icon-button.has-options {
+  position: relative;
+}
+
+.devhelper-toolbar-rail .devhelper-icon-button.has-options::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fafafa;
+  pointer-events: none;
+}
+
+.devhelper-toolbar-rail .devhelper-icon-button.is-disabled-script {
+  opacity: 0.45;
+}
+
+.devhelper-toolbar-rail .devhelper-icon-button.is-running {
+  cursor: progress;
+}
+
+.devhelper-toolbar-rail .devhelper-icon-button.is-running svg {
+  animation: devhelper-spin 1s linear infinite;
+}
+
+@keyframes devhelper-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .devhelper-side-column {
   display: flex;
   flex-direction: column;

@@ -1,9 +1,11 @@
-import { Plugin } from "obsidian";
+import { FileSystemAdapter, Platform, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, mergePluginSettings, type PluginSettings } from "./settings";
 import { SettingsTab } from "./ui/SettingsTab";
 import { CredentialSession } from "./data/CredentialSession";
 import { ProjectTaskRepository } from "./data/ProjectTaskRepository";
 import { ObsidianVaultAdapter } from "./data/ObsidianVaultAdapter";
+import { ToolbarButtonRepository } from "./data/ToolbarButtonRepository";
+import { createShellExec } from "./ui/buttons/shellExec";
 import {
   DashboardView,
   VIEW_TYPE_DEVHELPER_DASHBOARD,
@@ -30,6 +32,8 @@ import {
 export default class DevHelperDashboardPlugin extends Plugin {
   settings: PluginSettings = { ...DEFAULT_SETTINGS };
   repository!: ProjectTaskRepository;
+  /** Notas de botón de la barra; la pestaña de ajustes también lo usa. */
+  buttonRepository!: ToolbarButtonRepository;
   /** In-memory master-key session. Never persisted; see `CredentialSession`. */
   credentialSession!: CredentialSession;
 
@@ -48,6 +52,19 @@ export default class DevHelperDashboardPlugin extends Plugin {
 
     const adapter = new ObsidianVaultAdapter(this.app);
     this.repository = new ProjectTaskRepository(adapter, this.settings);
+    // Getter perezoso: SettingsTab reemplaza `this.settings` al guardar.
+    this.buttonRepository = new ToolbarButtonRepository(
+      adapter,
+      () => this.settings,
+    );
+    const vaultAdapter = this.app.vault.adapter;
+    const buttonExec = createShellExec({
+      isDesktop: Platform.isDesktopApp,
+      defaultCwd:
+        vaultAdapter instanceof FileSystemAdapter
+          ? vaultAdapter.getBasePath()
+          : null,
+    });
 
     this.credentialSession = new CredentialSession(
       this.settings.credentialLockTimeoutMinutes,
@@ -85,6 +102,12 @@ export default class DevHelperDashboardPlugin extends Plugin {
           },
           (isoDate?: string) => {
             void this.activateCalendarView(isoDate);
+          },
+          {
+            repository: this.buttonRepository,
+            isAllowed: () => this.settings.allowButtonScripts,
+            exec: buttonExec,
+            refresh: () => this.scheduleDashboardRefresh(),
           },
         ),
     );

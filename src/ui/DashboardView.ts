@@ -1,4 +1,10 @@
 import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
+import * as obsidian from "obsidian";
+import type { ToolbarButtonRepository } from "../data/ToolbarButtonRepository";
+import type { ToolbarButtonRecord } from "../domain/toolbarButtons";
+import { ButtonRunner } from "./buttons/ButtonRunner";
+import type { ShellExec } from "./buttons/shellExec";
+import { renderToolbarButtons } from "./buttons/toolbarButtonsRail";
 import type { PluginSettings } from "../settings";
 import type {
   CalendarEventRecord,
@@ -48,6 +54,17 @@ import {
 } from "./CredentialFormModal";
 
 export const VIEW_TYPE_DEVHELPER_DASHBOARD = "devhelper-dashboard";
+
+/**
+ * Botones de usuario de la barra, inyectados por el plugin. `isAllowed` se
+ * consulta en cada uso (los ajustes se reemplazan al guardar).
+ */
+export interface ToolbarButtonDeps {
+  repository: ToolbarButtonRepository;
+  isAllowed(): boolean;
+  exec: ShellExec;
+  refresh(): void;
+}
 
 /**
  * Credentials wiring injected by the plugin: the in-memory session plus
@@ -102,18 +119,48 @@ export class DashboardView extends ItemView {
    */
   private midnightTimer: number | null = null;
 
+  /** Botones `enabled` del último `refresh()` (ya ordenados por el repositorio). */
+  private buttons: ToolbarButtonRecord[] = [];
+  private buttonIssues: DashboardIssue[] = [];
+  private lastProjects: ProjectRecord[] = [];
+  private readonly buttonRunner: ButtonRunner;
+
   constructor(
     leaf: WorkspaceLeaf,
     repository: ProjectTaskRepository,
     settings: PluginSettings,
     credentialsDeps: CredentialDeps,
     private readonly openCalendar: (isoDate?: string) => void,
+    private readonly buttonDeps: ToolbarButtonDeps,
   ) {
     super(leaf);
     // The plugin's `app` field is already set by `super(leaf)`.
     this.repository = repository;
     this.settings = settings;
     this.credentialsDeps = credentialsDeps;
+    this.buttonRunner = new ButtonRunner({
+      app: this.app,
+      obsidian,
+      isAllowed: () => buttonDeps.isAllowed(),
+      notice: (msg, ms) => {
+        new Notice(msg, ms);
+      },
+      getProject: () => this.currentProject(),
+      repo: repository,
+      exec: buttonDeps.exec,
+      refresh: () => buttonDeps.refresh(),
+      openCalendar: (isoDate) => this.openCalendar(isoDate),
+      logError: (message, err, code) =>
+        console.error(`DevHelper: ${message}`, err, code),
+    });
+  }
+
+  /** Proyecto de la selección actual para `ctx.project` (`null` en «Todos»). */
+  private currentProject(): { path: string; title: string } | null {
+    if (this.selection.kind !== "project") return null;
+    const path = this.selection.path;
+    const project = this.lastProjects.find((p) => p.path === path);
+    return project ? { path: project.path, title: project.title } : null;
   }
 
   getViewType(): string {
@@ -172,9 +219,31 @@ export class DashboardView extends ItemView {
    * in-view modal callbacks).
    */
   async refresh(): Promise<void> {
-    const data = await this.repository.load();
+    const [data, buttonData] = await Promise.all([
+      this.repository.load(),
+      this.loadButtons(),
+    ]);
+    this.buttons = buttonData.buttons.filter((b) => b.enabled);
+    this.buttonIssues = buttonData.issues;
+    this.lastProjects = data.projects;
     const decrypted = await this.decryptVisibleCredentials(data);
     this.render(data, decrypted);
+  }
+
+  /**
+   * Un fallo al leer la carpeta de botones nunca debe tumbar el dashboard:
+   * se degrada a «sin botones» y se registra en consola.
+   */
+  private async loadButtons(): Promise<{
+    buttons: ToolbarButtonRecord[];
+    issues: DashboardIssue[];
+  }> {
+    try {
+      return await this.buttonDeps.repository.load();
+    } catch (err) {
+      console.error("DevHelper: no se pudieron cargar los botones", err);
+      return { buttons: [], issues: [] };
+    }
   }
 
   /**
@@ -250,7 +319,7 @@ export class DashboardView extends ItemView {
     this.renderToolbarRail();
     this.renderSideColumn(data);
     this.renderBottomSections(data, presentation, decrypted);
-    this.renderIssues(presentation.issues);
+    this.renderIssues([...presentation.issues, ...this.buttonIssues]);
   }
 
   /**
@@ -866,9 +935,8 @@ export class DashboardView extends ItemView {
 
   /**
    * Columna estrecha de herramientas entre el panel de tareas y el
-   * calendario. Contenedor listo para los botones que el usuario pueda
-   * configurar en el futuro; por ahora sólo trae el de Ajustes, que
-   * abre la pestaña de ajustes del plugin.
+   * calendario: primero ⚙ Ajustes (abre la pestaña del plugin) y después
+   * los botones de usuario `enabled` (notas de `buttonsFolder`).
    */
   private renderToolbarRail(): void {
     const rail = this.contentEl.createDiv({
@@ -886,8 +954,15 @@ export class DashboardView extends ItemView {
     setIcon(settingsButton, "settings");
     settingsButton.addEventListener("click", () => this.openPluginSettings());
 
-    // Punto de extensión: aquí irán los botones configurables por el
-    // usuario (futuro). No renderizar nada más por ahora.
+    renderToolbarButtons(rail, this.buttons, {
+      runner: this.buttonRunner,
+      isAllowed: () => this.buttonDeps.isAllowed(),
+      openNote: (path) => this.openNote(path),
+      disable: async (path) => {
+        await this.buttonDeps.repository.setButtonEnabled(path, false);
+        await this.refresh();
+      },
+    });
   }
 
   /**
