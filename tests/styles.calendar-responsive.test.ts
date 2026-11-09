@@ -70,3 +70,38 @@ describe("calendario: contenedor + rejilla compacta", () => {
   });
 });
 
+
+describe("calendario: topbar adaptable", () => {
+  const in480 = (s: string) => decls(ruleBody(onlyAtRule(calendar, C480), s));
+  const in380 = (s: string) => decls(ruleBody(onlyAtRule(calendar, C380), s));
+
+  test("«Nuevo» como icono en ≤480", () => {
+    expect(in480(".devhelper-calendar-add .devhelper-calendar-add-label")).toContain(
+      "display: none",
+    );
+    const add = in480(".devhelper-calendar-topbar .devhelper-calendar-add");
+    expect(add).toContain("width: 36px");
+    expect(add).toContain("padding: 0");
+    expect(add).toContain("border-radius: 50%");
+  });
+
+  test("la etiqueta del mes no se recorta", () => {
+    const label = in480(".devhelper-calendar-month-label");
+    expect(label).toContain("white-space: nowrap");
+    expect(label).toContain("font-size: 1.05em");
+    expect(label).toContain("flex: 0 0 auto");
+  });
+
+  test("flechas compactas", () => {
+    expect(in480(".devhelper-calendar-topbar .devhelper-calendar-nav")).toContain(
+      "gap: 2px",
+    );
+  });
+
+  test("topbar en dos filas en ≤380", () => {
+    expect(in380(".devhelper-calendar-topbar")).toContain("flex-direction: column");
+    expect(in380(".devhelper-calendar-topbar .devhelper-calendar-actions")).toContain(
+      "justify-content: flex-end",
+    );
+  });
+});

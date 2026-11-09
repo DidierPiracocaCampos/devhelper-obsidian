@@ -297,7 +297,7 @@ export class CalendarView extends ItemView {
       },
     });
     setIcon(addBtn, "plus");
-    addBtn.createSpan({ text: "Nuevo" });
+    addBtn.createSpan({ cls: "devhelper-calendar-add-label", text: "Nuevo" });
     addBtn.addEventListener("click", () => this.openCreateEvent());
   }
 

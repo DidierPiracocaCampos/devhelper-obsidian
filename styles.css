@@ -2111,6 +2111,32 @@
   }
 }
 
+/* Topbar en una sola línea: «Nuevo» queda como «+» redondo (el botón
+   conserva `aria-label="Nuevo evento"`) para que «Septiembre 2026» quepa
+   entero junto a las flechas. */
+@container devhelper-calendar (max-width: 480px) {
+  .devhelper-calendar-topbar .devhelper-calendar-nav {
+    gap: 2px;
+  }
+
+  .devhelper-calendar-month-label {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 1.05em;
+  }
+
+  .devhelper-calendar-add .devhelper-calendar-add-label {
+    display: none;
+  }
+
+  .devhelper-calendar-topbar .devhelper-calendar-add {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+}
+
 @container devhelper-calendar (max-width: 380px) {
   .devhelper-calendar-topbar {
     flex-direction: column;
@@ -2127,7 +2153,7 @@
 
   .devhelper-calendar-topbar .devhelper-calendar-actions {
     margin-left: 0;
-    justify-content: space-between;
+    justify-content: flex-end;
   }
 
   .devhelper-event-card.devhelper-task-card {
