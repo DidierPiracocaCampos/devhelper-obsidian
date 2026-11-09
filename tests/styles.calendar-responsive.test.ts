@@ -36,6 +36,10 @@ describe("calendario: contenedor + rejilla compacta", () => {
     expect(cell).toContain("min-height: 0");
     expect(cell).toContain("align-items: center");
     expect(cell).toContain("padding: 4px 0");
+    // Un <button> con aspect-ratio no se estira solo a su columna del grid.
+    expect(cell).toContain("width: 100%");
+    // Obsidian fija `height: var(--input-height)` en los botones: anula el aspect-ratio.
+    expect(cell).toContain("height: auto");
     const day = in640(".devhelper-calendar-month-card .devhelper-calendar-cell-day");
     expect(day).toContain("align-self: center");
     expect(day).toContain("margin: 0");

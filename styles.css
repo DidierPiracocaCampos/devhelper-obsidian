@@ -1353,6 +1353,13 @@
     flex: 1 1 0;
     width: auto;
   }
+  /* El día estirado haría ovalado el `border-radius: 50%` de «hoy»: el
+     círculo se pinta como fondo radial ajustado al lado corto. */
+  .devhelper-calendar .devhelper-calendar-day.is-today {
+    background: radial-gradient(circle closest-side, #18181b 96%, transparent 100%);
+    background-color: transparent;
+    border-radius: 0;
+  }
 }
 
 /* --- Narrow layout -------------------------------------------------------- */
@@ -2112,6 +2119,8 @@
 
   .devhelper-calendar-month-card .devhelper-calendar-cell {
     aspect-ratio: 1;
+    height: auto;
+    width: 100%;
     min-height: 0;
     min-width: 0;
     align-items: center;

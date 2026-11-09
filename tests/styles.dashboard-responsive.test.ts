@@ -173,3 +173,18 @@ describe("dashboard: táctil y móvil", () => {
     ).toContain("height: 40px");
   });
 });
+
+describe("dashboard: «hoy» del mini-calendario sigue redondo", () => {
+  // En ≤900px el día se estira (flex: 1 1 0): con border-radius: 50% el
+  // relleno de «hoy» salía ovalado. El círculo se pinta como fondo radial
+  // ajustado al lado corto, así es redondo con cualquier ancho.
+  test("hoy usa un fondo radial en el escalón medio", () => {
+    const today = decls(
+      ruleBody(onlyAtRule(dashboard, C900), ".devhelper-calendar .devhelper-calendar-day.is-today"),
+    );
+    expect(today).toContain(
+      "background: radial-gradient(circle closest-side, #18181b 96%, transparent 100%)",
+    );
+    expect(today).toContain("background-color: transparent");
+  });
+});
