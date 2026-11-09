@@ -58,16 +58,15 @@ export default class DevHelperDashboardPlugin extends Plugin {
       () => this.settings,
     );
     const vaultAdapter = this.app.vault.adapter;
+    const execImpl = loadChildProcessExec();
+    const canExec = execImpl !== undefined;
     const buttonExec = createShellExec({
-      isDesktop: Platform.isDesktopApp,
+      isDesktop: canExec,
       defaultCwd:
-        Platform.isDesktopApp && vaultAdapter instanceof FileSystemAdapter
+        canExec && vaultAdapter instanceof FileSystemAdapter
           ? vaultAdapter.getBasePath()
           : null,
-      execImpl: Platform.isDesktopApp
-        ? // eslint-disable-next-line @typescript-eslint/no-require-imports -- child_process sólo existe en escritorio: se carga detrás de Platform.isDesktopApp y nunca en móvil.
-          (require("child_process") as { exec: ExecFn }).exec
-        : undefined,
+      execImpl,
     });
 
     this.credentialSession = new CredentialSession(
@@ -311,3 +310,19 @@ export default class DevHelperDashboardPlugin extends Plugin {
 
 /** Time window (in ms) used to coalesce bursty vault events. */
 const DEBOUNCE_MS = 250;
+
+/**
+ * `child_process.exec` sólo en escritorio. En móvil, y también con la
+ * emulación móvil de Obsidian en escritorio (donde `isDesktopApp` sigue a
+ * `true` pero `require` de paquetes Node lanza), devuelve `undefined`: los
+ * botones pierden `ctx.run` pero el plugin carga igual.
+ */
+function loadChildProcessExec(): ExecFn | undefined {
+  if (!Platform.isDesktopApp || Platform.isMobile) return undefined;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- child_process sólo existe en escritorio: se carga detrás de Platform.isDesktopApp y nunca en móvil.
+    return (require("child_process") as { exec: ExecFn }).exec;
+  } catch {
+    return undefined;
+  }
+}
