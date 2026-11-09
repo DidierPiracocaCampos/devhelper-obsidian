@@ -245,7 +245,16 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   **Alarma de medianoche** (`scheduleMidnightRefresh` / `msUntilNextMidnight`, limpiada
   en `onClose`): como `today` sólo se calcula en el render, sin ella la marca `is-today`
   y la selección quedan congeladas en ayer si la pestaña sigue abierta al cruzar
-  medianoche. Es una única alarma diaria, no un polling.
+  medianoche. Es una única alarma diaria, no un polling. En ancho compacto
+  (`isCompactWidth(contentEl.clientWidth)`) el click en un día desplaza el panel de
+  día a la vista con `scrollIntoView({ block: "nearest" })`; en ancho no se mueve.
+- `src/ui/responsive.ts` — `COMPACT_MAX_WIDTH = 640` (el mismo umbral que las
+  container queries) e `isCompactWidth(width)` (`0` = hoja oculta → `false`).
+- `src/ui/longPress.ts` — `attachLongPress(target, onLongPress, options?)`: pulsación
+  larga táctil (500ms, tolerancia 10px, un dedo) como sustituto del clic derecho,
+  porque iOS no emite `contextmenu`. Tras disparar traga durante 800ms el `click` (no
+  selecciona) y el `contextmenu` (Android lo lanza además; el menú saldría dos veces).
+  `DashboardView` lo engancha a cada chip de favorito → `openFavoriteMenu`.
 - `src/ui/CalendarEventFormModal.ts` — `obsidian.Modal` de creación/edición de eventos:
   título, `kind` (select de 4), fecha de inicio, «varios días» + fecha fin, «todo el
   día» + hora, recurrencia + fin de recurrencia y proyecto opcional en un desplegable
@@ -287,11 +296,29 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   reutilizan el estilo de tarjeta oscura de las tareas. Calendario: rejilla
   `.devhelper-calendar-grid`/`.devhelper-calendar-cell` (6×7, Lun–Dom), puntitos
   `.devhelper-dot--evento|--reunion|--fecha_limite|--aviso` por tipo y panel de día que
-  reutiliza `.devhelper-task-card`. Breakpoints: `@media (max-width: 640px)` → una
-  columna, oculta el rail y el panel del calendario pasa debajo de la rejilla;
-  `@media (max-width: 320px)` → controles y acciones apilados sin recorte.
+  reutiliza `.devhelper-task-card`.
+  **Responsive por container queries, nunca por viewport:** la hoja de cada vista
+  es el contenedor (`.workspace-leaf-content[data-type="devhelper-dashboard"]` →
+  `container: devhelper-dashboard / inline-size`, ídem `devhelper-calendar`), así
+  que un split o la sidebar se comportan como un teléfono. Va en la hoja y no en la
+  raíz porque un contenedor no puede consultarse a sí mismo. Dashboard: `≤900px`
+  tareas + rail arriba y mini-calendario a todo el ancho debajo (días `flex: 1 1 0`;
+  «hoy» se pinta con `radial-gradient(circle closest-side…)` para seguir redondo);
+  `≤640px` una columna, chips de favoritos en una fila con scroll horizontal,
+  buscador a fila completa sin pista `Ctrl+K`, padding inferior con
+  `env(safe-area-inset-bottom)`; `≤380px` tarjetas apiladas. Las pantallas altas
+  (`@media (min-height: 900px)` + `@container (min-width: 901px)`) reparten
+  `auto 2fr 1fr auto`. Calendario: `≤640px` celdas cuadradas (`aspect-ratio: 1` con
+  `width: 100%` y `height: auto` — Obsidian fija `height` en los botones y anularía
+  el ratio), número centrado y puntitos de 5px; `≤480px` «Nuevo» queda como «+»
+  redondo (`.devhelper-calendar-add-label` oculta); `≤380px` topbar en dos filas.
+  Táctil: `@media (pointer: coarse)` sube los objetivos a 40px mínimo (los días del
+  rail sólo en alto: 7×40px no caben a 360px). Lo que sólo existe en Obsidian móvil
+  cuelga de las clases de body: `.is-mobile` (inputs a 16px para que iOS no haga
+  zoom, sin pista `Ctrl+K`) e `.is-phone` (filas en línea del modal apiladas; los
+  modales no viven en la hoja y no les llega el contenedor).
 
-## Tests (`tests/`) — 232 en total, todos en verde
+## Tests (`tests/`) — 276 en total, todos en verde
 
 - `tests/settings.test.ts` — 16 tests (normalización de carpetas —incluidas las de
   calendario— + preservación del material clave `credSaltB64`/`credVerifier` en
@@ -312,6 +339,17 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   allDay→time→title→path, `counts`, eventos globales).
 - `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
+- `tests/styles.dashboard-responsive.test.ts` — 17 tests y
+  `tests/styles.calendar-responsive.test.ts` — 16 tests: contrato del CSS responsive
+  (contenedor declarado en la hoja, cero `@media` de ancho en cada sección, reglas
+  exactas por escalón, `pointer: coarse`, `.is-mobile`/`.is-phone`). Leen `styles.css`
+  con `tests/helpers/cssBlocks.ts` (`readStyles`, `splitSections` por el banner
+  «Calendar view (vista mensual)», `atRuleBodies`, `onlyAtRule`, `ruleBody`,
+  `ruleBodyContaining`, `decls`), sin dependencias nuevas.
+- `tests/longPress.test.ts` — 8 tests con fake timers y `EventTarget` de Node:
+  umbral 500ms, tolerancia 10px, cancelación, dos dedos, tragado de click/contextmenu
+  en 800ms y detach.
+- `tests/responsive.test.ts` — 3 tests del límite 640/641 de `isCompactWidth`.
 - `tests/templates.test.ts` — 16 tests; cubre validación y aplicación de plantillas,
   incluida `calendar-event` (`evento.md`, propiedades fijas y estampado de `created`).
 - `tests/credentialsCrypto.test.ts` — 8 tests (formato `enc:v1`, round-trip AES-GCM,
@@ -415,7 +453,7 @@ un fallo de parseo inutiliza la skill.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 232/232 verde
+npm test            # 276/276 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
