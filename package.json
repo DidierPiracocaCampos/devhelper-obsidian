@@ -1,6 +1,6 @@
 {
   "name": "devhelper-dashboard",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Project and task dashboard backed by Markdown notes, with files, encrypted credentials and a monthly calendar.",
   "main": "main.js",
   "engines": {
