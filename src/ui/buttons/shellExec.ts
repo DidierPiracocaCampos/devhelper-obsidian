@@ -1,3 +1,5 @@
+export const DEFAULT_TIMEOUT_MS = 60000;
+
 export interface ShellResult {
   code: number;
   stdout: string;
@@ -18,7 +20,7 @@ interface ExecError {
   message?: string;
 }
 
-type ExecFn = (
+export type ExecFn = (
   cmd: string,
   options: { cwd?: string; timeout?: number; windowsHide: boolean; maxBuffer: number },
   callback: (error: ExecError | null, stdout: string, stderr: string) => void
@@ -27,17 +29,24 @@ type ExecFn = (
 export function createShellExec(opts: {
   isDesktop: boolean;
   defaultCwd: string | null;
+  /** Sólo para pruebas: sustituye a child_process.exec. */
+  execImpl?: ExecFn;
 }): ShellExec {
   return (cmd, options = {}) => {
     if (!opts.isDesktop) {
       return Promise.reject(new Error("ctx.run sólo está disponible en escritorio"));
     }
     return new Promise<ShellResult>((resolve, reject) => {
+      const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       let exec: ExecFn;
       try {
+        if (opts.execImpl) {
+          exec = opts.execImpl;
+        } else {
         // Carga perezosa: esbuild deja `child_process` externo y en móvil nunca se evalúa.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        exec = (require("child_process") as { exec: ExecFn }).exec;
+          exec = (require("child_process") as { exec: ExecFn }).exec;
+        }
       } catch (e) {
         reject(new Error(`No se pudo ejecutar el comando: ${(e as Error).message}`));
         return;
@@ -47,7 +56,7 @@ export function createShellExec(opts: {
         cmd,
         {
           cwd,
-          timeout: options.timeoutMs,
+          timeout: timeoutMs,
           windowsHide: true,
           maxBuffer: 10 * 1024 * 1024
         },
@@ -56,8 +65,16 @@ export function createShellExec(opts: {
             resolve({ code: 0, stdout: String(stdout), stderr: String(stderr) });
             return;
           }
-          if (error.killed || error.signal) {
-            reject(new Error(`El comando superó el tiempo límite de ${options.timeoutMs} ms`));
+          if (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+            reject(new Error("La salida del comando superó el límite de memoria"));
+            return;
+          }
+          if (error.killed && error.signal === "SIGTERM") {
+            reject(new Error(`El comando superó el tiempo límite de ${timeoutMs} ms`));
+            return;
+          }
+          if (error.signal) {
+            reject(new Error(`El comando terminó por la señal ${error.signal}`));
             return;
           }
           if (typeof error.code === "number") {
