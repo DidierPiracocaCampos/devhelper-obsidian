@@ -1399,7 +1399,38 @@
 @container devhelper-dashboard (max-width: 900px) {
   .devhelper-dashboard-root {
     grid-template-columns: 1fr auto;
-    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    /* `1fr` (no `minmax(0, 1fr)`): el panel de tareas es contenedor de
+       scroll, así que su mínimo automático ya es 0, y la fila respeta el
+       `min-height` de tablet en vez de dejar que el panel pise al
+       calendario. */
+    grid-template-rows: auto auto 1fr auto auto auto;
+  }
+  /* Buscador a todo el ancho y, debajo, la tira de herramientas en fila
+     también a todo el ancho; las tareas pasan a ocupar ambas columnas.
+     Filas: topbar · herramientas · tareas · calendario · inferior · avisos. */
+  .devhelper-topbar-controls {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .devhelper-topbar-controls .devhelper-search-wrap {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .devhelper-toolbar-rail {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-self: stretch;
+    padding: 0;
+  }
+  .devhelper-tasks-panel,
+  .devhelper-main {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    /* Más alto que el hueco sobrante: si no cabe, la página hace scroll. */
+    min-height: 60vh;
   }
   .devhelper-side-column {
     grid-column: 1 / -1;
@@ -1493,18 +1524,31 @@
     align-self: flex-start;
     order: 2;
   }
+  /* Ningún bloque se encoge: si Obsidian mantiene `height: 100%` en la
+     raíz, el flex en columna los aplastaba por debajo de su contenido y
+     las tareas o las tarjetas de Archivos/Contraseña se salían de su
+     panel pisando lo de abajo. La raíz hace scroll en su lugar. */
+  .devhelper-dashboard-root > * {
+    flex-shrink: 0;
+  }
+  /* Tareas con alto acotado y scroll interno: con muchas tareas el panel
+     deja de crecer sin fin y el resto del dashboard sigue alcanzable. */
   .devhelper-tasks-panel {
-    overflow: visible;
+    overflow: hidden;
     align-self: stretch;
-    min-height: 40vh;
+    min-height: 60vh;
+    max-height: 75vh;
     order: 3;
   }
   .devhelper-main {
     order: 3;
   }
   .devhelper-tasks-panel .devhelper-task-list {
-    overflow-y: visible;
-    flex: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .devhelper-side-column {
     order: 4;
@@ -1513,6 +1557,17 @@
   .devhelper-bottom-sections {
     flex-direction: column;
     order: 5;
+  }
+  /* En columna, la base 0 de escritorio dejaba cada sección en su
+     `min-height`: Archivos y Contraseña miden ahora su contenido, con más
+     alto mínimo y un listado más alto antes de hacer scroll. */
+  .devhelper-bottom-sections .devhelper-section {
+    flex: 0 0 auto;
+    min-height: 200px;
+  }
+  .devhelper-section .devhelper-file-list,
+  .devhelper-credential-list {
+    max-height: min(420px, 55vh);
   }
   .devhelper-issues {
     order: 6;
@@ -1531,6 +1586,13 @@
 /* Obsidian móvil (teléfono y tablet): sin teclado físico no hay Ctrl+K. */
 .is-mobile .devhelper-search-hint {
   display: none;
+}
+
+/* Tablet en horizontal: con ~820px de alto, Archivos + Contraseña (310px)
+   dejaban el panel de tareas en ~245px (dos tarjetas). Con este mínimo la
+   página hace scroll en vez de aplastar las tareas. */
+.is-tablet .devhelper-tasks-panel {
+  min-height: 50vh;
 }
 
 /* 16px es el mínimo con el que iOS no hace zoom al enfocar un input. */

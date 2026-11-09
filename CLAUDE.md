@@ -330,9 +330,10 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   `container: devhelper-dashboard / inline-size`, ídem `devhelper-calendar`), así
   que un split o la sidebar se comportan como un teléfono. Va en la hoja y no en la
   raíz porque un contenedor no puede consultarse a sí mismo. Dashboard: `≤900px`
-  tareas + rail arriba y mini-calendario a todo el ancho debajo (días `flex: 1 1 0`;
+  buscador al 100%, tira de botones en fila debajo, tareas a todo el ancho con
+  `min-height: 60vh` (fila `1fr`, no `minmax(0, 1fr)`) y mini-calendario debajo (días `flex: 1 1 0`;
   «hoy» se pinta con `radial-gradient(circle closest-side…)` para seguir redondo);
-  `≤640px` una columna, chips de favoritos en una fila con scroll horizontal,
+  `≤640px` una columna (tareas `60vh–75vh` con scroll interno; Archivos/Contraseña `flex: 0 0 auto`, `min-height: 200px`), chips de favoritos en una fila con scroll horizontal,
   buscador a fila completa sin pista `Ctrl+K`, padding inferior con
   `env(safe-area-inset-bottom)`; `≤380px` tarjetas apiladas. Las pantallas altas
   (`@media (min-height: 900px)` + `@container (min-width: 901px)`) reparten
@@ -405,7 +406,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   `tests/helpers/fakeVault.ts`.
 - `tests/ButtonRunner.test.ts` — 11 tests (`await`, `blocked`, errores sync/async/sintaxis,
   `busy`, `ctx`).
-- `tests/shellExec.test.ts` — 11 tests (móvil o sin `execImpl` rechaza, escritorio con `node -e`, código ≠ 0). `child_process.exec` se inyecta desde `main.ts` detrás de `Platform.isDesktopApp`.
+- `tests/shellExec.test.ts` — 11 tests (móvil o sin `execImpl` rechaza, escritorio con `node -e`, código ≠ 0). `child_process.exec` se inyecta desde `main.ts` (`loadChildProcessExec`: sólo escritorio no móvil y en try/catch, porque la emulación móvil bloquea `require` de Node y tumbaba el plugin).
 - `tests/skills.test.mjs` — 3 tests (frontmatter de las 10 skills en `src/skills` y en
   el espejo `skills/`).
 
