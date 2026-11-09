@@ -163,6 +163,9 @@ describe("dashboard: táctil y móvil", () => {
     for (const selector of [
       ".is-mobile .devhelper-task-filters .devhelper-task-search",
       ".is-mobile .devhelper-search-wrap .devhelper-search",
+      // Los <select> de filtro también hacen zoom en iOS por debajo de 16px.
+      ".is-mobile .devhelper-task-filters .devhelper-task-status-select",
+      ".is-mobile .devhelper-task-filters .devhelper-task-kind-select",
     ]) {
       expect(decls(ruleBodyContaining(dashboard, selector)), selector).toContain(
         "font-size: 16px",

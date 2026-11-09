@@ -90,8 +90,19 @@ export function attachLongPress(
   target.addEventListener("touchmove", onMove, { passive: true });
   target.addEventListener("touchend", cancel);
   target.addEventListener("touchcancel", cancel);
+  // Si la plataforma lanza su propio `contextmenu` antes que nuestro
+  // temporizador (Android 12+: ~400ms), gana el nativo y cancelamos el
+  // nuestro; si llega después de disparar, se traga.
+  const onContextMenu = (evt: Event): void => {
+    if (pending !== null) {
+      cancel();
+      return;
+    }
+    swallow(evt);
+  };
+
   target.addEventListener("click", swallow, { capture: true });
-  target.addEventListener("contextmenu", swallow, { capture: true });
+  target.addEventListener("contextmenu", onContextMenu, { capture: true });
 
   return () => {
     cancel();
@@ -103,6 +114,6 @@ export function attachLongPress(
     target.removeEventListener("touchend", cancel);
     target.removeEventListener("touchcancel", cancel);
     target.removeEventListener("click", swallow, { capture: true });
-    target.removeEventListener("contextmenu", swallow, { capture: true });
+    target.removeEventListener("contextmenu", onContextMenu, { capture: true });
   };
 }

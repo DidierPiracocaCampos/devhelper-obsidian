@@ -108,6 +108,25 @@ describe("attachLongPress", () => {
     expect(later).toHaveBeenCalledTimes(1);
   });
 
+  // Android 12+ lanza su propio contextmenu a ~400ms (o ~300ms con «retraso
+  // corto»), antes que nuestro temporizador: gana el nativo y el nuestro se
+  // cancela, o el menú se abriría dos veces.
+  test("un contextmenu nativo antes de tiempo cancela la pulsación larga", () => {
+    attachLongPress(target, onLongPress);
+    const later = vi.fn();
+    target.addEventListener("contextmenu", later);
+
+    target.dispatchEvent(touchEvent("touchstart", [{ clientX: 100, clientY: 200 }]));
+    vi.advanceTimersByTime(400);
+    const menu = cancelable("contextmenu");
+    target.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(false);
+    expect(later).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(600);
+    expect(onLongPress).not.toHaveBeenCalled();
+  });
+
   test("el detach limpia", () => {
     const detach = attachLongPress(target, onLongPress);
     target.dispatchEvent(touchEvent("touchstart", [{ clientX: 100, clientY: 200 }]));

@@ -253,7 +253,8 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 - `src/ui/longPress.ts` — `attachLongPress(target, onLongPress, options?)`: pulsación
   larga táctil (500ms, tolerancia 10px, un dedo) como sustituto del clic derecho,
   porque iOS no emite `contextmenu`. Tras disparar traga durante 800ms el `click` (no
-  selecciona) y el `contextmenu` (Android lo lanza además; el menú saldría dos veces).
+  selecciona) y el `contextmenu`; si Android lanza su `contextmenu` antes (~400ms), gana
+  el nativo y se cancela el temporizador (el menú saldría dos veces).
   `DashboardView` lo engancha a cada chip de favorito → `openFavoriteMenu`.
 - `src/ui/CalendarEventFormModal.ts` — `obsidian.Modal` de creación/edición de eventos:
   título, `kind` (select de 4), fecha de inicio, «varios días» + fecha fin, «todo el
@@ -318,7 +319,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   zoom, sin pista `Ctrl+K`) e `.is-phone` (filas en línea del modal apiladas; los
   modales no viven en la hoja y no les llega el contenedor).
 
-## Tests (`tests/`) — 276 en total, todos en verde
+## Tests (`tests/`) — 277 en total, todos en verde
 
 - `tests/settings.test.ts` — 16 tests (normalización de carpetas —incluidas las de
   calendario— + preservación del material clave `credSaltB64`/`credVerifier` en
@@ -346,9 +347,9 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   con `tests/helpers/cssBlocks.ts` (`readStyles`, `splitSections` por el banner
   «Calendar view (vista mensual)», `atRuleBodies`, `onlyAtRule`, `ruleBody`,
   `ruleBodyContaining`, `decls`), sin dependencias nuevas.
-- `tests/longPress.test.ts` — 8 tests con fake timers y `EventTarget` de Node:
+- `tests/longPress.test.ts` — 9 tests con fake timers y `EventTarget` de Node:
   umbral 500ms, tolerancia 10px, cancelación, dos dedos, tragado de click/contextmenu
-  en 800ms y detach.
+  en 800ms, `contextmenu` nativo temprano (Android) que cancela el nuestro y detach.
 - `tests/responsive.test.ts` — 3 tests del límite 640/641 de `isCompactWidth`.
 - `tests/templates.test.ts` — 16 tests; cubre validación y aplicación de plantillas,
   incluida `calendar-event` (`evento.md`, propiedades fijas y estampado de `created`).
@@ -453,7 +454,7 @@ un fallo de parseo inutiliza la skill.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 276/276 verde
+npm test            # 277/277 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
