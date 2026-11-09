@@ -20,6 +20,9 @@ description: Usar y sugerir las plantillas configuradas (`Plantillas/`, `Plantil
     (reconocidas por nombre: `proyecto.md`, `tarea.md`, `nota.md`, etc.).
   - `<calendarTemplatesFolder>/` — plantillas de evento de calendario
     (reconocidas: `evento.md`, `reunion.md`, `fecha_limite.md`, `aviso.md`).
+  - `<templatesFolder>/boton.md` — plantilla de botón de la barra
+    (`type: toolbar-button`, ver `devhelper-buttons`); el plugin la siembra sin
+    sobrescribir y «Crear botón» en Ajustes la copia.
 - Las plantillas **nunca** se sobrescriben.
 
 ## Receta: listar plantillas
@@ -77,6 +80,18 @@ ir al mínimo del modelo de datos de la skill correspondiente.
 - Conflicto entre el `kind:` de la plantilla y el pedido del usuario → gana el usuario.
 
 ## Ejemplos YAML
+
+Plantilla de botón (`Plantillas/boton.md`, seguida de un bloque js; ver `devhelper-buttons`):
+
+```yaml
+---
+type: toolbar-button
+label: Nuevo botón
+icon: square-terminal
+order: 100
+enabled: true
+---
+```
 
 Plantilla mínima de proyecto (`Plantillas/proyecto.md`):
 

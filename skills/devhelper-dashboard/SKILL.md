@@ -23,6 +23,7 @@ Cuando el disparador sea específico, **carga la skill hija**:
 | Identificar el proyecto General | `devhelper-general` |
 | Crear/editar/listar eventos de calendario | `devhelper-calendar` |
 | Usar o sugerir plantillas | `devhelper-templates` |
+| Crear/editar botones de la barra que ejecutan código | `devhelper-buttons` |
 
 ## Modelo de datos (universal)
 
@@ -35,7 +36,7 @@ Cuando el disparador sea específico, **carga la skill hija**:
   obsidian eval 'app.plugins.plugins["devhelper-dashboard"].settings.projectsFolder'
   ```
 
-  Si la lectura falla, defaults: `projectsFolder=Projects`, `templatesFolder=Plantillas`, `calendarFolder=Calendario`, `calendarTemplatesFolder=Plantillas/Calendario`.
+  Si la lectura falla, defaults: `projectsFolder=Projects`, `templatesFolder=Plantillas`, `calendarFolder=Calendario`, `calendarTemplatesFolder=Plantillas/Calendario`, `buttonsFolder=Botones`.
 
 - **Sanitización de nombres** al crear archivos:
   - `\ / : * ? " < > | #` → `-`
@@ -78,7 +79,8 @@ Cuando el disparador sea específico, **carga la skill hija**:
 
 ## Lo que NO debe hacer
 
-- No leer ni escribir `data.json` directamente.
+- No leer ni escribir `data.json` directamente (guarda nueve claves: las cinco carpetas incl. `buttonsFolder`, `allowButtonScripts`, `credentialLockTimeoutMinutes`, `credSaltB64` y `credVerifier`).
+- No activar `allowButtonScripts`: lo decide el usuario en Ajustes.
 - No modificar el cuerpo Markdown al editar propiedades (usa `obsidian property:set`).
 - No generar blobs `enc:v1:` a mano.
 - No crear ni borrar la carpeta `<projectsFolder>/General/`.

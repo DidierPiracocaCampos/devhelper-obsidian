@@ -60,7 +60,7 @@ test("frontmatter YAML es válido en src/skills y skills/", () => {
   }
 });
 
-test("existen 9 skills (1 núcleo + 8 hijas)", () => {
+test("existen 10 skills (1 núcleo + 9 hijas)", () => {
   const seen = new Set();
   for (const src of sources) {
     for (const file of walk(src)) {
@@ -68,7 +68,7 @@ test("existen 9 skills (1 núcleo + 8 hijas)", () => {
       seen.add(rel);
     }
   }
-  expect(seen.size).toBe(9);
+  expect(seen.size).toBe(10);
 });
 
 test("los espejos src/skills y skills son byte-iguales por skill", () => {

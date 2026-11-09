@@ -47,22 +47,43 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   fecha y llama a su `refresh()`. `onunload` cancela el timer pendiente.
 - `src/settings.ts` — `PluginSettings`, `DEFAULT_SETTINGS = { projectsFolder: "Projects",
   templatesFolder: "Plantillas", calendarFolder: "Calendario",
-  calendarTemplatesFolder: "Plantillas/Calendario", credentialLockTimeoutMinutes: 15 }`, y
+  calendarTemplatesFolder: "Plantillas/Calendario", buttonsFolder: "Botones",
+  allowButtonScripts: false, credentialLockTimeoutMinutes: 15 }`, y
   `normalizeVaultFolderPath(path, fallback): string`. La
   normalización RECHAZA rutas absolutas, letras de unidad y `..` ANTES de trim barras.
   `mergePluginSettings(defaults, stored)` conserva el material clave de credenciales
   (`credSaltB64` / `credVerifier`) al persistir: la pestaña de ajustes sólo edita las
-  cuatro carpetas + el timeout, y un merge ingenuo borraría la sal y el verificador del
-  `data.json` (bloqueando todas las credenciales). `data.json` guarda por tanto siete
+  cinco carpetas + el timeout + el interruptor de botones, y un merge ingenuo borraría la sal y el verificador del
+  `data.json` (bloqueando todas las credenciales). `data.json` guarda por tanto nueve
   claves: `projectsFolder`, `templatesFolder`, `calendarFolder`,
-  `calendarTemplatesFolder`, `credentialLockTimeoutMinutes`,
+  `calendarTemplatesFolder`, `buttonsFolder`, `allowButtonScripts` (booleano, default
+  `false`; no booleano → `false`), `credentialLockTimeoutMinutes`,
   `credSaltB64` (sal PBKDF2 en base64, una por vault) y `credVerifier` (testigo cifrado
-  de la maestra, `devhelper-ok`). Nunca edites `credSaltB64`/`credVerifier` a mano.
-- `src/ui/SettingsTab.ts` — `PluginSettingTab` con cuatro `TextComponent` de carpetas
-  (proyectos, plantillas, calendario y plantillas de calendario) más un
+  de la maestra, `devhelper-ok`). Nunca edites `credSaltB64`/`credVerifier` a mano. `applySettingsEdit` aplica
+  una edición de ajustes preservando ese material clave.
+- `src/ui/SettingsTab.ts` — `PluginSettingTab` con cinco `TextComponent` de carpetas
+  (proyectos, plantillas, calendario, plantillas de calendario y botones) más un
   campo numérico de timeout de bloqueo (`credentialLockTimeoutMinutes`, minutos),
   persiste vía `plugin.saveData()` con `mergePluginSettings` para no perder
-  `credSaltB64`/`credVerifier`. No expone la sal ni el verificador.
+  `credSaltB64`/`credVerifier`. No expone la sal ni el verificador. Sección «Botones de la barra»: carpeta
+  de botones, toggle «Permitir botones con código» (`allowButtonScripts`), lista de
+  botones detectados (toggle `enabled` + «Abrir») y «Crear botón» (copia
+  `<templatesFolder>/boton.md`, `DEFAULT_BUTTON_TEMPLATE` si falta).
+- Botones de la barra (scripts de usuario): `src/domain/toolbarButtons.ts`
+  (`parseToolbarButton` puro, nunca lanza; `type: toolbar-button` con `label`, `icon`
+  Lucide default `square-terminal`, `order`, `enabled`; acción directa = primer bloque
+  `js`/`javascript`, menú = un `## Opción` por opción con su primer bloque js;
+  `sortToolbarButtons`), `src/data/ToolbarButtonRepository.ts` (carpeta `buttonsFolder`
+  no recursiva, `load`, `seedTemplate`, `createButton`, `setButtonEnabled`),
+  `src/ui/buttons/ButtonRunner.ts` (`new AsyncFunction("app","obsidian","ctx",code)`;
+  `ctx` = `project`, `repo` con métodos ligados de `ButtonRepoApi`, `run`, `notice`,
+  `refresh`, `openCalendar`, `button`; `RunResult` ok/blocked/busy/error; un menú sin
+  opción es error), `src/ui/buttons/shellExec.ts` (`ctx.run`: `{code,stdout,stderr}`, código
+  ≠ 0 no rechaza, timeout 60000 ms, cwd raíz del vault, sólo escritorio) y
+  `src/ui/buttons/toolbarButtonsRail.ts` (pinta los botones en la barra; `DashboardView`
+  recibe `ToolbarButtonDeps` como sexto parámetro del constructor). El plugin expone
+  `buttonRepository`, `openNote` y `refreshViews`. `allowButtonScripts` apagado: los botones
+  se ven atenuados y avisan con un `Notice`, sin compilar nada.
 - `src/domain/types.ts` — interfaces puras: `ProjectRecord` (incluye `favorite: boolean`
   que el frontmatter expone como chip visible en la fila de favoritos, más `isGeneral?: boolean`
   sólo `true` en el hub sombra `Projects/General/General.md`, excluido de chips/favoritos/picker
@@ -245,7 +266,17 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   **Alarma de medianoche** (`scheduleMidnightRefresh` / `msUntilNextMidnight`, limpiada
   en `onClose`): como `today` sólo se calcula en el render, sin ella la marca `is-today`
   y la selección quedan congeladas en ayer si la pestaña sigue abierta al cruzar
-  medianoche. Es una única alarma diaria, no un polling.
+  medianoche. Es una única alarma diaria, no un polling. En ancho compacto
+  (`isCompactWidth(contentEl.clientWidth)`) el click en un día desplaza el panel de
+  día a la vista con `scrollIntoView({ block: "nearest" })`; en ancho no se mueve.
+- `src/ui/responsive.ts` — `COMPACT_MAX_WIDTH = 640` (el mismo umbral que las
+  container queries) e `isCompactWidth(width)` (`0` = hoja oculta → `false`).
+- `src/ui/longPress.ts` — `attachLongPress(target, onLongPress, options?)`: pulsación
+  larga táctil (500ms, tolerancia 10px, un dedo) como sustituto del clic derecho,
+  porque iOS no emite `contextmenu`. Tras disparar traga durante 800ms el `click` (no
+  selecciona) y el `contextmenu`; si Android lanza su `contextmenu` antes (~400ms), gana
+  el nativo y se cancela el temporizador (el menú saldría dos veces).
+  `DashboardView` lo engancha a cada chip de favorito → `openFavoriteMenu`.
 - `src/ui/CalendarEventFormModal.ts` — `obsidian.Modal` de creación/edición de eventos:
   título, `kind` (select de 4), fecha de inicio, «varios días» + fecha fin, «todo el
   día» + hora, recurrencia + fin de recurrencia y proyecto opcional en un desplegable
@@ -287,14 +318,32 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   reutilizan el estilo de tarjeta oscura de las tareas. Calendario: rejilla
   `.devhelper-calendar-grid`/`.devhelper-calendar-cell` (6×7, Lun–Dom), puntitos
   `.devhelper-dot--evento|--reunion|--fecha_limite|--aviso` por tipo y panel de día que
-  reutiliza `.devhelper-task-card`. Breakpoints: `@media (max-width: 640px)` → una
-  columna, oculta el rail y el panel del calendario pasa debajo de la rejilla;
-  `@media (max-width: 320px)` → controles y acciones apilados sin recorte.
+  reutiliza `.devhelper-task-card`.
+  **Responsive por container queries, nunca por viewport:** la hoja de cada vista
+  es el contenedor (`.workspace-leaf-content[data-type="devhelper-dashboard"]` →
+  `container: devhelper-dashboard / inline-size`, ídem `devhelper-calendar`), así
+  que un split o la sidebar se comportan como un teléfono. Va en la hoja y no en la
+  raíz porque un contenedor no puede consultarse a sí mismo. Dashboard: `≤900px`
+  tareas + rail arriba y mini-calendario a todo el ancho debajo (días `flex: 1 1 0`;
+  «hoy» se pinta con `radial-gradient(circle closest-side…)` para seguir redondo);
+  `≤640px` una columna, chips de favoritos en una fila con scroll horizontal,
+  buscador a fila completa sin pista `Ctrl+K`, padding inferior con
+  `env(safe-area-inset-bottom)`; `≤380px` tarjetas apiladas. Las pantallas altas
+  (`@media (min-height: 900px)` + `@container (min-width: 901px)`) reparten
+  `auto 2fr 1fr auto`. Calendario: `≤640px` celdas cuadradas (`aspect-ratio: 1` con
+  `width: 100%` y `height: auto` — Obsidian fija `height` en los botones y anularía
+  el ratio), número centrado y puntitos de 5px; `≤480px` «Nuevo» queda como «+»
+  redondo (`.devhelper-calendar-add-label` oculta); `≤380px` topbar en dos filas.
+  Táctil: `@media (pointer: coarse)` sube los objetivos a 40px mínimo (los días del
+  rail sólo en alto: 7×40px no caben a 360px). Lo que sólo existe en Obsidian móvil
+  cuelga de las clases de body: `.is-mobile` (inputs a 16px para que iOS no haga
+  zoom, sin pista `Ctrl+K`) e `.is-phone` (filas en línea del modal apiladas; los
+  modales no viven en la hoja y no les llega el contenedor).
 
-## Tests (`tests/`) — 232 en total, todos en verde
+## Tests (`tests/`) — 331 en total, todos en verde
 
-- `tests/settings.test.ts` — 16 tests (normalización de carpetas —incluidas las de
-  calendario— + preservación del material clave `credSaltB64`/`credVerifier` en
+- `tests/settings.test.ts` — 23 tests (normalización de carpetas —incluidas las de
+  calendario y `buttonsFolder`—, `allowButtonScripts` + preservación del material clave `credSaltB64`/`credVerifier` en
   `mergePluginSettings`).
 - `tests/parseNote.test.ts` — 60 tests con casos específicos por modo de error, la
   prop `favorite`, notas simples `type: note`, credenciales `type: credentials`
@@ -310,15 +359,26 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   inclusivo, weekly con `recurrenceEnd`, tope 6 meses sin fin, mensual día 31 que omite
   febrero sin desplazar, solapes sin duplicar) y `presentCalendar` (orden
   allDay→time→title→path, `counts`, eventos globales).
-- `tests/weekStrip.test.ts` — 4 tests; cubre semana ISO, transición de mes,
+- `tests/weekStrip.test.ts` — 5 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
+- `tests/styles.dashboard-responsive.test.ts` — 17 tests y
+  `tests/styles.calendar-responsive.test.ts` — 16 tests: contrato del CSS responsive
+  (contenedor declarado en la hoja, cero `@media` de ancho en cada sección, reglas
+  exactas por escalón, `pointer: coarse`, `.is-mobile`/`.is-phone`). Leen `styles.css`
+  con `tests/helpers/cssBlocks.ts` (`readStyles`, `splitSections` por el banner
+  «Calendar view (vista mensual)», `atRuleBodies`, `onlyAtRule`, `ruleBody`,
+  `ruleBodyContaining`, `decls`), sin dependencias nuevas.
+- `tests/longPress.test.ts` — 9 tests con fake timers y `EventTarget` de Node:
+  umbral 500ms, tolerancia 10px, cancelación, dos dedos, tragado de click/contextmenu
+  en 800ms, `contextmenu` nativo temprano (Android) que cancela el nuestro y detach.
+- `tests/responsive.test.ts` — 3 tests del límite 640/641 de `isCompactWidth`.
 - `tests/templates.test.ts` — 16 tests; cubre validación y aplicación de plantillas,
   incluida `calendar-event` (`evento.md`, propiedades fijas y estampado de `created`).
 - `tests/credentialsCrypto.test.ts` — 8 tests (formato `enc:v1`, round-trip AES-GCM,
   verificador, errores en español ante blob corrupto o clave errónea).
 - `tests/CredentialSession.test.ts` — 8 tests (unlock/lock, timeout con fake timers,
   `touch`, `onExpire`, contraseña incorrecta sin dejar clave).
-- `tests/ProjectTaskRepository.test.ts` — 60 tests con un `VaultAdapter` falso en
+- `tests/ProjectTaskRepository.test.ts` — 64 tests con un `VaultAdapter` falso en
   memoria. Cubre sanitize, disambiguate, propiedades y cuerpo preservados, renombrado
   que actualiza tareas, edición manual round-tripped, `setProjectFavorite` aislado,
   `createProject` devolviendo el hub path y promoción automática del recién creado,
@@ -330,10 +390,21 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   el path, `updateCalendarEvent` por frontmatter preservando body y borrando props con
   `null`, `deleteCalendarEvent` a la papelera y `endDate<date` a issues.
 
+- `tests/toolbarButtons.test.ts` — 16 tests del parser de botones (directa, menú,
+  avisos, issues, defaults, vallas `~~~`, `##` dentro de código) y `sortToolbarButtons`.
+- `tests/ToolbarButtonRepository.test.ts` — 10 tests (carpeta y plantilla sin
+  sobrescribir, `load`, `createButton`, `setButtonEnabled`) con
+  `tests/helpers/fakeVault.ts`.
+- `tests/ButtonRunner.test.ts` — 11 tests (`await`, `blocked`, errores sync/async/sintaxis,
+  `busy`, `ctx`).
+- `tests/shellExec.test.ts` — 10 tests (móvil rechaza, escritorio con `node -e`, código ≠ 0).
+- `tests/skills.test.mjs` — 3 tests (frontmatter de las 10 skills en `src/skills` y en
+  el espejo `skills/`).
+
 Los tests **no usan mocks** — usan un `VaultAdapter` en memoria que simula
 determinísticamente los métodos del API.
 
-## Skills de IA distribuidas (9)
+## Skills de IA distribuidas (10)
 
 El plugin transporta una familia de skills de IA a la carpeta del plugin en el
 vault (`<vault>/.obsidian/plugins/devhelper-dashboard/skills/`). Las skills son
@@ -356,7 +427,9 @@ publica en el vault de prueba.
 - `devhelper-general` — identificar el proyecto sombra `Projects/General/`.
 - `devhelper-calendar` — crear/expandir eventos (rangos, recurrencias,
   reglas `allDay`/`time`).
-- `devhelper-templates` — usar y sugerir plantillas configuradas.
+- `devhelper-templates` — usar y sugerir plantillas configuradas (incluye `boton.md`).
+- `devhelper-buttons` — crear/editar botones de la barra que ejecutan JavaScript
+  (formato directa/menú, referencia de `ctx`, ejemplos y reglas).
 
 **Reglas para los mantenedores**: cualquier cambio al modelo de datos
 (frontmatter, props, carpetas, reglas de validación) debe actualizar la
@@ -385,8 +458,8 @@ un fallo de parseo inutiliza la skill.
   `deleteCredential` elimina la entrada de la nota `Credenciales.md` (también con
   confirmación). No hay borrado de proyectos ni de carpetas. No hay borrado silencioso.
 - **Las notas Markdown son la única fuente de verdad.** No crees un store paralelo en
-  la config del plugin; `data.json` sólo guarda las cuatro carpetas configurables, el
-  timeout de bloqueo y el material clave (`credSaltB64`, `credVerifier`). La sal y el
+  la config del plugin; `data.json` sólo guarda las cinco carpetas configurables, el
+  interruptor `allowButtonScripts`, el timeout de bloqueo y el material clave (`credSaltB64`, `credVerifier`). La sal y el
   verificador los gestiona el propio plugin al fijar/desbloquear la maestra; nunca los
   edites a mano ni los expongas en la UI.
 - **Regla Archivos/General.** El proyecto sombra `Projects/General/General.md` se siembra
@@ -415,7 +488,7 @@ un fallo de parseo inutiliza la skill.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 232/232 verde
+npm test            # 331/331 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
@@ -493,6 +566,10 @@ ni commitearlo al repo.
   `docs/superpowers/specs/2026-10-19-calendario-mensual-design.md`
 - Plan calendario mensual ejecutado:
   `docs/superpowers/plans/2026-10-19-calendario-mensual.md`
+- Spec botones configurables de la barra:
+  `docs/superpowers/specs/2026-11-09-botones-barra-design.md`
+- Plan botones de la barra:
+  `docs/superpowers/plans/2026-11-09-botones-barra.md`
 
 Si recibes un plan nuevo en el mismo formato, emplea `superpowers:subagent-driven-development`
 (o `superpowers:executing-plans` si no hay subagentes disponibles) para entregarlo
