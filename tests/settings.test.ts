@@ -98,6 +98,59 @@ describe("settings", () => {
     });
   });
 
+  describe("buttons settings", () => {
+    it("has defaults", () => {
+      expect(DEFAULT_SETTINGS.buttonsFolder).toBe("Botones");
+      expect(DEFAULT_SETTINGS.allowButtonScripts).toBe(false);
+    });
+
+    it("normalizes buttonsFolder", () => {
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { buttonsFolder: " Mis/Botones/ " }).buttonsFolder,
+      ).toBe("Mis/Botones");
+      expect(mergePluginSettings(DEFAULT_SETTINGS, { buttonsFolder: "../x" }).buttonsFolder).toBe(
+        "Botones",
+      );
+    });
+
+    it("rejects buttonsFolder inside projectsFolder (case-insensitive)", () => {
+      const base = { projectsFolder: "Projects" };
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { ...base, buttonsFolder: "Projects/Botones" })
+          .buttonsFolder,
+      ).toBe("Botones");
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { ...base, buttonsFolder: "Projects" }).buttonsFolder,
+      ).toBe("Botones");
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { ...base, buttonsFolder: "projects/x" })
+          .buttonsFolder,
+      ).toBe("Botones");
+    });
+
+    it("coerces allowButtonScripts strictly", () => {
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, {
+          allowButtonScripts: "true" as unknown as boolean,
+        }).allowButtonScripts,
+      ).toBe(false);
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { allowButtonScripts: true }).allowButtonScripts,
+      ).toBe(true);
+    });
+
+    it("keeps key material with allowButtonScripts", () => {
+      const m = mergePluginSettings(DEFAULT_SETTINGS, {
+        credSaltB64: "s",
+        credVerifier: "v",
+        allowButtonScripts: true,
+      });
+      expect(m.credSaltB64).toBe("s");
+      expect(m.credVerifier).toBe("v");
+      expect(m.allowButtonScripts).toBe(true);
+    });
+  });
+
   describe("normalizesFolderPath", () => {
     it("returns the fallback for an empty string", () => {
       expect(normalizeVaultFolderPath("", "Projects")).toBe("Projects");

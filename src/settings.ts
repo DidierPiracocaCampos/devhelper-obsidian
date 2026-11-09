@@ -11,6 +11,8 @@ export interface PluginSettings {
   calendarFolder: string;
   calendarTemplatesFolder: string;
   credentialLockTimeoutMinutes: number;
+  buttonsFolder: string;
+  allowButtonScripts: boolean;
   credSaltB64?: string;
   credVerifier?: string;
 }
@@ -21,6 +23,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   calendarFolder: "Calendario",
   calendarTemplatesFolder: "Plantillas/Calendario",
   credentialLockTimeoutMinutes: 15,
+  buttonsFolder: "Botones",
+  allowButtonScripts: false,
 };
 
 /**
@@ -74,13 +78,26 @@ export function mergePluginSettings(
   defaults: PluginSettings,
   stored: Partial<PluginSettings> | undefined,
 ): PluginSettings {
+  const projectsFolder = normalizeVaultFolderPath(
+    stored?.projectsFolder ?? defaults.projectsFolder,
+    defaults.projectsFolder,
+  );
+  let buttonsFolder = normalizeVaultFolderPath(
+    stored?.buttonsFolder ?? defaults.buttonsFolder,
+    defaults.buttonsFolder,
+  );
+  // A buttons folder inside projectsFolder would be scanned as a project.
+  const lowerButtons = buttonsFolder.toLowerCase();
+  const lowerProjects = projectsFolder.toLowerCase();
+  if (lowerButtons === lowerProjects || lowerButtons.startsWith(lowerProjects + "/")) {
+    buttonsFolder = defaults.buttonsFolder;
+  }
   return {
     ...defaults,
     ...stored,
-    projectsFolder: normalizeVaultFolderPath(
-      stored?.projectsFolder ?? defaults.projectsFolder,
-      defaults.projectsFolder,
-    ),
+    projectsFolder,
+    buttonsFolder,
+    allowButtonScripts: stored?.allowButtonScripts === true,
     templatesFolder: normalizeVaultFolderPath(
       stored?.templatesFolder ?? defaults.templatesFolder,
       defaults.templatesFolder,

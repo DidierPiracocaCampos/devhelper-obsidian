@@ -1,5 +1,5 @@
 import { Plugin } from "obsidian";
-import { DEFAULT_SETTINGS, type PluginSettings } from "./settings";
+import { DEFAULT_SETTINGS, mergePluginSettings, type PluginSettings } from "./settings";
 import { SettingsTab } from "./ui/SettingsTab";
 import { CredentialSession } from "./data/CredentialSession";
 import { ProjectTaskRepository } from "./data/ProjectTaskRepository";
@@ -41,8 +41,7 @@ export default class DevHelperDashboardPlugin extends Plugin {
   private refreshTimer: number | null = null;
 
   async onload(): Promise<void> {
-    this.settings = Object.assign(
-      {},
+    this.settings = mergePluginSettings(
       DEFAULT_SETTINGS,
       (await this.loadData()) as Partial<PluginSettings> | undefined,
     );
