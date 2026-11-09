@@ -17,8 +17,15 @@
        transparent row of chips + the search field - no longer a panel of its
        own), the tasks panel takes the wide column, the toolbar rail lives
        in the narrow one.
-     - Narrow panels (< 640px, added by the responsive pass): the grid
-       collapses to a single column; task card actions stack below 320px.
+     - Breakpoints are container queries on the leaf
+       (`.workspace-leaf-content[data-type="devhelper-dashboard"]`, container
+       `devhelper-dashboard`), never viewport media queries, so a narrow
+       split or sidebar behaves like a phone:
+         <= 900px  medium: tasks + rail on top, mini-calendar full width below.
+         <= 640px  compact (phone / sidebar): single column.
+         <= 380px  minimum: task card title and actions stack.
+       Touch sizing lives in `@media (pointer: coarse)` and mobile-only
+       tweaks hang from Obsidian's body classes (`.is-mobile`, `.is-phone`).
 
    Layout primitives: `.devhelper-dashboard-root` (grid), `.devhelper-topbar`
    (transparent row holding `.devhelper-chip-list` + `.devhelper-topbar-controls`
@@ -36,6 +43,14 @@
    live in the wide column; `.devhelper-issues` and
    `.devhelper-bottom-sections` span all columns.
    ========================================================================== */
+
+/* La hoja de Obsidian es el contenedor: los breakpoints miran el ancho real
+   del panel (móvil, split, sidebar), no el de la ventana. Va en la hoja y no
+   en `.devhelper-dashboard-root` porque un contenedor no puede consultarse a
+   sí mismo. */
+.workspace-leaf-content[data-type="devhelper-dashboard"] {
+  container: devhelper-dashboard / inline-size;
+}
 
 .devhelper-dashboard-root {
   display: grid;
@@ -1317,7 +1332,7 @@
 }
 
 /* --- Narrow layout -------------------------------------------------------- */
-@media (max-width: 640px) {
+@container devhelper-dashboard (max-width: 640px) {
   .devhelper-dashboard-root {
     /* En estrecho se apila por flex en columna: cada bloque mide según
        su contenido y la tira de herramientas se reordena tras la topbar. */
@@ -1373,7 +1388,7 @@
   }
 }
 
-@media (max-width: 320px) {
+@container devhelper-dashboard (max-width: 380px) {
   /* Horizontal card collapses to a vertical stack so the title and
      the actions never get clipped. */
   .devhelper-task-card {
@@ -1417,9 +1432,11 @@
    En pantallas muy altas el espacio libre se reparte: tareas se queda con
    dos partes y la fila inferior (Archivos + Contraseña) con una, para que
    tareas no crezca sin límite y los inferiores también respiren. */
-@media (min-height: 900px) and (min-width: 641px) {
-  .devhelper-dashboard-root {
-    grid-template-rows: auto 2fr 1fr auto;
+@media (min-height: 900px) {
+  @container devhelper-dashboard (min-width: 641px) {
+    .devhelper-dashboard-root {
+      grid-template-rows: auto 2fr 1fr auto;
+    }
   }
 }
 
