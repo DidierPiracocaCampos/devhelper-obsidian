@@ -1,4 +1,4 @@
-import { Menu, setIcon } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
 import {
   DEFAULT_BUTTON_ICON,
   type ToolbarButtonRecord,
@@ -119,7 +119,13 @@ function openButtonMenu(
     item
       .setTitle("Desactivar")
       .setIcon("eye-off")
-      .onClick(() => void opts.disable(button.path)),
+      .onClick(() => {
+        opts.disable(button.path).catch((error: unknown) => {
+          new Notice(
+            `No se pudo desactivar el botón: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
+      }),
   );
   show(menu);
 }

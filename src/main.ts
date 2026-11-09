@@ -61,7 +61,7 @@ export default class DevHelperDashboardPlugin extends Plugin {
     const buttonExec = createShellExec({
       isDesktop: Platform.isDesktopApp,
       defaultCwd:
-        vaultAdapter instanceof FileSystemAdapter
+        Platform.isDesktopApp && vaultAdapter instanceof FileSystemAdapter
           ? vaultAdapter.getBasePath()
           : null,
     });

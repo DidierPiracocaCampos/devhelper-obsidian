@@ -340,9 +340,9 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   zoom, sin pista `Ctrl+K`) e `.is-phone` (filas en línea del modal apiladas; los
   modales no viven en la hoja y no les llega el contenedor).
 
-## Tests (`tests/`) — 331 en total, todos en verde
+## Tests (`tests/`) — 335 en total, todos en verde
 
-- `tests/settings.test.ts` — 23 tests (normalización de carpetas —incluidas las de
+- `tests/settings.test.ts` — 26 tests (normalización de carpetas —incluidas las de
   calendario y `buttonsFolder`—, `allowButtonScripts` + preservación del material clave `credSaltB64`/`credVerifier` en
   `mergePluginSettings`).
 - `tests/parseNote.test.ts` — 60 tests con casos específicos por modo de error, la
@@ -392,7 +392,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
 
 - `tests/toolbarButtons.test.ts` — 16 tests del parser de botones (directa, menú,
   avisos, issues, defaults, vallas `~~~`, `##` dentro de código) y `sortToolbarButtons`.
-- `tests/ToolbarButtonRepository.test.ts` — 10 tests (carpeta y plantilla sin
+- `tests/ToolbarButtonRepository.test.ts` — 11 tests (carpeta y plantilla sin
   sobrescribir, `load`, `createButton`, `setButtonEnabled`) con
   `tests/helpers/fakeVault.ts`.
 - `tests/ButtonRunner.test.ts` — 11 tests (`await`, `blocked`, errores sync/async/sintaxis,
@@ -488,7 +488,7 @@ un fallo de parseo inutiliza la skill.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 331/331 verde
+npm test            # 335/335 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```

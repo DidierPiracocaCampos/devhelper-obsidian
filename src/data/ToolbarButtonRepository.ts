@@ -107,6 +107,11 @@ export class ToolbarButtonRepository {
     const path = this.templatePath();
     if (this.adapter.exists(path)) return;
     await this.adapter.createFolder(this.getSettings().templatesFolder);
-    await this.adapter.createMarkdown(path, DEFAULT_BUTTON_TEMPLATE);
+    try {
+      await this.adapter.createMarkdown(path, DEFAULT_BUTTON_TEMPLATE);
+    } catch (error) {
+      // Siembra concurrente: otra carga la creó entre el exists y el create.
+      if (!this.adapter.exists(path)) throw error;
+    }
   }
 }

@@ -78,19 +78,24 @@ export function mergePluginSettings(
   defaults: PluginSettings,
   stored: Partial<PluginSettings> | undefined,
 ): PluginSettings {
-  const projectsFolder = normalizeVaultFolderPath(
-    stored?.projectsFolder ?? defaults.projectsFolder,
-    defaults.projectsFolder,
-  );
-  let buttonsFolder = normalizeVaultFolderPath(
-    stored?.buttonsFolder ?? defaults.buttonsFolder,
-    defaults.buttonsFolder,
-  );
-  // A buttons folder inside projectsFolder would be scanned as a project.
-  const lowerButtons = buttonsFolder.toLowerCase();
-  const lowerProjects = projectsFolder.toLowerCase();
-  if (lowerButtons === lowerProjects || lowerButtons.startsWith(lowerProjects + "/")) {
-    buttonsFolder = defaults.buttonsFolder;
+  const folder = (key: FolderKey): string => {
+    const value: unknown = stored?.[key];
+    return typeof value === "string"
+      ? normalizeVaultFolderPath(value, defaults[key])
+      : defaults[key];
+  };
+  const projectsFolder = folder("projectsFolder");
+  const templatesFolder = folder("templatesFolder");
+  let buttonsFolder = folder("buttonsFolder");
+  // Una carpeta de botones dentro de projectsFolder se escanearía como
+  // proyecto; dentro de templatesFolder, `boton.md` sería un botón vivo.
+  const conflicts = (candidate: string): boolean =>
+    isSameOrInside(candidate, projectsFolder) ||
+    isSameOrInside(candidate, templatesFolder);
+  if (conflicts(buttonsFolder)) {
+    buttonsFolder = conflicts(defaults.buttonsFolder)
+      ? ALTERNATE_BUTTONS_FOLDER
+      : defaults.buttonsFolder;
   }
   return {
     ...defaults,
@@ -98,19 +103,26 @@ export function mergePluginSettings(
     projectsFolder,
     buttonsFolder,
     allowButtonScripts: stored?.allowButtonScripts === true,
-    templatesFolder: normalizeVaultFolderPath(
-      stored?.templatesFolder ?? defaults.templatesFolder,
-      defaults.templatesFolder,
-    ),
-    calendarFolder: normalizeVaultFolderPath(
-      stored?.calendarFolder ?? defaults.calendarFolder,
-      defaults.calendarFolder,
-    ),
-    calendarTemplatesFolder: normalizeVaultFolderPath(
-      stored?.calendarTemplatesFolder ?? defaults.calendarTemplatesFolder,
-      defaults.calendarTemplatesFolder,
-    ),
+    templatesFolder,
+    calendarFolder: folder("calendarFolder"),
+    calendarTemplatesFolder: folder("calendarTemplatesFolder"),
   };
+}
+
+type FolderKey =
+  | "projectsFolder"
+  | "templatesFolder"
+  | "calendarFolder"
+  | "calendarTemplatesFolder"
+  | "buttonsFolder";
+
+/** Fallback determinista cuando «Botones» también choca. */
+const ALTERNATE_BUTTONS_FOLDER = "Botones de la barra";
+
+function isSameOrInside(candidate: string, container: string): boolean {
+  const c = candidate.toLowerCase();
+  const p = container.toLowerCase();
+  return c === p || c.startsWith(p + "/");
 }
 
 /**

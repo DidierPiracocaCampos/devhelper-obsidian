@@ -129,6 +129,38 @@ describe("settings", () => {
       ).toBe("Botones");
     });
 
+    it("ignores non-string folder values without throwing", () => {
+      const merged = mergePluginSettings(DEFAULT_SETTINGS, {
+        projectsFolder: 42,
+        buttonsFolder: null,
+        templatesFolder: {},
+      } as unknown as Partial<typeof DEFAULT_SETTINGS>);
+      expect(merged.projectsFolder).toBe("Projects");
+      expect(merged.buttonsFolder).toBe("Botones");
+      expect(merged.templatesFolder).toBe("Plantillas");
+    });
+
+    it("uses a deterministic alternate when the default buttons folder also collides", () => {
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { projectsFolder: "Botones", buttonsFolder: "Botones" })
+          .buttonsFolder,
+      ).toBe("Botones de la barra");
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { templatesFolder: "Botones", buttonsFolder: "Botones/x" })
+          .buttonsFolder,
+      ).toBe("Botones de la barra");
+    });
+
+    it("rejects buttonsFolder equal to or inside templatesFolder", () => {
+      const base = { templatesFolder: "Plantillas" };
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { ...base, buttonsFolder: "Plantillas" }).buttonsFolder,
+      ).toBe("Botones");
+      expect(
+        mergePluginSettings(DEFAULT_SETTINGS, { ...base, buttonsFolder: "plantillas/b" }).buttonsFolder,
+      ).toBe("Botones");
+    });
+
     it("coerces allowButtonScripts strictly", () => {
       expect(
         mergePluginSettings(DEFAULT_SETTINGS, {

@@ -25,6 +25,13 @@ export interface SettingsHost {
   refreshViews(): void;
 }
 
+type FolderKey =
+  | "projectsFolder"
+  | "templatesFolder"
+  | "calendarFolder"
+  | "calendarTemplatesFolder"
+  | "buttonsFolder";
+
 export class SettingsTab extends PluginSettingTab {
   private readonly host: SettingsHost;
   private readonly defaults: PluginSettings;
@@ -41,63 +48,31 @@ export class SettingsTab extends PluginSettingTab {
 
     const settings = this.readSettings();
 
-    new Setting(containerEl)
-      .setName("Projects folder")
-      .setDesc("Vault-relative folder that stores project Markdown notes.")
-      .addText((text) => {
-        text.setValue(settings.projectsFolder).onChange(async (value) => {
-          settings.projectsFolder = normalizeVaultFolderPath(
-            value,
-            this.defaults.projectsFolder,
-          );
-          await this.writeSettings(settings);
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Carpeta de plantillas")
-      .setDesc(
-        "Carpeta del vault donde se siembran las plantillas. Por defecto «Plantillas».",
-      )
-      .addText((text) => {
-        text.setValue(settings.templatesFolder).onChange(async (value) => {
-          settings.templatesFolder = normalizeVaultFolderPath(
-            value,
-            this.defaults.templatesFolder,
-          );
-          await this.writeSettings(settings);
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Carpeta de calendario")
-      .setDesc(
-        "Carpeta del vault donde se guardan los eventos del calendario. Por defecto «Calendario».",
-      )
-      .addText((text) => {
-        text.setValue(settings.calendarFolder).onChange(async (value) => {
-          settings.calendarFolder = normalizeVaultFolderPath(
-            value,
-            this.defaults.calendarFolder,
-          );
-          await this.writeSettings(settings);
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Carpeta de plantillas de calendario")
-      .setDesc(
-        "Carpeta del vault donde se siembran las plantillas de eventos. Por defecto «Plantillas/Calendario».",
-      )
-      .addText((text) => {
-        text.setValue(settings.calendarTemplatesFolder).onChange(async (value) => {
-          settings.calendarTemplatesFolder = normalizeVaultFolderPath(
-            value,
-            this.defaults.calendarTemplatesFolder,
-          );
-          await this.writeSettings(settings);
-        });
-      });
+    const folderFields: Array<{ key: FolderKey; name: string; desc: string }> = [
+      {
+        key: "projectsFolder",
+        name: "Projects folder",
+        desc: "Vault-relative folder that stores project Markdown notes.",
+      },
+      {
+        key: "templatesFolder",
+        name: "Carpeta de plantillas",
+        desc: "Carpeta del vault donde se siembran las plantillas. Por defecto «Plantillas».",
+      },
+      {
+        key: "calendarFolder",
+        name: "Carpeta de calendario",
+        desc: "Carpeta del vault donde se guardan los eventos del calendario. Por defecto «Calendario».",
+      },
+      {
+        key: "calendarTemplatesFolder",
+        name: "Carpeta de plantillas de calendario",
+        desc: "Carpeta del vault donde se siembran las plantillas de eventos. Por defecto «Plantillas/Calendario».",
+      },
+    ];
+    for (const field of folderFields) {
+      this.addFolderSetting(containerEl, settings, field.key, field.name, field.desc);
+    }
 
     new Setting(containerEl)
       .setName("Bloqueo de credenciales (minutos)")
@@ -124,22 +99,14 @@ export class SettingsTab extends PluginSettingTab {
   ): void {
     new Setting(containerEl).setName("Botones de la barra").setHeading();
 
-    new Setting(containerEl)
-      .setName("Carpeta de botones")
-      .setDesc("Carpeta del vault con las notas de botón. Por defecto «Botones».")
-      .addText((text) => {
-        text.setValue(settings.buttonsFolder);
-        // Sólo al confirmar (blur/Enter): cada tecla crearía carpetas basura.
-        text.inputEl.addEventListener("change", () => {
-          void this.run("guardar la carpeta", async () => {
-            settings.buttonsFolder = text.getValue();
-            await this.writeSettings(settings);
-            settings.buttonsFolder = this.host.settings.buttonsFolder;
-            text.setValue(settings.buttonsFolder);
-            await this.renderButtonList(listEl);
-          });
-        });
-      });
+    this.addFolderSetting(
+      containerEl,
+      settings,
+      "buttonsFolder",
+      "Carpeta de botones",
+      "Carpeta del vault con las notas de botón. Por defecto «Botones».",
+      () => this.renderButtonList(listEl),
+    );
 
     new Setting(containerEl)
       .setName("Permitir botones con código")
@@ -147,9 +114,11 @@ export class SettingsTab extends PluginSettingTab {
         "Ejecuta el JavaScript de las notas de botón con acceso completo al vault y, en escritorio, al sistema. Actívalo sólo si confías en esas notas.",
       )
       .addToggle((toggle) => {
-        toggle.setValue(settings.allowButtonScripts).onChange(async (value) => {
-          settings.allowButtonScripts = value;
-          await this.writeSettings(settings);
+        toggle.setValue(settings.allowButtonScripts).onChange((value) => {
+          void this.run("guardar el ajuste", async () => {
+            settings.allowButtonScripts = value;
+            await this.writeSettings(settings);
+          });
         });
       });
 
@@ -211,6 +180,35 @@ export class SettingsTab extends PluginSettingTab {
         });
       });
     }
+  }
+
+  /**
+   * Campo de carpeta que sólo guarda al confirmar (blur/Enter): guardar en
+   * cada tecla crearía carpetas basura (`M/`, `Mi/`…) al sembrar plantillas.
+   */
+  private addFolderSetting(
+    containerEl: HTMLElement,
+    settings: PluginSettings,
+    key: FolderKey,
+    name: string,
+    desc: string,
+    afterCommit?: () => Promise<void>,
+  ): void {
+    new Setting(containerEl)
+      .setName(name)
+      .setDesc(desc)
+      .addText((text) => {
+        text.setValue(settings[key]);
+        text.inputEl.addEventListener("change", () => {
+          void this.run("guardar la carpeta", async () => {
+            settings[key] = normalizeVaultFolderPath(text.getValue(), this.defaults[key]);
+            await this.writeSettings(settings);
+            settings[key] = this.host.settings[key];
+            text.setValue(settings[key]);
+            await afterCommit?.();
+          });
+        });
+      });
   }
 
   private async run(what: string, fn: () => Promise<void>): Promise<void> {

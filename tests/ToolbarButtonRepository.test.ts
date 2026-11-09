@@ -33,6 +33,19 @@ describe("ToolbarButtonRepository", () => {
     expect(vault.files.get(TEMPLATE_PATH)).toBe(DEFAULT_BUTTON_TEMPLATE);
   });
 
+  it("concurrent first-run loads both resolve", async () => {
+    const { vault } = setup();
+    const inner = vault.createMarkdown.bind(vault);
+    vault.createMarkdown = async (path, content) => {
+      await Promise.resolve();
+      if (vault.files.has(path)) throw new Error("File already exists.");
+      return inner(path, content);
+    };
+    const repo = new ToolbarButtonRepository(vault, () => DEFAULT_SETTINGS);
+    await expect(Promise.all([repo.load(), repo.load()])).resolves.toHaveLength(2);
+    expect(vault.files.get(TEMPLATE_PATH)).toBe(DEFAULT_BUTTON_TEMPLATE);
+  });
+
   it("does not overwrite a user-edited template", async () => {
     const { vault, repo } = setup();
     await repo.load();

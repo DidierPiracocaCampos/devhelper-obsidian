@@ -82,8 +82,8 @@ El código se ejecuta como cuerpo de `AsyncFunction("app", "obsidian", "ctx", co
 | `ctx.repo.createCalendarEvent(input)` | `Promise<string>` (path); `input`: `title`, `kind` (`evento`, `reunion`, `fecha_limite`, `aviso`), `date` `YYYY-MM-DD`, y opcionales `endDate`, `time` `HH:mm`, `allDay`, `recurrence`, `recurrenceEnd`, `projectLink` (ruta `.md` del hub), `body`, `status` |
 | `ctx.repo.updateCalendarEvent(path, patch)` | `Promise<void>`; `null` borra una prop opcional |
 | `ctx.repo.setCalendarEventStatus(path, status)` | `Promise<void>` |
-| `ctx.repo.load()` | datos actuales del dashboard |
-| `ctx.run(cmd, { cwd?, timeoutMs? })` | `Promise<{ code, stdout, stderr }>`; `code` ≠ 0 **no** rechaza; `cwd` default raíz del vault; `timeoutMs` default 60000; sólo escritorio (en móvil rechaza) |
+| `ctx.repo.load()` | `Promise<DashboardData>`: datos actuales del dashboard |
+| `ctx.run(cmd, { cwd?, timeoutMs? })` | `Promise<{ code, stdout, stderr }>`; `code` ≠ 0 **no** rechaza (sí rechaza por timeout, señal o salida demasiado grande; en Windows un timeout puede dejar vivos procesos hijo del shell); `cwd` default raíz del vault; `timeoutMs` default 60000; sólo escritorio (en móvil rechaza) |
 | `ctx.notice(msg, ms?)` | muestra un `Notice` |
 | `ctx.refresh()` | refresca dashboard y calendario |
 | `ctx.openCalendar(isoDate?)` | abre el calendario (en ese día) |
