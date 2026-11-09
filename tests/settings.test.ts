@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_SETTINGS,
+  applySettingsEdit,
   mergePluginSettings,
   normalizeVaultFolderPath,
   type PluginSettings,
@@ -204,6 +205,24 @@ describe("settings", () => {
       expect(normalizeVaultFolderPath("Projects\\\\Sub//Inner", "fallback")).toBe(
         "Projects/Sub/Inner",
       );
+    });
+  });
+
+  describe("applySettingsEdit", () => {
+    it("takes key material from current settings, not the stale snapshot", () => {
+      const stale = { ...DEFAULT_SETTINGS, calendarFolder: "Cal" };
+      const current = { ...DEFAULT_SETTINGS, credSaltB64: "SAL", credVerifier: "VER" };
+      const out = applySettingsEdit(DEFAULT_SETTINGS, current, stale);
+      expect(out.credSaltB64).toBe("SAL");
+      expect(out.credVerifier).toBe("VER");
+      expect(out.calendarFolder).toBe("Cal");
+    });
+
+    it("respects a cleared master (current has no key material)", () => {
+      const stale = { ...DEFAULT_SETTINGS, credSaltB64: "OLD", credVerifier: "OLD" };
+      const out = applySettingsEdit(DEFAULT_SETTINGS, DEFAULT_SETTINGS, stale);
+      expect(out.credSaltB64).toBeUndefined();
+      expect(out.credVerifier).toBeUndefined();
     });
   });
 });

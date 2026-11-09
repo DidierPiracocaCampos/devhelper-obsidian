@@ -113,6 +113,24 @@ export function mergePluginSettings(
   };
 }
 
+/**
+ * Aplica una edición de la pestaña de ajustes sobre los ajustes ACTUALES del
+ * plugin. El material clave de credenciales se toma siempre de `current`: la
+ * pestaña edita una instantánea y, si mientras tanto el dashboard fijó o
+ * limpió la maestra, guardar la instantánea lo restauraría obsoleto.
+ */
+export function applySettingsEdit(
+  defaults: PluginSettings,
+  current: Partial<PluginSettings> | undefined,
+  edited: PluginSettings,
+): PluginSettings {
+  return mergePluginSettings(defaults, {
+    ...edited,
+    credSaltB64: current?.credSaltB64,
+    credVerifier: current?.credVerifier,
+  });
+}
+
 function splitSegments(value: string): string[] {
   return value.split("/");
 }

@@ -1,6 +1,6 @@
-import { Plugin, PluginSettingTab, Setting, setIcon } from "obsidian";
+import { Notice, Plugin, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type { PluginSettings } from "../settings";
-import { mergePluginSettings, normalizeVaultFolderPath } from "../settings";
+import { applySettingsEdit, mergePluginSettings, normalizeVaultFolderPath } from "../settings";
 import type { CredentialSession } from "../data/CredentialSession";
 import type { ToolbarButtonRepository } from "../data/ToolbarButtonRepository";
 
@@ -128,12 +128,16 @@ export class SettingsTab extends PluginSettingTab {
       .setName("Carpeta de botones")
       .setDesc("Carpeta del vault con las notas de botón. Por defecto «Botones».")
       .addText((text) => {
-        text.setValue(settings.buttonsFolder).onChange(async (value) => {
-          settings.buttonsFolder = value;
-          await this.writeSettings(settings);
-          // writeSettings normaliza; la lista debe leer la carpeta nueva.
-          settings.buttonsFolder = this.host.settings.buttonsFolder;
-          void this.renderButtonList(listEl);
+        text.setValue(settings.buttonsFolder);
+        // Sólo al confirmar (blur/Enter): cada tecla crearía carpetas basura.
+        text.inputEl.addEventListener("change", () => {
+          void this.run("guardar la carpeta", async () => {
+            settings.buttonsFolder = text.getValue();
+            await this.writeSettings(settings);
+            settings.buttonsFolder = this.host.settings.buttonsFolder;
+            text.setValue(settings.buttonsFolder);
+            await this.renderButtonList(listEl);
+          });
         });
       });
 
@@ -156,16 +160,24 @@ export class SettingsTab extends PluginSettingTab {
       button
         .setButtonText("Crear botón")
         .setCta()
-        .onClick(async () => {
-          const path = await this.host.buttonRepository.createButton("Nuevo botón");
-          this.host.openNote(path);
-          await this.renderButtonList(listEl);
+        .onClick(() => {
+          void this.run("crear el botón", async () => {
+            const path = await this.host.buttonRepository.createButton("Nuevo botón");
+            this.host.openNote(path);
+            await this.renderButtonList(listEl);
+          });
         });
     });
   }
 
   private async renderButtonList(listEl: HTMLElement): Promise<void> {
-    const { buttons } = await this.host.buttonRepository.load();
+    let buttons;
+    try {
+      ({ buttons } = await this.host.buttonRepository.load());
+    } catch (error) {
+      new Notice(`No se pudo cargar los botones: ${errorMessage(error)}`);
+      return;
+    }
     listEl.empty();
     if (buttons.length === 0) {
       listEl.createEl("p", {
@@ -186,9 +198,11 @@ export class SettingsTab extends PluginSettingTab {
       setIcon(iconEl, record.icon);
       setting.nameEl.createSpan({ text: ` ${record.label}` });
       setting.addToggle((toggle) => {
-        toggle.setValue(record.enabled).onChange(async (value) => {
-          await this.host.buttonRepository.setButtonEnabled(record.path, value);
-          this.host.refreshViews();
+        toggle.setValue(record.enabled).onChange((value) => {
+          void this.run("cambiar el botón", async () => {
+            await this.host.buttonRepository.setButtonEnabled(record.path, value);
+            this.host.refreshViews();
+          });
         });
       });
       setting.addButton((button) => {
@@ -196,6 +210,14 @@ export class SettingsTab extends PluginSettingTab {
           this.host.openNote(record.path);
         });
       });
+    }
+  }
+
+  private async run(what: string, fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (error) {
+      new Notice(`No se pudo ${what}: ${errorMessage(error)}`);
     }
   }
 
@@ -207,7 +229,11 @@ export class SettingsTab extends PluginSettingTab {
 
   private async writeSettings(edited: PluginSettings): Promise<void> {
     // Normaliza (carpeta de botones, booleano estricto) antes de guardar.
-    const settings = mergePluginSettings(this.defaults, edited);
+    const settings = applySettingsEdit(
+      this.defaults,
+      this.host.settings,
+      edited,
+    );
     await this.host.saveData(settings);
     this.host.settings = settings;
     this.host.refreshViews();
@@ -217,4 +243,8 @@ export class SettingsTab extends PluginSettingTab {
       settings.credentialLockTimeoutMinutes,
     );
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
