@@ -1551,15 +1551,23 @@
 /* ============================================================================
    Calendar view (vista mensual)
 
-   Misma paleta fija que el dashboard: lienzo oscuro #0e0e10, paneles claros
-   #f4f4f5 (tarjeta del mes `.devhelper-calendar-month-card` y panel de día)
-   y tarjetas de evento oscuras #1b1b1e. Nada depende del tema de Obsidian
-   para que la vista se vea idéntica al resto del plugin.
+   Misma paleta fija que el dashboard: lienzo oscuro #0e0e10, tarjeta del mes
+   `.devhelper-calendar-month-card` oscura #141417 con hairline #232328, panel
+   de día #18181b y tarjetas de evento #1b1b1e; el claro #fafafa queda como
+   acento. Nada depende del tema de Obsidian.
+   Responsive: la hoja es el contenedor `devhelper-calendar` y los escalones
+   (640 / 480 / 380px) son container queries; ver el bloque del final.
    NOTE: los selectores de botones repiten el padre (0,2,0) a propósito — la
    regla propia de Obsidian `button:not(.clickable-icon)` (0,1,1) pinta cada
    botón con `background-color: var(--interactive-normal)` + `var(--input-shadow)`
    y ganaría a una sola clase.
    ========================================================================== */
+
+/* La hoja es el contenedor (un contenedor no puede consultarse a sí mismo,
+   por eso no va en `.devhelper-calendar-root`). */
+.workspace-leaf-content[data-type="devhelper-calendar"] {
+  container: devhelper-calendar / inline-size;
+}
 
 .devhelper-calendar-root {
   display: flex;
@@ -2041,20 +2049,59 @@
   font-size: 0.95em;
 }
 
-/* --- Calendar responsive breakpoints -------------------------------------- */
-@media (max-width: 640px) {
+/* --- Calendar responsive breakpoints --------------------------------------
+   Container queries sobre la hoja (contenedor `devhelper-calendar`), nunca
+   sobre el viewport: el calendario en la sidebar o en un split estrecho se
+   comporta como en el teléfono.
+     <= 640px  compacto: celdas cuadradas, número centrado, puntitos de 5px.
+     <= 480px  topbar en una línea con «Nuevo» como icono.
+     <= 380px  mínimo: topbar en dos filas y tarjetas de evento apiladas. */
+@container devhelper-calendar (max-width: 640px) {
   .devhelper-calendar-root {
     height: auto;
-    padding: 8px;
+    padding: 8px 8px calc(16px + env(safe-area-inset-bottom));
   }
 
+  .devhelper-calendar-month-card {
+    padding: 10px 8px 12px;
+    border-radius: 16px;
+  }
+
+  /* Filas por contenido: el alto lo marca el `aspect-ratio` de cada celda. */
   .devhelper-calendar-month-card .devhelper-calendar-grid {
-    min-height: 280px;
+    min-height: 0;
+    gap: 4px;
+    grid-template-rows: none;
   }
 
   .devhelper-calendar-month-card .devhelper-calendar-cell {
-    min-height: 44px;
-    padding: 4px 1px;
+    aspect-ratio: 1;
+    min-height: 0;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 0;
+    border-radius: 10px;
+  }
+
+  .devhelper-calendar-month-card .devhelper-calendar-cell-day {
+    align-self: center;
+    margin: 0;
+    min-width: 24px;
+    height: 24px;
+    font-size: 0.9em;
+  }
+
+  /* 4 tipos × 5px + 3 huecos de 2px = 26px: caben en una celda de ~44px. */
+  .devhelper-calendar-month-card .devhelper-calendar-dots {
+    gap: 2px;
+    flex-wrap: nowrap;
+  }
+
+  .devhelper-calendar-month-card .devhelper-calendar-dot {
+    width: 5px;
+    height: 5px;
   }
 
   /* Móvil: el panel de día sigue sin alto mínimo — un día sin eventos
@@ -2064,7 +2111,7 @@
   }
 }
 
-@media (max-width: 320px) {
+@container devhelper-calendar (max-width: 380px) {
   .devhelper-calendar-topbar {
     flex-direction: column;
     align-items: stretch;
