@@ -1106,11 +1106,19 @@
   gap: 10px;
 }
 
-/* La lista ocupa el alto libre de la sección y desplaza por dentro. */
+/* Listado con alto máximo y scroll interno. La fila inferior del grid
+   es `auto`/`1fr` (= minmax(auto, 1fr)): sin tope, con muchos ficheros
+   la sección crece hasta su contenido, estira Contraseña a la misma
+   altura y aplasta el panel de tareas. ~3 tarjetas (74px + 10px de
+   gap) visibles; la media tarjeta asomando indica que hay más. */
 .devhelper-section .devhelper-file-list {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 260px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Hueco para la barra de scroll sin pisar los botones de la tarjeta. */
+  padding-right: 4px;
 }
 
 /* Icono de fichero junto al nombre, en el tono apagado del subtítulo. */
