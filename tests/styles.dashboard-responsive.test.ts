@@ -43,11 +43,11 @@ describe("dashboard: base de container queries", () => {
     );
   });
 
-  test("pantallas altas conservan el reparto 2fr/1fr", () => {
+  test("pantallas altas (>900px) conservan el reparto 2fr/1fr", () => {
     const tall = onlyAtRule(dashboard, /^@media \(min-height: 900px\)$/);
     const inner = onlyAtRule(
       tall,
-      /^@container devhelper-dashboard \(min-width: 641px\)$/,
+      /^@container devhelper-dashboard \(min-width: 901px\)$/,
     );
     expect(decls(ruleBody(inner, ".devhelper-dashboard-root"))).toContain(
       "grid-template-rows: auto 2fr 1fr auto",
@@ -56,3 +56,32 @@ describe("dashboard: base de container queries", () => {
 });
 
 
+const C900 = /^@container devhelper-dashboard \(max-width: 900px\)$/;
+
+describe("dashboard: escalón medio (≤900px)", () => {
+  test("medio: tareas + rail, calendario debajo", () => {
+    const body = onlyAtRule(dashboard, C900);
+    expect(decls(ruleBody(body, ".devhelper-dashboard-root"))).toContain(
+      "grid-template-columns: 1fr auto",
+    );
+    expect(decls(ruleBody(body, ".devhelper-side-column"))).toContain(
+      "grid-column: 1 / -1",
+    );
+  });
+
+  test("medio: el mini-calendario reparte los días", () => {
+    const body = onlyAtRule(dashboard, C900);
+    expect(
+      decls(ruleBody(body, ".devhelper-calendar .devhelper-calendar-day")),
+    ).toContain("flex: 1 1 0");
+    expect(decls(ruleBody(body, ".devhelper-calendar-weekdays span"))).toContain(
+      "flex: 1 1 0",
+    );
+  });
+
+  test("el buscador nunca supera su contenedor", () => {
+    expect(decls(ruleBody(dashboard, ".devhelper-search-wrap"))).toContain(
+      "max-width: 100%",
+    );
+  });
+});

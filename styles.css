@@ -231,6 +231,7 @@
   display: inline-flex;
   align-items: center;
   width: 340px;
+  max-width: 100%;
   height: 40px;
   margin-left: auto;
   background: #1b1b1e;
@@ -1331,6 +1332,29 @@
   text-decoration: underline;
 }
 
+/* --- Medium layout (≤ 900px) ---------------------------------------------- */
+/* Split vertical, tablet en vertical: tres columnas ahogan las tareas. Se
+   quedan tareas + rail arriba y el mini-calendario baja a una fila propia
+   a todo el ancho, con los días repartidos en vez de 32px fijos. */
+@container devhelper-dashboard (max-width: 900px) {
+  .devhelper-dashboard-root {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  }
+  .devhelper-side-column {
+    grid-column: 1 / -1;
+    align-self: stretch;
+  }
+  .devhelper-calendar .devhelper-calendar-day {
+    flex: 1 1 0;
+    width: auto;
+  }
+  .devhelper-calendar-weekdays span {
+    flex: 1 1 0;
+    width: auto;
+  }
+}
+
 /* --- Narrow layout -------------------------------------------------------- */
 @container devhelper-dashboard (max-width: 640px) {
   .devhelper-dashboard-root {
@@ -1433,7 +1457,7 @@
    dos partes y la fila inferior (Archivos + Contraseña) con una, para que
    tareas no crezca sin límite y los inferiores también respiren. */
 @media (min-height: 900px) {
-  @container devhelper-dashboard (min-width: 641px) {
+  @container devhelper-dashboard (min-width: 901px) {
     .devhelper-dashboard-root {
       grid-template-rows: auto 2fr 1fr auto;
     }
