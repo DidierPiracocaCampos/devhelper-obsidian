@@ -346,7 +346,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   zoom, sin pista `Ctrl+K`) e `.is-phone` (filas en línea del modal apiladas; los
   modales no viven en la hoja y no les llega el contenedor).
 
-## Tests (`tests/`) — 345 en total, todos en verde
+## Tests (`tests/`) — 346 en total, todos en verde
 
 - `tests/settings.test.ts` — 26 tests (normalización de carpetas —incluidas las de
   calendario y `buttonsFolder`—, `allowButtonScripts` + preservación del material clave `credSaltB64`/`credVerifier` en
@@ -405,7 +405,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   `tests/helpers/fakeVault.ts`.
 - `tests/ButtonRunner.test.ts` — 11 tests (`await`, `blocked`, errores sync/async/sintaxis,
   `busy`, `ctx`).
-- `tests/shellExec.test.ts` — 10 tests (móvil rechaza, escritorio con `node -e`, código ≠ 0).
+- `tests/shellExec.test.ts` — 11 tests (móvil o sin `execImpl` rechaza, escritorio con `node -e`, código ≠ 0). `child_process.exec` se inyecta desde `main.ts` detrás de `Platform.isDesktopApp`.
 - `tests/skills.test.mjs` — 3 tests (frontmatter de las 10 skills en `src/skills` y en
   el espejo `skills/`).
 
@@ -496,7 +496,7 @@ un fallo de parseo inutiliza la skill.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 345/345 verde
+npm test            # 346/346 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```
