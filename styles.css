@@ -965,7 +965,12 @@
 }
 
 .devhelper-section {
-  flex: 1;
+  /* Base 0 + min-width 0: Archivos y Contraseña reparten el ancho a
+     partes iguales sin importar el contenido. Con `flex: 1` a secas el
+     min-width automático dejaba que un nombre de archivo largo ensanchara
+     Archivos y aplastara Contraseña; ahora el título se recorta con «…». */
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
