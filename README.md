@@ -12,6 +12,8 @@ and your own properties and note bodies are preserved on every edit.
 
 > The plugin UI is in Spanish.
 
+Website and docs (Spanish): **[devhelper.didierpiracoca.com/obsidian](https://devhelper.didierpiracoca.com/obsidian)**
+
 ### Features
 
 - **Dashboard view** (ribbon icon `layout-dashboard` or command *Abrir el
@@ -62,7 +64,9 @@ Requires Obsidian **1.9.0** or newer (Bases).
 
 ### Installation
 
-- **Community plugins** (once approved): search for *DevHelper Dashboard*.
+- **Community plugins**: *Settings → Community plugins → Browse*, search for
+  *DevHelper Dashboard*, or open its
+  [store page](https://community.obsidian.md/plugins/devhelper-dashboard).
 - **BRAT**: add `DidierPiracocaCampos/devhelper-obsidian`.
 - **Manual**: download `main.js`, `manifest.json` and `styles.css` from the
   [latest release](https://github.com/DidierPiracocaCampos/devhelper-obsidian/releases/latest)
@@ -76,8 +80,9 @@ teach AI agents (Claude Code, OpenCode…) the plugin's data model. Unzip them i
 
 ### Companion theme
 
-The dark monochrome [DevHelper theme](https://github.com/DidierPiracocaCampos/obsidian-devhelper-theme)
-was designed alongside this plugin.
+The dark monochrome [DevHelper theme](https://community.obsidian.md/themes/devhelper)
+([source](https://github.com/DidierPiracocaCampos/obsidian-devhelper-theme)) was
+designed alongside this plugin.
 
 ---
 
@@ -86,6 +91,8 @@ was designed alongside this plugin.
 Dashboard de proyectos y tareas para Obsidian respaldado por notas Markdown.
 Las notas son la única fuente de verdad: el plugin no guarda un almacén
 paralelo y conserva tus Properties y el cuerpo de las notas en cada edición.
+
+Web y documentación: **[devhelper.didierpiracoca.com/obsidian](https://devhelper.didierpiracoca.com/obsidian)**
 
 ### Características
 
@@ -138,7 +145,9 @@ Requiere Obsidian **1.9.0** o superior (Bases).
 
 ### Instalación
 
-- **Complementos de la comunidad** (cuando se apruebe): busca *DevHelper Dashboard*.
+- **Complementos de la comunidad**: *Ajustes → Complementos de la comunidad →
+  Explorar*, busca *DevHelper Dashboard*, o abre su
+  [página en la tienda](https://community.obsidian.md/plugins/devhelper-dashboard).
 - **BRAT**: añade `DidierPiracocaCampos/devhelper-obsidian`.
 - **Manual**: descarga `main.js`, `manifest.json` y `styles.css` de la
   [última release](https://github.com/DidierPiracocaCampos/devhelper-obsidian/releases/latest)
@@ -155,8 +164,9 @@ modelo de datos del plugin a agentes de IA. Descomprímelo en
 
 ### Theme
 
-El theme oscuro monocromo [DevHelper](https://github.com/DidierPiracocaCampos/obsidian-devhelper-theme)
-se diseñó junto a este plugin.
+El theme oscuro monocromo [DevHelper](https://community.obsidian.md/themes/devhelper)
+([código](https://github.com/DidierPiracocaCampos/obsidian-devhelper-theme)) se
+diseñó junto a este plugin.
 
 ### Desarrollo
 
