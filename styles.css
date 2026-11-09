@@ -2049,6 +2049,42 @@
   font-size: 0.95em;
 }
 
+/* Teléfono: los modales no viven en la hoja (no les llega el contenedor), así
+   que cuelgan de las clases de body de Obsidian. Fecha inicio/fin y hora
+   apiladas: dos `min-width: 140px` lado a lado no caben a 320px. */
+.is-phone .devhelper-form-inline {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.is-phone .devhelper-form-inline .devhelper-form-row {
+  min-width: 0;
+  width: 100%;
+}
+
+/* 16px: el mínimo con el que iOS no hace zoom al enfocar. Vale para todos los
+   modales del plugin, que comparten `.devhelper-form`. */
+.is-mobile .devhelper-form input,
+.is-mobile .devhelper-form select,
+.is-mobile .devhelper-form textarea {
+  font-size: 16px;
+}
+
+/* Dedo: la topbar, «Añadir aquí» y las acciones de evento a 40px mínimo. */
+@media (pointer: coarse) {
+  .devhelper-calendar-topbar .devhelper-calendar-step,
+  .devhelper-calendar-topbar .devhelper-calendar-add,
+  .devhelper-day-panel-header .devhelper-fab,
+  .devhelper-event-card .devhelper-task-actions .devhelper-icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .devhelper-calendar-topbar .devhelper-calendar-nav-today {
+    min-height: 40px;
+  }
+}
+
 /* --- Calendar responsive breakpoints --------------------------------------
    Container queries sobre la hoja (contenedor `devhelper-calendar`), nunca
    sobre el viewport: el calendario en la sidebar o en un split estrecho se

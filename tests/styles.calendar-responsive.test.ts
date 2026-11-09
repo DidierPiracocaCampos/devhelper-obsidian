@@ -120,3 +120,43 @@ describe("calendario: panel de día compacto", () => {
     );
   });
 });
+
+describe("calendario: táctil y modal en teléfono", () => {
+  test("objetivos táctiles del calendario", () => {
+    const coarse = onlyAtRule(calendar, /^@media \(pointer: coarse\)$/);
+    for (const selector of [
+      ".devhelper-calendar-topbar .devhelper-calendar-step",
+      ".devhelper-calendar-topbar .devhelper-calendar-add",
+      ".devhelper-day-panel-header .devhelper-fab",
+      ".devhelper-event-card .devhelper-task-actions .devhelper-icon-button",
+    ]) {
+      const d = decls(ruleBodyContaining(coarse, selector));
+      expect(d, selector).toContain("min-width: 40px");
+      expect(d, selector).toContain("min-height: 40px");
+    }
+    expect(
+      decls(
+        ruleBodyContaining(coarse, ".devhelper-calendar-topbar .devhelper-calendar-nav-today"),
+      ),
+    ).toContain("min-height: 40px");
+  });
+
+  test("el modal apila filas en teléfono", () => {
+    const inline = decls(ruleBodyContaining(calendar, ".is-phone .devhelper-form-inline"));
+    expect(inline).toContain("flex-direction: column");
+    expect(inline).toContain("align-items: stretch");
+    const row = decls(
+      ruleBodyContaining(calendar, ".is-phone .devhelper-form-inline .devhelper-form-row"),
+    );
+    expect(row).toContain("min-width: 0");
+    expect(row).toContain("width: 100%");
+  });
+
+  test("inputs del modal a 16px en móvil", () => {
+    for (const selector of [".is-mobile .devhelper-form input", ".is-mobile .devhelper-form select"]) {
+      expect(decls(ruleBodyContaining(calendar, selector)), selector).toContain(
+        "font-size: 16px",
+      );
+    }
+  });
+});
