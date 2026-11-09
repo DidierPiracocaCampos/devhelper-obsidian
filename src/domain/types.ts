@@ -37,6 +37,8 @@ export interface TaskRecord {
   title: string;
   projectPath: string;
   status: "open" | "done";
+  // Prop `description` o, si falta, primer párrafo del cuerpo.
+  description?: string;
   properties: Record<string, unknown>;
 }
 
@@ -48,6 +50,8 @@ export interface NoteRecord {
   path: string;
   title: string;
   projectPath: string;
+  // Prop `description` o, si falta, primer párrafo del cuerpo.
+  description?: string;
   properties: Record<string, unknown>;
 }
 

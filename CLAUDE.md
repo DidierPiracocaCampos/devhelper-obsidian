@@ -152,6 +152,12 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   `project: "[[…hub]]"` (extra libre, el parser lo ignora) para no quedar huérfana en el
   grafo; `load()` lo rellena en las notas heredadas que no lo tengan
   (`linkCredentialsToProject`, sólo esa prop).
+- `src/domain/description.ts` — `extractDescription(properties, body)` puro (nunca
+  lanza): prop `description` (texto no vacío) o, si falta, primer párrafo del cuerpo
+  (salta encabezados, embeds, código, comentarios y reglas; limpia Markdown; recorta a
+  200 caracteres con «…»). `parseNote` lo guarda en `TaskRecord.description` /
+  `NoteRecord.description` (opcional) y las tarjetas lo pintan como subtítulo
+  (fallback «Sin descripción» / «Nota simple»).
 - `src/domain/weekStrip.ts` — función pura `getWeekStrip(today: Date): WeekStrip`;
   sin imports de Obsidian; calcula la semana ISO (Lun–Dom) de una fecha y el nombre
   del mes en español.
@@ -340,7 +346,7 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   zoom, sin pista `Ctrl+K`) e `.is-phone` (filas en línea del modal apiladas; los
   modales no viven en la hoja y no les llega el contenedor).
 
-## Tests (`tests/`) — 335 en total, todos en verde
+## Tests (`tests/`) — 345 en total, todos en verde
 
 - `tests/settings.test.ts` — 26 tests (normalización de carpetas —incluidas las de
   calendario y `buttonsFolder`—, `allowButtonScripts` + preservación del material clave `credSaltB64`/`credVerifier` en
@@ -359,6 +365,8 @@ Después de cualquier cambio, ejecuta **typecheck + test + build** antes de comp
   inclusivo, weekly con `recurrenceEnd`, tope 6 meses sin fin, mensual día 31 que omite
   febrero sin desplazar, solapes sin duplicar) y `presentCalendar` (orden
   allDay→time→title→path, `counts`, eventos globales).
+- `tests/description.test.ts` — 10 tests de `extractDescription` (prop, fallback al
+  cuerpo, saltos, limpieza de Markdown, recorte) y su paso por `parseProjectTaskNote`.
 - `tests/weekStrip.test.ts` — 5 tests; cubre semana ISO, transición de mes,
   `monthLabel` y marca exacta de `isToday`.
 - `tests/styles.dashboard-responsive.test.ts` — 17 tests y
@@ -488,7 +496,7 @@ un fallo de parseo inutiliza la skill.
 
 ```bash
 npm run typecheck   # debe quedar limpio
-npm test            # 335/335 verde
+npm test            # 345/345 verde
 npm run build       # emite main.js
 git status --short  # ver qué se va a commitear
 ```

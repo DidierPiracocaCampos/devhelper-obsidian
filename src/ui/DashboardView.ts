@@ -809,11 +809,12 @@ export class DashboardView extends ItemView {
       });
     }
 
-    // Placeholder subtitle until the `description` property lands (spec
-    // roadmap); always rendered so the card height is stable.
+    // `description` (prop o primer párrafo del cuerpo); siempre se pinta
+    // para que la altura de la tarjeta sea estable.
     main.createEl("p", {
       cls: "devhelper-task-subtitle",
-      text: "Sin descripción",
+      text: task.description ?? "Sin descripción",
+      attr: task.description ? { title: task.description } : {},
     });
 
     const actions = card.createDiv({ cls: "devhelper-task-actions" });
@@ -888,7 +889,8 @@ export class DashboardView extends ItemView {
 
     main.createEl("p", {
       cls: "devhelper-task-subtitle",
-      text: "Nota simple",
+      text: note.description ?? "Nota simple",
+      attr: note.description ? { title: note.description } : {},
     });
 
     const actions = card.createDiv({ cls: "devhelper-task-actions" });

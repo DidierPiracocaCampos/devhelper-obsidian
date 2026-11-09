@@ -28,6 +28,7 @@
 
 import yaml from "js-yaml";
 import { sliceFrontmatter } from "./frontmatter";
+import { extractDescription } from "./description";
 import { ENCRYPTED_PREFIX, isEncryptedValue } from "./credentialsCrypto";
 import type {
   CalendarEventRecord,
@@ -130,10 +131,10 @@ export function parseProjectTaskNote(
     return buildProject(note, title, properties);
   }
   if (type === "task") {
-    return buildTask(note, title, properties, resolveProject);
+    return buildTask(note, title, properties, resolveProject, sliced.body);
   }
   if (type === "note") {
-    return buildNote(note, title, properties, resolveProject);
+    return buildNote(note, title, properties, resolveProject, sliced.body);
   }
   if (type === "calendar-event") {
     return buildCalendarEvent(note, title, properties, resolveProject);
@@ -252,6 +253,7 @@ function buildTask(
   title: string,
   properties: Record<string, unknown>,
   resolveProject: ResolveProjectFn,
+  body: string,
 ): ParsedNote {
   const projectLink = properties.project;
   if (typeof projectLink !== "string" || projectLink.length === 0) {
@@ -315,6 +317,8 @@ function buildTask(
     status: statusRaw as "open" | "done",
     properties,
   };
+  const taskDescription = extractDescription(properties, body);
+  if (taskDescription !== undefined) task.description = taskDescription;
   return { kind: "task", task };
 }
 
@@ -323,6 +327,7 @@ function buildNote(
   title: string,
   properties: Record<string, unknown>,
   resolveProject: ResolveProjectFn,
+  body: string,
 ): ParsedNote {
   const projectLink = properties.project;
   if (typeof projectLink !== "string" || projectLink.length === 0) {
@@ -381,6 +386,8 @@ function buildNote(
     projectPath,
     properties,
   };
+  const noteDescription = extractDescription(properties, body);
+  if (noteDescription !== undefined) noteRecord.description = noteDescription;
   return { kind: "note", note: noteRecord };
 }
 

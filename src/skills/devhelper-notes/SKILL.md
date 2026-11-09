@@ -27,6 +27,21 @@ description: "Crear, renombrar, reasignar y listar notas simples (`type: note`) 
 
 - `status` **no existe** en notas simples (sólo en tareas y eventos).
 
+## Descripción en el dashboard
+
+La tarjeta de nota muestra una línea de descripción. Se toma de la prop
+opcional `description` (texto) y, si falta o está vacía, del **primer
+párrafo del cuerpo** (se saltan encabezados, embeds `![[…]]`, bloques de
+código, comentarios `%% %%` y reglas `---`; se limpia el Markdown y se
+recorta a 200 caracteres). Para fijar una descripción explícita:
+
+```bash
+obsidian property:set name="description" value="<texto corto>" path="<ruta>.md"
+```
+
+O escribir una primera línea de cuerpo que resuma la nota. Sin ninguna de
+las dos, el dashboard muestra «Nota simple».
+
 ## Receta: crear
 
 1. Confirmar el proyecto destino (`obsidian exists`).
