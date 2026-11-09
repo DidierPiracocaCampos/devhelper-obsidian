@@ -1185,6 +1185,14 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Mismo tope que Archivos (comparten la fila inferior del grid): sin
+     él, muchas credenciales estiran la fila y aplastan las tareas. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 /* Credencial bloqueada: la misma tarjeta oscura de las tareas, con candado
